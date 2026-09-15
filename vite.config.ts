@@ -20,8 +20,10 @@ export default defineConfig({
         theme_color: '#5d4037',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/',
-        scope: '/',
+        // 相对路径：部署到 GitHub Pages 子路径(/<仓库名>/)或用户页(/)都能正确解析，
+        // 真正的 base 由 CI 在 build 时通过 --base 注入（见 .github/workflows/deploy.yml）
+        start_url: './',
+        scope: './',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
