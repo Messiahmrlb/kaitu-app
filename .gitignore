@@ -1,0 +1,12 @@
+node_modules
+dist
+.DS_Store
+*.local
+android/app/build
+android/.gradle
+
+# 临时构建/调试产物
+_dist_*
+*.timestamp-*.mjs
+_inspect_*.cjs
+*.log
