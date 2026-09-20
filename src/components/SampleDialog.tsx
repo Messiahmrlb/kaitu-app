@@ -9,6 +9,7 @@ import {
   Stack,
   Box,
   Typography,
+  Chip,
   Divider,
   FormControl,
   ToggleButton,
@@ -38,6 +39,8 @@ interface Props {
   customTestItems: string[];
   /** 新增一个自定义试验项目名称（name 可能含空白，组件内部会 trim 去重） */
   onAddCustomTestItem: (name: string) => void;
+  /** 删除一个全局自定义试验项目名称 */
+  onRemoveCustomTestItem?: (name: string) => void;
 }
 
 /** 单条土样录入对话框：覆盖全部字段，含仅 App 内显示的 IL / Ip */
@@ -49,6 +52,7 @@ export default function SampleDialog({
   onClose,
   customTestItems,
   onAddCustomTestItem,
+  onRemoveCustomTestItem,
 }: Props) {
   const [sample, setSample] = useState<SoilSample>(initial ?? ({} as SoilSample));
 
@@ -163,9 +167,32 @@ export default function SampleDialog({
               value={sample.otherTestItems ?? []}
               onChange={(v) => set('otherTestItems', v)}
             />
+            {customTestItems.length > 0 && (
+              <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {customTestItems.map((item) => (
+                  <Chip
+                    key={item}
+                    size="small"
+                    label={item}
+                    color="warning"
+                    variant="outlined"
+                    onDelete={() => {
+                      if (
+                        !window.confirm(
+                          `删除自定义试验项目「${item}」？\n将从全局列表移除；当前土样中已勾选该项会同步取消。`,
+                        )
+                      )
+                        return;
+                      onRemoveCustomTestItem?.(item);
+                      set('otherTestItems', (sample.otherTestItems ?? []).filter((t) => t !== item));
+                    }}
+                  />
+                ))}
+              </Box>
+            )}
             {customTestItems.length === 0 && (
               <Typography variant="caption" color="text.secondary">
-                暂无自定义项，可在批量勾选中添加。
+                暂无自定义项，可在下方添加。
               </Typography>
             )}
             <Button

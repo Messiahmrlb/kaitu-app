@@ -106,6 +106,11 @@ export default function App() {
     saveCustomTestItems(next);
   };
 
+  /** 删除某个全局自定义试验项目 */
+  const removeCustomTestItem = (name: string) => {
+    persistCustomTestItems(customTestItems.filter((t) => t !== name));
+  };
+
   // ---------- 新建 / 打开 ----------
   const handleModeSelect = (mode: RecordMode) => {
     setModeDialogOpen(false);
@@ -783,6 +788,7 @@ export default function App() {
             const t = name.trim();
             if (t && !customTestItems.includes(t)) persistCustomTestItems([...customTestItems, t]);
           }}
+          onRemoveCustomTestItem={removeCustomTestItem}
         />
 
         <BatchCheckDialog

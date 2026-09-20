@@ -14,10 +14,12 @@ import {
   Box,
   Typography,
   Button,
+  IconButton,
 } from '@mui/material';
 import { SoilSample } from '../types';
 import { TEST_ITEMS } from '../constants';
 import { setDisturbance, isPermQuickConflict, isQuickShearBothConflict } from '../utils';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 /** 渗透/快剪冲突行高亮底色（MUI error.light） */
 const CONFLICT_BG = '#ffebee';
@@ -174,6 +176,20 @@ export default function BatchCheckDialog({
     onCustomTestItemsChange([...customTestItems, name]);
   };
 
+  /** 删除一个全局自定义试验项目：从全局列表移除，并同步取消当前记录中已勾选该项的土样 */
+  const removeCustomItem = (name: string) => {
+    if (
+      !window.confirm(
+        `删除自定义试验项目「${name}」？\n将从全局列表移除；当前记录中已勾选该项的土样会同步取消（其他记录不受影响）。`,
+      )
+    )
+      return;
+    onCustomTestItemsChange(customTestItems.filter((x) => x !== name));
+    setWorking((prev) =>
+      prev.map((s) => ({ ...s, otherTestItems: (s.otherTestItems ?? []).filter((t) => t !== name) })),
+    );
+  };
+
   const handleSave = () => {
     onSave(working);
     onClose();
@@ -265,9 +281,33 @@ export default function BatchCheckDialog({
                         gap: 0,
                       }}
                     >
-                      <Typography variant="caption" fontWeight={700} color="warning.main">
-                        {item}
-                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.25,
+                          maxWidth: 120,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          fontWeight={700}
+                          color="warning.main"
+                          noWrap
+                          title={item}
+                        >
+                          {item}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          color="warning"
+                          onClick={() => removeCustomItem(item)}
+                          sx={{ p: 0.25 }}
+                          aria-label={`删除自定义项 ${item}`}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
                       <Checkbox
                         size="small"
                         checked={otherItemAllChecked(item)}
