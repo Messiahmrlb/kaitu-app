@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -33,7 +33,7 @@ import InboxIcon from '@mui/icons-material/Inbox';
 import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode } from './types';
 import { MODE_LABELS, siltySandSymbol } from './constants';
-import { loadRecords, saveRecords, loadCustomTestItems, saveCustomTestItems } from './storage';
+import { loadRecords, saveRecords } from './storage';
 import { newRecord, newSample, newSamplesBatch, sortRecordsByHole } from './utils';
 import { exportRecord } from './xlsxExport';
 import { parseDeliveryFile } from './importDelivery';
@@ -83,32 +83,10 @@ export default function App() {
   // 批量删除确认：'selected'=删除选中，'all'=清空全部
   const [batchConfirm, setBatchConfirm] = useState<'selected' | 'all' | null>(null);
 
-  // 全局自定义/额外试验项目（跨记录持久化）
-  const [customTestItems, setCustomTestItems] = useState<string[]>([]);
-
-  // 启动时并行加载本地记录与全局自定义试验项目
-  useEffect(() => {
-    Promise.all([loadRecords(), loadCustomTestItems()]).then(([recs, custom]) => {
-      setRecords(recs);
-      setCustomTestItems(custom);
-    });
-  }, []);
-
   /** 持久化记录列表 */
   const persist = async (next: SoilRecord[]) => {
     setRecords(next);
     await saveRecords(next);
-  };
-
-  /** 持久化全局自定义试验项目：更新 state 并写入本地存储 */
-  const persistCustomTestItems = (next: string[]) => {
-    setCustomTestItems(next);
-    saveCustomTestItems(next);
-  };
-
-  /** 删除某个全局自定义试验项目 */
-  const removeCustomTestItem = (name: string) => {
-    persistCustomTestItems(customTestItems.filter((t) => t !== name));
   };
 
   // ---------- 新建 / 打开 ----------
@@ -783,12 +761,15 @@ export default function App() {
           initial={editingSample}
           onSave={saveSample}
           onClose={() => setSampleDialogOpen(false)}
-          customTestItems={customTestItems}
+          customTestItems={editing.customTestItems ?? []}
           onAddCustomTestItem={(name) => {
             const t = name.trim();
-            if (t && !customTestItems.includes(t)) persistCustomTestItems([...customTestItems, t]);
+            const cur = editing.customTestItems ?? [];
+            if (t && !cur.includes(t)) updateEditing({ customTestItems: [...cur, t] });
           }}
-          onRemoveCustomTestItem={removeCustomTestItem}
+          onRemoveCustomTestItem={(name) =>
+            updateEditing({ customTestItems: (editing.customTestItems ?? []).filter((x) => x !== name) })
+          }
         />
 
         <BatchCheckDialog
@@ -796,8 +777,8 @@ export default function App() {
           samples={editing.samples}
           onSave={(updated) => updateEditing({ samples: updated })}
           onClose={() => setBatchCheckOpen(false)}
-          customTestItems={customTestItems}
-          onCustomTestItemsChange={persistCustomTestItems}
+          customTestItems={editing.customTestItems ?? []}
+          onCustomTestItemsChange={(items) => updateEditing({ customTestItems: items })}
         />
       </Box>
     );

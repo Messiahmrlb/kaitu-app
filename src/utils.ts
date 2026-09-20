@@ -149,6 +149,7 @@ export function newRecord(mode: RecordMode): SoilRecord {
       openDate: todayStr(),
     },
     samples: [newSample(1)],
+    customTestItems: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

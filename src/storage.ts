@@ -18,7 +18,15 @@ export async function loadRecords(): Promise<SoilRecord[]> {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? (parsed as SoilRecord[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    // 兼容旧数据：早期版本的自定义项是全局存储，记录上无 customTestItems 字段。
+    // 用各土样 otherTestItems 的并集回填，保证旧记录里已勾的自定义项仍可管理（按记录独立）。
+    return (parsed as SoilRecord[]).map((r) => ({
+      ...r,
+      customTestItems: Array.isArray(r.customTestItems)
+        ? r.customTestItems
+        : Array.from(new Set((r.samples ?? []).flatMap((s) => s.otherTestItems ?? []))),
+    }));
   } catch {
     return [];
   }
@@ -27,24 +35,4 @@ export async function loadRecords(): Promise<SoilRecord[]> {
 /** 覆盖保存全部记录 */
 export async function saveRecords(records: SoilRecord[]): Promise<void> {
   await Preferences.set({ key: STORAGE_KEY, value: JSON.stringify(records) });
-}
-
-/** 全局自定义/额外试验项目名称存储 key */
-const CUSTOM_TESTS_KEY = 'kaitu_custom_tests_v1';
-
-/** 读取全局自定义试验项目列表，无数据或损坏时返回空数组 */
-export async function loadCustomTestItems(): Promise<string[]> {
-  const { value } = await Preferences.get({ key: CUSTOM_TESTS_KEY });
-  if (!value) return [];
-  try {
-    const p = JSON.parse(value);
-    return Array.isArray(p) ? p.filter((x: unknown) => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-/** 覆盖保存全局自定义试验项目列表 */
-export async function saveCustomTestItems(items: string[]): Promise<void> {
-  await Preferences.set({ key: CUSTOM_TESTS_KEY, value: JSON.stringify(items) });
 }

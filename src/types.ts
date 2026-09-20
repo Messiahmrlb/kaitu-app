@@ -75,6 +75,8 @@ export interface SoilRecord {
   engineering: EngineeringInfo;
   /** 土样列表 */
   samples: SoilSample[];
+  /** 自定义/额外试验项目名称列表（按记录独立，各记录互不串） */
+  customTestItems: string[];
   /** 创建时间（毫秒时间戳） */
   createdAt: number;
   /** 最后更新时间（毫秒时间戳） */

@@ -289,6 +289,7 @@ function parseOneBlock(
       openDate: todayStr(),
     },
     samples,
+    customTestItems: Array.from(unknownSeen),
     createdAt: now,
     updatedAt: now,
   };
