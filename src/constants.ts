@@ -53,6 +53,9 @@ export const TEST_ITEMS: string[] = [
   '三轴',
 ];
 
+/** 对扰动土也适用的试验项目：点「全选」时不跳过扰动土；其余项（固结/渗透/快剪/三轴）仅对原状土勾选 */
+export const DISTURBED_APPLICABLE_TESTS: string[] = ['物性', '颗分'];
+
 /** 模式标签，用于列表/对话框展示 */
 export const MODE_LABELS: Record<'A' | 'B', string> = {
   A: '普通目力鉴别',

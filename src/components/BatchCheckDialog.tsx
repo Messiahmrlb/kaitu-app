@@ -15,14 +15,15 @@ import {
   Typography,
   Button,
   IconButton,
+  Chip,
 } from '@mui/material';
 import { SoilSample } from '../types';
-import { TEST_ITEMS } from '../constants';
+import { TEST_ITEMS, DISTURBED_APPLICABLE_TESTS } from '../constants';
 import { setDisturbance, isPermQuickConflict, isQuickShearBothConflict } from '../utils';
+import { conflictBg } from '../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
-
-/** 渗透/快剪冲突行高亮底色（MUI error.light） */
-const CONFLICT_BG = '#ffebee';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 /**
  * 冻结首列（土号）样式：横向滚动时始终贴左可见。
@@ -118,17 +119,27 @@ export default function BatchCheckDialog({
       }),
     );
 
-  /** 某试验项目「全选」表头：勾选->全部添加，取消->全部移除 */
-  const itemAllChecked = (item: string) =>
-    working.length > 0 && working.every((s) => s.testItems.includes(item));
+  /** 某试验项目「全选」表头状态：
+   *  - 对扰动土也适用的项（物性/颗分）：全部土样都勾上才算全选；
+   *  - 其余项（固结/渗透/快剪/三轴）：只看原状土，扰动土不参与判定（全选时会跳过扰动土）。 */
+  const itemAllChecked = (item: string) => {
+    const relevant = DISTURBED_APPLICABLE_TESTS.includes(item)
+      ? working
+      : working.filter((s) => s.disturbance !== '扰动');
+    return relevant.length > 0 && relevant.every((s) => s.testItems.includes(item));
+  };
+  /** 某试验项目「全选」表头：勾选->对适用的土样全部添加（对扰动土不适用的项跳过扰动土），取消->全部移除 */
   const toggleAllItem = (item: string, checked: boolean) =>
     setWorking((prev) =>
       prev.map((s) => {
         const has = s.testItems.includes(item);
-        if (checked && !has)
+        // 勾选时：对扰动土不适用的试验项目（除 物性/颗分 外）跳过扰动土
+        const applicableToDisturbed = DISTURBED_APPLICABLE_TESTS.includes(item);
+        if (checked && !has) {
+          if (!applicableToDisturbed && s.disturbance === '扰动') return s;
           return { ...s, testItems: [...s.testItems, item] };
-        if (!checked && has)
-          return { ...s, testItems: s.testItems.filter((t) => t !== item) };
+        }
+        if (!checked && has) return { ...s, testItems: s.testItems.filter((t) => t !== item) };
         return s;
       }),
     );
@@ -199,10 +210,12 @@ export default function BatchCheckDialog({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle>批量勾选（试验项目 / 扰动土）</DialogTitle>
       <DialogContent dividers>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          逐列「全选」可快速应用到全部土样；勾选「扰动土」会自动勾选「颗分」。
-          同时含「渗透」与「快剪」的行、或同时勾选「饱固快剪」与「自然快剪」的行，
-          将以红色标示（可能的冲突组合）。
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.7 }}>
+          逐列「全选」可快速应用到全部土样；勾选「扰动土」会自动联动「颗分」。
+          对扰动土不适用的试验项目（固结/渗透/快剪/三轴）点「全选」时自动跳过扰动土（仅勾原状）。
+          同时含「渗透+快剪」或「饱固快剪+自然快剪」的行将
+          <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}> 标红 </Box>
+          （可能的冲突组合）。
         </Typography>
         <Box
           sx={{
@@ -216,8 +229,13 @@ export default function BatchCheckDialog({
           <Typography variant="caption" color="text.secondary">
             自定义/额外试验项目为全局项，可在下方表格逐列勾选，或点此新增。
           </Typography>
-          <Button size="small" variant="outlined" onClick={addCustomItem}>
-            ＋ 添加自定义试验项目
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<AddCircleOutlineIcon />}
+            onClick={addCustomItem}
+          >
+            添加自定义试验项目
           </Button>
         </Box>
         <TableContainer sx={{ maxHeight: 440 }}>
@@ -292,7 +310,7 @@ export default function BatchCheckDialog({
                         <Typography
                           variant="caption"
                           fontWeight={700}
-                          color="warning.main"
+                          color="secondary.main"
                           noWrap
                           title={item}
                         >
@@ -300,7 +318,7 @@ export default function BatchCheckDialog({
                         </Typography>
                         <IconButton
                           size="small"
-                          color="warning"
+                          color="secondary"
                           onClick={() => removeCustomItem(item)}
                           sx={{ p: 0.25 }}
                           aria-label={`删除自定义项 ${item}`}
@@ -325,16 +343,32 @@ export default function BatchCheckDialog({
                   <TableRow
                     key={s.id}
                     hover
-                    sx={{ bgcolor: conflict ? CONFLICT_BG : undefined }}
+                    sx={{ bgcolor: conflict ? conflictBg : undefined }}
                   >
                     <TableCell
                       sx={{
                         ...STICKY_BODY,
                         fontWeight: 600,
-                        backgroundColor: conflict ? CONFLICT_BG : 'background.paper',
+                        backgroundColor: conflict ? conflictBg : 'background.paper',
                       }}
                     >
-                      {s.soilNumber || '(未填)'}
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        <span>{s.soilNumber || '(未填)'}</span>
+                        {conflict && (
+                          <Chip
+                            size="small"
+                            color="error"
+                            icon={<WarningAmberIcon style={{ fontSize: 14 }} />}
+                            label="冲突"
+                            sx={{
+                              alignSelf: 'flex-start',
+                              height: 20,
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          />
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell align="center">
                       <Checkbox
