@@ -28,3 +28,23 @@ export async function loadRecords(): Promise<SoilRecord[]> {
 export async function saveRecords(records: SoilRecord[]): Promise<void> {
   await Preferences.set({ key: STORAGE_KEY, value: JSON.stringify(records) });
 }
+
+/** 全局自定义/额外试验项目名称存储 key */
+const CUSTOM_TESTS_KEY = 'kaitu_custom_tests_v1';
+
+/** 读取全局自定义试验项目列表，无数据或损坏时返回空数组 */
+export async function loadCustomTestItems(): Promise<string[]> {
+  const { value } = await Preferences.get({ key: CUSTOM_TESTS_KEY });
+  if (!value) return [];
+  try {
+    const p = JSON.parse(value);
+    return Array.isArray(p) ? p.filter((x: unknown) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 覆盖保存全局自定义试验项目列表 */
+export async function saveCustomTestItems(items: string[]): Promise<void> {
+  await Preferences.set({ key: CUSTOM_TESTS_KEY, value: JSON.stringify(items) });
+}

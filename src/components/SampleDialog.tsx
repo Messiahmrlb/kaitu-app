@@ -24,6 +24,7 @@ import {
   SILTY_SAND,
 } from '../constants';
 import ChipMultiSelect from './ChipMultiSelect';
+import { setDisturbance } from '../utils';
 
 interface Props {
   open: boolean;
@@ -33,10 +34,22 @@ interface Props {
   initial: SoilSample | null;
   onSave: (sample: SoilSample) => void;
   onClose: () => void;
+  /** 全局自定义/额外试验项目名称列表 */
+  customTestItems: string[];
+  /** 新增一个自定义试验项目名称（name 可能含空白，组件内部会 trim 去重） */
+  onAddCustomTestItem: (name: string) => void;
 }
 
 /** 单条土样录入对话框：覆盖全部字段，含仅 App 内显示的 IL / Ip */
-export default function SampleDialog({ open, mode, initial, onSave, onClose }: Props) {
+export default function SampleDialog({
+  open,
+  mode,
+  initial,
+  onSave,
+  onClose,
+  customTestItems,
+  onAddCustomTestItem,
+}: Props) {
   const [sample, setSample] = useState<SoilSample>(initial ?? ({} as SoilSample));
 
   // 打开时同步初始数据
@@ -142,6 +155,31 @@ export default function SampleDialog({ open, mode, initial, onSave, onClose }: P
             onChange={(v) => set('testItems', v)}
           />
 
+          {/* 额外 / 自定义试验项目：勾选写入 sample.otherTestItems，不进 40 列主表，导出到「额外试验项目」工作表 */}
+          <Box sx={{ borderTop: '1px dashed #ccc', pt: 2, mt: 1 }}>
+            <ChipMultiSelect
+              label="额外/自定义试验项目（多选）"
+              options={customTestItems}
+              value={sample.otherTestItems ?? []}
+              onChange={(v) => set('otherTestItems', v)}
+            />
+            {customTestItems.length === 0 && (
+              <Typography variant="caption" color="text.secondary">
+                暂无自定义项，可在批量勾选中添加。
+              </Typography>
+            )}
+            <Button
+              size="small"
+              variant="outlined"
+              sx={{ mt: 1 }}
+              onClick={() =>
+                onAddCustomTestItem(window.prompt('输入自定义试验项目名称') ?? '')
+              }
+            >
+              ＋ 添加自定义试验项目
+            </Button>
+          </Box>
+
           {/* 仅 App 内显示/保存，不写入导出表格 */}
           <Box sx={{ borderTop: '1px dashed #ccc', pt: 2, mt: 1 }}>
             <Typography variant="caption" color="text.secondary">
@@ -189,7 +227,9 @@ export default function SampleDialog({ open, mode, initial, onSave, onClose }: P
                 size="small"
                 color="primary"
                 value={sample.disturbance ?? '原状'}
-                onChange={(_e, v: string | null) => v && set('disturbance', v)}
+                onChange={(_e, v: string | null) =>
+                  v && setSample((prev) => setDisturbance(prev, v as '原状' | '扰动'))
+                }
               >
                 {DISTURBANCE.map((d) => (
                   <ToggleButton key={d} value={d}>

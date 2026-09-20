@@ -12,7 +12,8 @@ export function todayStr(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 创建一条空白土样，序号 index 用于默认土号（-index）
+/**
+ * 创建一条空白土样，序号 index 用于默认土号（-index）
  *  @param soilNumber 可选，显式指定土号（批量编号时使用）；不传则默认 -index
  */
 export function newSample(index: number, soilNumber?: string): SoilSample {
@@ -92,6 +93,30 @@ export function coupleDisturbance(sample: SoilSample): SoilSample {
 }
 
 /**
+ * 扰动土 ↔ 颗分 可逆联动：返回 sample 的克隆副本，绝不修改入参。
+ * - next === '扰动'：确保 testItems 中包含「颗分」（去重、保持原有顺序）。
+ * - next === '原状'：摘掉「颗分」，除非该土样当前为「原状且塑性指数 Ip≤10」
+ *   （此情形本应做颗分，导出颗分统计表也会纳入，故保留）。
+ */
+export function setDisturbance(sample: SoilSample, next: '原状' | '扰动'): SoilSample {
+  const clone: SoilSample = { ...sample, testItems: [...(sample.testItems ?? [])] };
+  // 同步 disturbance 字段本身（调用方未必显式设置，故此处兜底，确保 UI 与导出一致）
+  clone.disturbance = next;
+  if (next === '扰动') {
+    if (!clone.testItems.includes('颗分')) clone.testItems = [...clone.testItems, '颗分'];
+  } else {
+    // 原状：摘掉颗分，除非"原状且塑性指数 Ip≤10"（此情形本应做颗分，且导出颗分统计表会纳入）
+    // 注意：判定用 sample.disturbance（切换前的原值），不受上面 clone.disturbance = next 影响
+    const ip = parseFloat(String(sample.ip ?? ''));
+    const ipLe10 = !Number.isNaN(ip) && ip <= 10;
+    if (clone.testItems.includes('颗分') && !(sample.disturbance === '原状' && ipLe10)) {
+      clone.testItems = clone.testItems.filter((t: string) => t !== '颗分');
+    }
+  }
+  return clone;
+}
+
+/**
  * 渗透/快剪冲突判定：当 sample 同时包含「渗透」（垂直渗透 或 水平渗透）
  * 与「快剪」（饱固快剪 或 自然快剪）时返回 true，否则 false。
  * 用于在批量勾选对话框中对冲突行标红提示。
@@ -101,6 +126,14 @@ export function isPermQuickConflict(sample: SoilSample): boolean {
   const hasPermeability = items.includes('垂直渗透') || items.includes('水平渗透');
   const hasQuickShear = items.includes('饱固快剪') || items.includes('自然快剪');
   return hasPermeability && hasQuickShear;
+}
+
+/**
+ * 快剪项互斥冲突判定：当 sample 同时勾选「饱固快剪」与「自然快剪」时返回 true。
+ * 用于在批量勾选对话框中对冲突行标红提示（二者一般不同时做）。
+ */
+export function isQuickShearBothConflict(sample: SoilSample): boolean {
+  return sample.testItems.includes('饱固快剪') && sample.testItems.includes('自然快剪');
 }
 
 /** 创建一份空白记录（含一条默认土样） */

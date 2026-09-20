@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>开土记录 App · UI 美化预览</title>
+<style>
+  :root{
+    --primary:#0F766E; --primary-dark:#115E59; --secondary:#D97706;
+    --error:#DC2626; --bg:#F1F5F4; --paper:#FFFFFF;
+    --text:#1F2A28; --text2:#5B6B67; --divider:#E3E8E6;
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#0b0f0e;color:var(--text);
+    display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  .phone{width:390px;max-width:100%;background:var(--bg);border-radius:32px;
+    overflow:hidden;box-shadow:0 30px 70px rgba(0,0,0,.55);position:relative}
+  /* AppBar */
+  .appbar{position:sticky;top:0;background:var(--primary);color:#fff;
+    display:flex;align-items:center;padding:14px 14px;z-index:5}
+  .appbar h1{font-size:18px;font-weight:700;flex:1;letter-spacing:.3px}
+  .appbar .tbtn{color:#fff;font-size:13px;font-weight:600;background:rgba(255,255,255,.14);
+    border:none;border-radius:10px;padding:7px 11px;margin-left:8px;cursor:pointer}
+  .appbar .tbtn:last-child{display:inline-flex;align-items:center;gap:5px}
+  /* content */
+  .content{padding:16px}
+  .sortbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .sortbtn{border:1px solid var(--primary);color:var(--primary);background:#fff;
+    border-radius:10px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer}
+  .sortbar small{color:var(--text2);font-size:12px;line-height:1.4}
+  /* card */
+  .card{background:var(--paper);border:1px solid var(--divider);
+    border-left:4px solid var(--primary);border-radius:14px;padding:13px 14px;
+    display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;
+    transition:box-shadow .2s,transform .2s;cursor:pointer}
+  .card:hover{box-shadow:0 6px 16px rgba(0,0,0,.12);transform:translateY(-1px)}
+  .card.disturb{border-left-color:var(--error);background:#fff5f5}
+  .card .info{flex:1;min-width:0}
+  .card .title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card .title b{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{font-size:11px;font-weight:600;border-radius:8px;padding:2px 8px;line-height:1.6}
+  .chip.primary{background:var(--primary);color:#fff}
+  .chip.secondary{background:var(--secondary);color:#fff}
+  .chip.err{background:#fff;color:var(--error);border:1px solid var(--error)}
+  .card .meta{color:var(--text2);font-size:13px;margin-top:6px;line-height:1.5}
+  .actions{display:flex;align-items:center;gap:2px;flex-shrink:0}
+  .iconbtn{width:32px;height:32px;border:none;background:transparent;border-radius:8px;
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2)}
+  .iconbtn:hover{background:rgba(0,0,0,.06)}
+  .iconbtn.danger{color:var(--error)}
+  .iconbtn svg{width:19px;height:19px}
+  /* FAB */
+  .fab{position:absolute;right:20px;bottom:22px;width:56px;height:56px;border-radius:16px;
+    background:var(--primary);color:#fff;border:none;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 20px rgba(15,118,110,.45);cursor:pointer}
+  .fab svg{width:26px;height:26px}
+  /* empty state */
+  .empty{text-align:center;color:var(--text2);margin-top:70px;padding:0 24px}
+  .empty .ic{font-size:64px;color:#c7d0cd}
+  .empty h3{color:var(--text2);font-weight:600;margin-top:8px}
+  .empty p{font-size:13px;margin-top:6px}
+  /* mode dialog */
+  .scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;
+    align-items:flex-end;justify-content:center}
+  .sheet{width:100%;background:var(--paper);border-radius:16px 16px 0 0;padding:18px 16px 24px}
+  .sheet h2{font-size:17px;font-weight:700;margin-bottom:12px}
+  .pick{border:1px solid var(--divider);border-radius:14px;padding:14px;display:flex;
+    gap:12px;align-items:center;margin-bottom:12px;cursor:pointer}
+  .pick:hover{border-color:var(--primary);background:rgba(15,118,110,.04)}
+  .pick.sec:hover{border-color:var(--secondary);background:rgba(217,119,6,.04)}
+  .pick .pic{color:var(--primary);font-size:26px}
+  .pick.sec .pic{color:var(--secondary)}
+  .pick b{font-weight:700;font-size:15px}
+  .pick small{display:block;color:var(--text2);font-size:12px;margin-top:2px}
+  .legend{text-align:center;color:#9aa6a2;font-size:11px;margin-top:14px}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <!-- 列表视图 -->
+    <div class="appbar">
+      <h1>开土记录录入</h1>
+      <button class="tbtn">批量删除</button>
+      <button class="tbtn">⬆ 导入送样单</button>
+    </div>
+
+    <div class="content">
+      <div class="sortbar">
+        <button class="sortbtn">按孔号排序 ▲</button>
+        <small>导入的记录顺序乱可在此一键排好；也可用每条右侧 ↑/↓ 手动挪</small>
+      </div>
+
+      <!-- 普通记录卡片（青绿强调边） -->
+      <div class="card">
+        <div class="info">
+          <div class="title">
+            <b>2026-城东地块勘察</b>
+            <span class="chip primary">普通目力鉴别</span>
+          </div>
+          <div class="meta">工程编号：GC-2026-018 ｜ 孔号：ZK3 ｜ 土样 12 条 ｜ 原状 10 · 扰动 2</div>
+        </div>
+        <div class="actions">
+          <button class="iconbtn" title="上移">↻</button>
+          <button class="iconbtn" title="下移">↺</button>
+          <button class="iconbtn" title="导出xlsx">▦</button>
+          <button class="iconbtn danger" title="删除">🗑</button>
+        </div>
+      </div>
+
+      <!-- 含扰动记录（红色强调边） -->
+      <div class="card disturb">
+        <div class="info">
+          <div class="title">
+            <b>滨江路管网详勘</b>
+            <span class="chip secondary">三角坐标定名</span>
+            <span class="chip err">扰动 3</span>
+          </div>
+          <div class="meta">工程编号：GC-2026-021 ｜ 孔号：ZK7 ｜ 土样 8 条 ｜ 原状 5 · 扰动 3</div>
+        </div>
+        <div class="actions">
+          <button class="iconbtn" title="上移">↻</button>
+          <button class="iconbtn" title="下移">↺</button>
+          <button class="iconbtn" title="导出xlsx">▦</button>
+          <button class="iconbtn danger" title="删除">🗑</button>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div class="empty">
+        <div class="ic">📥</div>
+        <h3>还没有开土记录</h3>
+        <p>点击右下角的“+”按钮，新建一份开土记录。</p>
+      </div>
+    </div>
+
+    <button class="fab" title="新建">＋</button>
+
+    <!-- 选择鉴别格式 底部弹层 -->
+    <div class="scrim">
+      <div class="sheet">
+        <h2>选择鉴别格式</h2>
+        <div class="pick">
+          <div class="pic">▣</div>
+          <div><b>普通目力鉴别</b><small>中砂 / 细砂 / 粉砂 / 粉土 / 粉质黏土 / 黏土</small></div>
+        </div>
+        <div class="pick sec">
+          <div class="pic">△</div>
+          <div><b>三角坐标定名</b><small>粉砂 / 轻粉质壤土 / 中粉质壤土 / 重粉质壤土 / 粉粘土 / 粘土</small></div>
+        </div>
+        <div class="legend">以上为 UI 美化预览（非运行界面）</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

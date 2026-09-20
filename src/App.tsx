@@ -6,9 +6,8 @@ import {
   Container,
   Box,
   Button,
-  List,
-  ListItem,
-  ListItemText,
+  Card,
+  Stack,
   IconButton,
   Fab,
   Dialog,
@@ -21,6 +20,7 @@ import {
   Chip,
   Divider,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -29,10 +29,11 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import InboxIcon from '@mui/icons-material/Inbox';
 import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode } from './types';
 import { MODE_LABELS, siltySandSymbol } from './constants';
-import { loadRecords, saveRecords } from './storage';
+import { loadRecords, saveRecords, loadCustomTestItems, saveCustomTestItems } from './storage';
 import { newRecord, newSample, newSamplesBatch, sortRecordsByHole } from './utils';
 import { exportRecord } from './xlsxExport';
 import { parseDeliveryFile } from './importDelivery';
@@ -82,15 +83,27 @@ export default function App() {
   // 批量删除确认：'selected'=删除选中，'all'=清空全部
   const [batchConfirm, setBatchConfirm] = useState<'selected' | 'all' | null>(null);
 
-  // 启动加载本地记录
+  // 全局自定义/额外试验项目（跨记录持久化）
+  const [customTestItems, setCustomTestItems] = useState<string[]>([]);
+
+  // 启动时并行加载本地记录与全局自定义试验项目
   useEffect(() => {
-    loadRecords().then(setRecords);
+    Promise.all([loadRecords(), loadCustomTestItems()]).then(([recs, custom]) => {
+      setRecords(recs);
+      setCustomTestItems(custom);
+    });
   }, []);
 
   /** 持久化记录列表 */
   const persist = async (next: SoilRecord[]) => {
     setRecords(next);
     await saveRecords(next);
+  };
+
+  /** 持久化全局自定义试验项目：更新 state 并写入本地存储 */
+  const persistCustomTestItems = (next: string[]) => {
+    setCustomTestItems(next);
+    saveCustomTestItems(next);
   };
 
   // ---------- 新建 / 打开 ----------
@@ -246,8 +259,8 @@ export default function App() {
               position: 'sticky',
               top: 56,
               zIndex: 2,
-              bgcolor: '#e3f2fd',
-              borderBottom: '1px solid #90caf9',
+              bgcolor: (t) => alpha(t.palette.primary.main, 0.08),
+              borderBottom: (t) => `1px solid ${alpha(t.palette.primary.main, 0.22)}`,
               px: 2,
               py: 1,
               display: 'flex',
@@ -280,122 +293,216 @@ export default function App() {
         )}
 
         <Container maxWidth="sm" sx={{ py: 2 }}>
-          {records.length === 0 && (
-            <Box sx={{ textAlign: 'center', color: 'text.secondary', mt: 6 }}>
-              还没有记录，点击右下角“+”新建一份开土记录。
-            </Box>
-          )}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => {
-                const d = sortDir === 'asc' ? 'desc' : 'asc';
-                setSortDir(d);
-                persist(sortRecordsByHole(records, d));
-                setSnack({ msg: '已按孔号' + (d === 'asc' ? '升序' : '降序') + '排序', sev: 'success' });
+          {records.length === 0 ? (
+            <Box
+              sx={{
+                textAlign: 'center',
+                color: 'text.secondary',
+                mt: 8,
+                px: 3,
               }}
             >
-              按孔号排序 {sortDir === 'asc' ? '▲' : '▼'}
-            </Button>
-            <Typography variant="caption" color="text.secondary">
-              导入的记录顺序乱可在此一键排好；也可用每条右侧 ↑/↓ 手动挪
-            </Typography>
-          </Box>
-          <List>
-            {records.map((rec, idx) => {
-              const disturb = disturbCount(rec);
-              const intact = rec.samples.length - disturb;
-              return (
-                <ListItem
-                  key={rec.id}
-                  divider
-                  secondaryAction={
-                    selectMode ? (
-                      <Checkbox
-                        edge="end"
-                        checked={selectedSet.has(rec.id)}
-                        onChange={() => toggleSelect(rec.id)}
-                      />
-                    ) : (
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <IconButton
-                          edge="end"
-                          aria-label="上移"
-                          size="small"
-                          disabled={idx === 0}
-                          onClick={() => moveRecord(idx, -1)}
-                        >
-                          <ArrowUpwardIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          edge="end"
-                          aria-label="下移"
-                          size="small"
-                          disabled={idx === records.length - 1}
-                          onClick={() => moveRecord(idx, 1)}
-                        >
-                          <ArrowDownwardIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          edge="end"
-                          aria-label="导出xlsx"
-                          onClick={() => handleExport(rec)}
-                        >
-                          <TableChartIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          edge="end"
-                          aria-label="删除"
-                          onClick={() => setDeleteRecord(rec)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Box>
-                    )
-                  }
-                  onClick={selectMode ? () => toggleSelect(rec.id) : undefined}
-                  sx={
-                    selectMode
-                      ? {
-                          cursor: 'pointer',
-                          bgcolor: selectedSet.has(rec.id) ? '#e3f2fd' : 'transparent',
-                        }
-                      : undefined
-                  }
+              <InboxIcon sx={{ fontSize: 64, color: 'action.disabled', mb: 1 }} />
+              <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 600 }}>
+                还没有开土记录
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                点击右下角的“+”按钮，新建一份开土记录。
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 1.5,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    const d = sortDir === 'asc' ? 'desc' : 'asc';
+                    setSortDir(d);
+                    persist(sortRecordsByHole(records, d));
+                    setSnack({
+                      msg: '已按孔号' + (d === 'asc' ? '升序' : '降序') + '排序',
+                      sev: 'success',
+                    });
+                  }}
                 >
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <span>{rec.name}</span>
-                        <Chip
-                          size="small"
-                          label={MODE_LABELS[rec.mode]}
-                          color={rec.mode === 'A' ? 'primary' : 'secondary'}
-                        />
-                        {disturb > 0 && (
-                          <Chip size="small" label={`扰动 ${disturb}`} color="error" />
-                        )}
+                  按孔号排序 {sortDir === 'asc' ? '▲' : '▼'}
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  导入的记录顺序乱可在此一键排好；也可用每条右侧 ↑/↓ 手动挪
+                </Typography>
+              </Box>
+
+              <Stack spacing={1.5}>
+                {records.map((rec, idx) => {
+                  const disturb = disturbCount(rec);
+                  const intact = rec.samples.length - disturb;
+                  const isSel = selectedSet.has(rec.id);
+                  return (
+                    <Card
+                      key={rec.id}
+                      variant="outlined"
+                      onClick={
+                        selectMode ? () => toggleSelect(rec.id) : () => openExisting(rec)
+                      }
+                      sx={{
+                        borderRadius: 3,
+                        cursor: 'pointer',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        borderColor: isSel ? 'primary.main' : 'divider',
+                        borderLeft: (t) =>
+                          `4px solid ${
+                            disturb > 0 ? t.palette.error.main : t.palette.primary.main
+                          }`,
+                        bgcolor: isSel
+                          ? (t) => alpha(t.palette.primary.main, 0.06)
+                          : 'background.paper',
+                        transition: 'box-shadow .2s ease, transform .2s ease',
+                        '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' },
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          p: 1.5,
+                          gap: 1,
+                        }}
+                      >
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <Typography
+                              fontWeight={700}
+                              noWrap
+                              sx={{
+                                minWidth: 0,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {rec.name}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={MODE_LABELS[rec.mode]}
+                              color={rec.mode === 'A' ? 'primary' : 'secondary'}
+                            />
+                            {disturb > 0 && (
+                              <Chip
+                                size="small"
+                                label={`扰动 ${disturb}`}
+                                color="error"
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5, fontSize: 13 }}
+                          >
+                            {`工程编号：${rec.engineering.projectCode || '—'} ｜ 孔号：${
+                              rec.engineering.holeCode || '—'
+                            } ｜ 土样 ${rec.samples.length} 条 ｜ 原状 ${intact} · 扰动 ${disturb}`}
+                            {selectMode ? '（点按选择）' : ''}
+                          </Typography>
+                        </Box>
+
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.25,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {selectMode ? (
+                            <Checkbox
+                              edge="end"
+                              checked={isSel}
+                              onChange={() => toggleSelect(rec.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <>
+                              <IconButton
+                                size="small"
+                                aria-label="上移"
+                                disabled={idx === 0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveRecord(idx, -1);
+                                }}
+                              >
+                                <ArrowUpwardIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                aria-label="下移"
+                                disabled={idx === records.length - 1}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveRecord(idx, 1);
+                                }}
+                              >
+                                <ArrowDownwardIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                aria-label="导出xlsx"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExport(rec);
+                                }}
+                              >
+                                <TableChartIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                aria-label="删除"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteRecord(rec);
+                                }}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </>
+                          )}
+                        </Box>
                       </Box>
-                    }
-                    secondary={
-                      `工程编号：${rec.engineering.projectCode || '—'} ｜ 孔号：${
-                        rec.engineering.holeCode || '—'
-                      } ｜ 土样 ${rec.samples.length} 条 ｜ 原状 ${intact} · 扰动 ${disturb}` +
-                      (selectMode ? '（点按选择）' : '')
-                    }
-                    onClick={!selectMode ? () => openExisting(rec) : undefined}
-                    sx={{ cursor: !selectMode ? 'pointer' : 'pointer' }}
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
+                    </Card>
+                  );
+                })}
+              </Stack>
+            </>
+          )}
         </Container>
         <Fab
           color="primary"
           aria-label="add"
-          sx={{ position: 'fixed', bottom: 24, right: 24 }}
+          sx={{
+            position: 'fixed',
+            bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+            right: 24,
+          }}
           onClick={() => setModeDialogOpen(true)}
         >
           <AddIcon />
@@ -650,9 +757,12 @@ export default function App() {
             bottom: 0,
             left: 0,
             right: 0,
-            p: 1.5,
+            px: 1.5,
+            py: 1.5,
+            pb: 'calc(12px + env(safe-area-inset-bottom, 0px))',
             bgcolor: 'background.paper',
-            borderTop: '1px solid #e0e0e0',
+            borderTop: 1,
+            borderColor: 'divider',
           }}
         >
           <Container maxWidth="sm">
@@ -668,6 +778,11 @@ export default function App() {
           initial={editingSample}
           onSave={saveSample}
           onClose={() => setSampleDialogOpen(false)}
+          customTestItems={customTestItems}
+          onAddCustomTestItem={(name) => {
+            const t = name.trim();
+            if (t && !customTestItems.includes(t)) persistCustomTestItems([...customTestItems, t]);
+          }}
         />
 
         <BatchCheckDialog
@@ -675,6 +790,8 @@ export default function App() {
           samples={editing.samples}
           onSave={(updated) => updateEditing({ samples: updated })}
           onClose={() => setBatchCheckOpen(false)}
+          customTestItems={customTestItems}
+          onCustomTestItemsChange={persistCustomTestItems}
         />
       </Box>
     );
