@@ -117,4 +117,13 @@ const theme = createTheme({
   },
 });
 
+/**
+ * 冲突行高亮底色（设计系统 token）。
+ * 由 error.main(#DC2626) 在 paper 白底上 10% 叠加得到的浅红实色，
+ * 既与 error 语义同源、又足够轻不会喧宾夺主；用实色（非透明）是为了
+ * 在批量勾选对话框的「冻结首列」滑动时也能挡住下方内容。
+ * 全站冲突高亮统一引用此处，避免在业务代码里散落 #ffebee 之类的硬编码。
+ */
+export const conflictBg = '#FDECEC';
+
 export default theme;

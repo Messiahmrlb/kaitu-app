@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>编辑页土样卡片 · 统一 Card 风格预览</title>
+<style>
+  :root{
+    --primary:#0F766E; --primary-dark:#115E59; --primary-light:#14B8A6;
+    --secondary:#D97706; --secondary-light:#F59E0B;
+    --error:#DC2626; --error-light:#EF4444;
+    --bg:#F1F5F4; --paper:#FFFFFF;
+    --text:#1F2A28; --text2:#5B6B67;
+    --divider:#E3E8E6; --conflict:#FDECEC;
+    --radius:14px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei','Hiragino Sans GB',sans-serif;
+    background:#2b3433; color:var(--text); padding:32px 16px;
+    display:flex; flex-direction:column; align-items:center; gap:24px;
+  }
+  .stage-title{color:#cfd8d6; font-size:13px; letter-spacing:.5px; font-weight:600;}
+  /* 手机外壳 */
+  .phone{
+    width:390px; max-width:100%; background:var(--bg);
+    border-radius:38px; padding:12px; box-shadow:0 24px 60px rgba(0,0,0,.45);
+    border:1px solid rgba(255,255,255,.08);
+  }
+  .screen{ background:var(--bg); border-radius:28px; overflow:hidden; min-height:760px; position:relative;}
+  /* AppBar */
+  .appbar{
+    background:var(--primary); color:#fff; display:flex; align-items:center; gap:8px;
+    padding:14px 14px; position:sticky; top:0; z-index:5;
+  }
+  .appbar .back{ width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+  .appbar .back:hover{background:rgba(255,255,255,.14);}
+  .appbar h6{ font-size:17px; font-weight:700; flex:1; letter-spacing:.3px;}
+  .appbar .export{ font-size:13px; font-weight:600; padding:6px 10px; border-radius:10px; background:rgba(255,255,255,.16);}
+  .content{ padding:16px 14px 96px; }
+  /* 标题行 */
+  .sec-head{ display:flex; align-items:center; justify-content:space-between; margin:6px 0 10px;}
+  .sec-head .t{ font-size:16px; font-weight:700; color:var(--text);}
+  .btn-outline{
+    border:1px solid var(--primary); color:var(--primary); background:#fff;
+    font-size:13px; font-weight:600; padding:7px 12px; border-radius:10px;
+    display:inline-flex; align-items:center; gap:5px; cursor:pointer;
+  }
+  .btn-outline:hover{ background:rgba(15,118,110,.06);}
+  /* 批量数量框 */
+  .batch-box{
+    border:1px dashed var(--divider); background:#fff; border-radius:12px;
+    padding:12px; display:flex; align-items:flex-end; gap:10px; margin-bottom:12px;
+  }
+  .batch-box label{ font-size:13px; color:var(--text2); display:block; margin-bottom:4px;}
+  .batch-box input{
+    width:72px; padding:7px 9px; border:1px solid var(--divider); border-radius:10px;
+    font-size:14px; color:var(--text); outline:none; font-family:inherit;
+  }
+  .btn-contained{
+    background:var(--primary); color:#fff; border:none; font-size:13px; font-weight:600;
+    padding:9px 14px; border-radius:10px; cursor:pointer; white-space:nowrap;
+  }
+  .btn-contained:hover{ box-shadow:0 6px 16px rgba(15,118,110,.28);}
+  .batch-box .hint{ font-size:12px; color:var(--text2); line-height:1.4;}
+  .btn-secondary{
+    border:1px solid var(--secondary); color:var(--secondary); background:#fff;
+    font-size:13px; font-weight:600; padding:9px 14px; border-radius:10px; cursor:pointer;
+    width:100%; margin-bottom:16px; display:inline-flex; justify-content:center; gap:6px;
+  }
+  .btn-secondary:hover{ background:rgba(217,119,6,.06);}
+  /* ===== 统一 Card 风格土样卡片 ===== */
+  .sample-card{
+    background:var(--paper); border:1px solid var(--divider); border-radius:var(--radius);
+    overflow:hidden; margin-bottom:14px; position:relative;
+    transition:box-shadow .2s ease, transform .2s ease;
+  }
+  .sample-card:hover{ box-shadow:0 8px 20px rgba(31,42,40,.10); transform:translateY(-1px);}
+  .sample-card .leftbar{ position:absolute; left:0; top:0; bottom:0; width:4px;}
+  .bar-intact{ background:var(--primary);}
+  .bar-disturb{ background:var(--error);}
+  .card-inner{ padding:14px 14px 14px 18px;}
+  .card-top{ display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .soil-no{ font-size:15px; font-weight:700; color:var(--text);}
+  .soil-no.disturb{ color:var(--error);}
+  .actions{ display:flex; align-items:center; gap:2px;}
+  .icon-btn{
+    width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    color:var(--text2); cursor:pointer; border:none; background:transparent;
+  }
+  .icon-btn:hover{ background:rgba(31,42,40,.06);}
+  .icon-btn.del:hover{ background:rgba(220,38,38,.10); color:var(--error);}
+  .meta{ font-size:13px; color:var(--text2); margin-top:8px; line-height:1.5;}
+  .meta .others{ color:var(--secondary); font-weight:600;}
+  .chip{
+    display:inline-flex; align-items:center; font-size:11px; font-weight:600; border-radius:8px;
+    padding:1px 8px; height:20px; line-height:1;
+  }
+  .chip-error{ background:rgba(220,38,38,.10); color:var(--error);}
+  .chip-primary{ background:rgba(15,118,110,.10); color:var(--primary);}
+  .chip-sec{ background:rgba(217,119,6,.10); color:var(--secondary); border:1px solid rgba(217,119,6,.35);}
+  .card-top .left{ display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  /* 底部四格信息块 */
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;}
+  .info-tile{
+    border:1px solid var(--divider); border-radius:8px; background:var(--bg);
+    padding:8px 10px; text-align:center; cursor:pointer; transition:background .15s;
+  }
+  .info-tile:hover{ background:rgba(15,118,110,.06);}
+  .info-tile .k{ font-size:11px; color:var(--text2); letter-spacing:.2px; display:block; margin-bottom:3px;}
+  .info-tile .v{ font-size:14px; font-weight:600; color:var(--text);}
+  /* 底部保存栏 */
+  .savebar{
+    position:absolute; left:0; right:0; bottom:0; padding:14px 18px 22px;
+    background:var(--paper); border-top:1px solid var(--divider);
+  }
+  .savebar .btn-contained{ width:100%; padding:13px; font-size:15px; border-radius:12px;}
+  .legend{ width:390px; max-width:100%; color:#aeb9b7; font-size:12px; line-height:1.7;}
+  .legend b{ color:#e7edeb; font-weight:600;}
+</style>
+</head>
+<body>
+  <div class="stage-title">编辑页 · 土样卡片「统一 Card 风格」预览（浅色主题 / 移动端 390px）</div>
+
+  <div class="phone">
+    <div class="screen">
+      <div class="appbar">
+        <div class="back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </div>
+        <h6>编辑记录</h6>
+        <div class="export">导出xlsx</div>
+      </div>
+
+      <div class="content">
+        <div class="sec-head">
+          <span class="t">土样列表（3）</span>
+          <span class="btn-outline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            添加土样
+          </span>
+        </div>
+
+        <div class="batch-box">
+          <div>
+            <label>批量数量</label>
+            <input value="8" />
+          </div>
+          <button class="btn-contained">添加 8 个</button>
+          <span class="hint">土号按孔号自动生成（如 孔号 ZK1 → ZK1-1…）</span>
+        </div>
+
+        <button class="btn-secondary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          批量勾选（试验/扰动）
+        </button>
+
+        <!-- 卡片 1：原状 -->
+        <div class="sample-card">
+          <div class="leftbar bar-intact"></div>
+          <div class="card-inner">
+            <div class="card-top">
+              <div class="left">
+                <span class="soil-no">ZK1-1</span>
+                <span class="chip chip-primary">原状</span>
+              </div>
+              <div class="actions">
+                <button class="icon-btn" title="编辑">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+                <button class="icon-btn del" title="删除">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="meta">
+              土类：粉质黏土、粉土 ｜ 实验：颗分、快剪<br/>
+              <span class="others">其他：渗透试验</span>
+            </div>
+            <div class="grid2">
+              <div class="info-tile"><span class="k">IL 液性指数</span><span class="v">0.42</span></div>
+              <div class="info-tile"><span class="k">Ip 塑性指数</span><span class="v">12.5</span></div>
+              <div class="info-tile"><span class="k">扰动土</span><span class="v">原状</span></div>
+              <div class="info-tile"><span class="k">粉砂判定</span><span class="v">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片 2：扰动（红左边条 + 扰动 chip） -->
+        <div class="sample-card">
+          <div class="leftbar bar-disturb"></div>
+          <div class="card-inner">
+            <div class="card-top">
+              <div class="left">
+                <span class="soil-no disturb">ZK1-2</span>
+                <span class="chip chip-error">扰动</span>
+              </div>
+              <div class="actions">
+                <button class="icon-btn" title="编辑">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+                <button class="icon-btn del" title="删除">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="meta">
+              土类：黏土 ｜ 实验：固快、饱固快剪<br/>
+              <span class="others">其他：三轴压缩</span>
+            </div>
+            <div class="grid2">
+              <div class="info-tile"><span class="k">IL 液性指数</span><span class="v">—</span></div>
+              <div class="info-tile"><span class="k">Ip 塑性指数</span><span class="v">—</span></div>
+              <div class="info-tile"><span class="k">扰动土</span><span class="v" style="color:var(--error)">扰动</span></div>
+              <div class="info-tile"><span class="k">粉砂判定</span><span class="v">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片 3：原状含自定义项（amber 标签） -->
+        <div class="sample-card">
+          <div class="leftbar bar-intact"></div>
+          <div class="card-inner">
+            <div class="card-top">
+              <div class="left">
+                <span class="soil-no">ZK1-3</span>
+                <span class="chip chip-primary">原状</span>
+                <span class="chip chip-sec">自定义项</span>
+              </div>
+              <div class="actions">
+                <button class="icon-btn" title="编辑">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+                <button class="icon-btn del" title="删除">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="meta">
+              土类：细砂 ｜ 实验：颗分<br/>
+              <span class="others">其他：承载比 CBR、有机质</span>
+            </div>
+            <div class="grid2">
+              <div class="info-tile"><span class="k">IL 液性指数</span><span class="v">—</span></div>
+              <div class="info-tile"><span class="k">Ip 塑性指数</span><span class="v">—</span></div>
+              <div class="info-tile"><span class="k">扰动土</span><span class="v">原状</span></div>
+              <div class="info-tile"><span class="k">粉砂判定</span><span class="v">▲</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="savebar">
+        <button class="btn-contained">保存记录</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>统一 Card 风格要点：</b><br/>
+    ① 弃用写死灰边小 Box，改用 MUI <b>Card（variant outlined、圆角 14、elevation 0）</b>，与首页列表卡片同一套语言。<br/>
+    ② 左边条 4px：原状=青绿 primary，扰动=红 error——一眼区分状态，不再整片红底（避免和"冲突红"混淆）。<br/>
+    ③ 底部 IL/Ip、扰动土/粉砂判定 四格信息块：统一 <b>divider 边框 + background.default 浅底 + 圆角 8</b>（原写死 #f5f5f5 灰底改为主题 token）。<br/>
+    ④ "其他：xxx"自定义项沿用 <b>secondary 琥珀</b>，与批量勾选对话框统一；扰动土值用 error 红强调。<br/>
+    ⑤ 编辑/删除 IconButton 加圆角 hover 背景，触控更友好。
+  </div>
+</body>
+</html>

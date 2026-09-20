@@ -21,14 +21,29 @@ import {
   Divider,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import type { SxProps, Theme } from '@mui/material/styles';
+
+/** 编辑页土样卡片内「信息格」统一样式：divider 边框 + 浅底 + 圆角 8（替代原写死 #f5f5f5 灰底） */
+const infoTileSx: SxProps<Theme> = {
+  flex: 1,
+  border: '1px solid',
+  borderColor: 'divider',
+  borderRadius: 8,
+  p: 1,
+  textAlign: 'center',
+  cursor: 'pointer',
+  bgcolor: 'background.default',
+  transition: 'background .15s',
+  '&:hover': { bgcolor: (t) => alpha(t.palette.primary.main, 0.06) },
+};
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import InboxIcon from '@mui/icons-material/Inbox';
 import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode } from './types';
@@ -60,6 +75,7 @@ export default function App() {
   const [sampleDialogOpen, setSampleDialogOpen] = useState(false);
   const [editingSample, setEditingSample] = useState<SoilSample | null>(null);
   const [sampleIndex, setSampleIndex] = useState<number>(-1); // -1 表示新增
+  const [sampleFocusField, setSampleFocusField] = useState<'il' | 'ip' | undefined>(undefined);
 
   // 批量勾选对话框（试验项目 / 扰动土）
   const [batchCheckOpen, setBatchCheckOpen] = useState(false);
@@ -121,13 +137,15 @@ export default function App() {
     if (!editing) return;
     setEditingSample(newSample(editing.samples.length + 1));
     setSampleIndex(-1);
+    setSampleFocusField(undefined);
     setSampleDialogOpen(true);
   };
 
-  const openEditSample = (idx: number) => {
+  const openEditSample = (idx: number, focus?: 'il' | 'ip') => {
     if (!editing) return;
     setEditingSample({ ...editing.samples[idx] });
     setSampleIndex(idx);
+    setSampleFocusField(focus);
     setSampleDialogOpen(true);
   };
 
@@ -433,7 +451,7 @@ export default function App() {
                                   moveRecord(idx, -1);
                                 }}
                               >
-                                <ArrowUpwardIcon fontSize="small" />
+                                <KeyboardArrowUpIcon fontSize="small" />
                               </IconButton>
                               <IconButton
                                 size="small"
@@ -444,7 +462,7 @@ export default function App() {
                                   moveRecord(idx, 1);
                                 }}
                               >
-                                <ArrowDownwardIcon fontSize="small" />
+                                <KeyboardArrowDownIcon fontSize="small" />
                               </IconButton>
                               <IconButton
                                 size="small"
@@ -563,9 +581,10 @@ export default function App() {
               gap: 1,
               mb: 1.5,
               p: 1.5,
-              border: '1px dashed #bdbdbd',
+              border: '1px dashed',
+              borderColor: 'divider',
               borderRadius: 2,
-              bgcolor: '#fafafa',
+              bgcolor: 'background.default',
             }}
           >
             <TextField
@@ -596,135 +615,114 @@ export default function App() {
             </Button>
           </Box>
 
-          {editing.samples.map((s, idx) => (
-            <Box
-              key={s.id}
-              sx={{
-                border: '1px solid #e0e0e0',
-                borderLeft: s.disturbance === '扰动' ? '4px solid #d32f2f' : '1px solid #e0e0e0',
-                bgcolor: s.disturbance === '扰动' ? '#fff5f5' : 'transparent',
-                borderRadius: 2,
-                p: 1.5,
-                mb: 1.5,
-              }}
-            >
-              <Box
+          {editing.samples.map((s, idx) => {
+            const isDisturb = s.disturbance === '扰动';
+            return (
+              <Card
+                key={s.id}
+                variant="outlined"
                 sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
+                  borderRadius: 3,
+                  mb: 1.5,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderColor: 'divider',
+                  borderLeft: (t) =>
+                    `4px solid ${isDisturb ? t.palette.error.main : t.palette.primary.main}`,
+                  transition: 'box-shadow .2s ease, transform .2s ease',
+                  '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' },
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Typography
-                    fontWeight={600}
-                    sx={s.disturbance === '扰动' ? { color: 'error.main' } : undefined}
+                <Box sx={{ p: 1.5, pl: 2 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
                   >
-                    土号 {s.soilNumber || '(未填)'}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography
+                        fontWeight={700}
+                        sx={isDisturb ? { color: 'error.main' } : undefined}
+                      >
+                        土号 {s.soilNumber || '(未填)'}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={isDisturb ? '扰动' : '原状'}
+                        color={isDisturb ? 'error' : 'primary'}
+                        variant={isDisturb ? 'filled' : 'outlined'}
+                        sx={{ height: 20 }}
+                      />
+                    </Box>
+                    <Box>
+                      <IconButton size="small" aria-label="编辑" onClick={() => openEditSample(idx)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label="删除"
+                        onClick={() => deleteSample(idx)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: 13 }}>
+                    土类：{s.soilType.join('、') || '—'} ｜ 实验：{s.testItems.join('、') || '—'}
+                    {s.otherTestItems.length > 0 && (
+                      <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600 }}>
+                        {' ｜ 其他：' + s.otherTestItems.join('、')}
+                      </Box>
+                    )}
                   </Typography>
-                  {s.disturbance === '扰动' && (
-                    <Chip size="small" label="扰动" color="error" sx={{ ml: 1, height: 20 }} />
-                  )}
-                </Box>
-                <Box>
-                  <IconButton size="small" onClick={() => openEditSample(idx)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton size="small" onClick={() => deleteSample(idx)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              </Box>
-              <Box sx={{ fontSize: 13, color: 'text.secondary', mt: 0.5 }}>
-                土类：{s.soilType.join('、') || '—'} ｜ 实验：{s.testItems.join('、') || '—'}
-                {s.otherTestItems.length > 0 && (
-                  <Typography component="span" color="warning.main">
-                    {' ｜ 其他：' + s.otherTestItems.join('、')}
-                  </Typography>
-                )}
-              </Box>
 
-              {/* 最后两列：IL / Ip 常显，点击进入编辑 */}
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                <Box
-                  onClick={() => openEditSample(idx)}
-                  sx={{
-                    flex: 1,
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 1,
-                    p: 1,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    bgcolor: '#f5f5f5',
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    IL 液性指数
-                  </Typography>
-                  <Typography fontWeight={600}>{s.il || '—'}</Typography>
-                </Box>
-                <Box
-                  onClick={() => openEditSample(idx)}
-                  sx={{
-                    flex: 1,
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 1,
-                    p: 1,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    bgcolor: '#f5f5f5',
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    Ip 塑性指数
-                  </Typography>
-                  <Typography fontWeight={600}>{s.ip || '—'}</Typography>
-                </Box>
-              </Box>
+                  {/* IL / Ip 信息格：点击直接进入录入并定位到对应输入框，避免手机上滑误触试验项目 */}
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                    <Box onClick={() => openEditSample(idx, 'il')} sx={infoTileSx}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        IL 液性指数
+                      </Typography>
+                      <Typography fontWeight={600}>{s.il || '—'}</Typography>
+                    </Box>
+                    <Box onClick={() => openEditSample(idx, 'ip')} sx={infoTileSx}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Ip 塑性指数
+                      </Typography>
+                      <Typography fontWeight={600}>{s.ip || '—'}</Typography>
+                    </Box>
+                  </Box>
 
-              {/* 扰动土 / 粉砂判定：常显，点击进入编辑 */}
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                <Box
-                  onClick={() => openEditSample(idx)}
-                  sx={{
-                    flex: 1,
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 1,
-                    p: 1,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    bgcolor: '#f5f5f5',
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    扰动土
-                  </Typography>
-                  <Typography fontWeight={600}>{s.disturbance || '—'}</Typography>
+                  {/* 扰动土 / 粉砂判定 信息格 */}
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                    <Box onClick={() => openEditSample(idx)} sx={infoTileSx}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        扰动土
+                      </Typography>
+                      <Typography
+                        fontWeight={600}
+                        sx={isDisturb ? { color: 'error.main' } : undefined}
+                      >
+                        {s.disturbance || '—'}
+                      </Typography>
+                    </Box>
+                    <Box onClick={() => openEditSample(idx)} sx={infoTileSx}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        粉砂判定
+                      </Typography>
+                      <Typography fontWeight={600}>
+                        {s.siltySand && s.siltySand !== 'none'
+                          ? siltySandSymbol(s.siltySand)
+                          : '—'}
+                      </Typography>
+                    </Box>
+                  </Box>
                 </Box>
-                <Box
-                  onClick={() => openEditSample(idx)}
-                  sx={{
-                    flex: 1,
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 1,
-                    p: 1,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    bgcolor: '#f5f5f5',
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    粉砂判定
-                  </Typography>
-                  <Typography fontWeight={600}>
-                    {s.siltySand && s.siltySand !== 'none'
-                      ? siltySandSymbol(s.siltySand)
-                      : '—'}
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-          ))}
+              </Card>
+            );
+          })}
 
           {editing.samples.length === 0 && (
             <Box sx={{ color: 'text.secondary', fontSize: 14 }}>
@@ -759,6 +757,7 @@ export default function App() {
           open={sampleDialogOpen}
           mode={editing.mode}
           initial={editingSample}
+          autoFocusField={sampleFocusField}
           onSave={saveSample}
           onClose={() => setSampleDialogOpen(false)}
           customTestItems={editing.customTestItems ?? []}

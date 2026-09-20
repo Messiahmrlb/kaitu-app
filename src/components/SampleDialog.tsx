@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,6 +26,7 @@ import {
 } from '../constants';
 import ChipMultiSelect from './ChipMultiSelect';
 import { setDisturbance } from '../utils';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 
 interface Props {
   open: boolean;
@@ -41,6 +42,8 @@ interface Props {
   onAddCustomTestItem: (name: string) => void;
   /** 删除一个全局自定义试验项目名称 */
   onRemoveCustomTestItem?: (name: string) => void;
+  /** 打开时自动滚动并聚焦到该字段（用于从卡片 IL/Ip 格点击直接进入录入，避免手机上滑误触试验项目） */
+  autoFocusField?: 'il' | 'ip';
 }
 
 /** 单条土样录入对话框：覆盖全部字段，含仅 App 内显示的 IL / Ip */
@@ -53,12 +56,29 @@ export default function SampleDialog({
   customTestItems,
   onAddCustomTestItem,
   onRemoveCustomTestItem,
+  autoFocusField,
 }: Props) {
   const [sample, setSample] = useState<SoilSample>(initial ?? ({} as SoilSample));
 
-  // 打开时同步初始数据
+  // 底部 IL/Ip 输入框的 DOM 引用，用于点击卡片后自动滚动 + 聚焦
+  const ilRef = useRef<HTMLInputElement>(null);
+  const ipRef = useRef<HTMLInputElement>(null);
+
+  // 打开时同步初始数据；若指定 autoFocusField，则在渲染后滚到该字段并聚焦
   useEffect(() => {
-    if (open) setSample(initial ?? ({} as SoilSample));
+    if (open) {
+      setSample(initial ?? ({} as SoilSample));
+      if (autoFocusField) {
+        const id = window.setTimeout(() => {
+          const el = autoFocusField === 'il' ? ilRef.current : ipRef.current;
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.focus({ preventScroll: true });
+          }
+        }, 80);
+        return () => window.clearTimeout(id);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial]);
 
@@ -160,7 +180,7 @@ export default function SampleDialog({
           />
 
           {/* 额外 / 自定义试验项目：勾选写入 sample.otherTestItems，不进 40 列主表，导出到「额外试验项目」工作表 */}
-          <Box sx={{ borderTop: '1px dashed #ccc', pt: 2, mt: 1 }}>
+          <Box sx={{ borderTop: '1px dashed', borderColor: 'divider', pt: 2, mt: 1 }}>
             <ChipMultiSelect
               label="额外/自定义试验项目（多选）"
               options={customTestItems}
@@ -174,7 +194,7 @@ export default function SampleDialog({
                     key={item}
                     size="small"
                     label={item}
-                    color="warning"
+                    color="secondary"
                     variant="outlined"
                     onDelete={() => {
                       if (
@@ -198,17 +218,18 @@ export default function SampleDialog({
             <Button
               size="small"
               variant="outlined"
+              startIcon={<AddCircleOutlineIcon />}
               sx={{ mt: 1 }}
               onClick={() =>
                 onAddCustomTestItem(window.prompt('输入自定义试验项目名称') ?? '')
               }
             >
-              ＋ 添加自定义试验项目
+              添加自定义试验项目
             </Button>
           </Box>
 
           {/* 仅 App 内显示/保存，不写入导出表格 */}
-          <Box sx={{ borderTop: '1px dashed #ccc', pt: 2, mt: 1 }}>
+          <Box sx={{ borderTop: '1px dashed', borderColor: 'divider', pt: 2, mt: 1 }}>
             <Typography variant="caption" color="text.secondary">
               以下两项（液性指数 IL / 塑性指数 Ip）仅 App 内显示与本地保存，导出 xlsx 时不写入表格。
             </Typography>
@@ -217,6 +238,7 @@ export default function SampleDialog({
               type="number"
               fullWidth
               margin="normal"
+              inputRef={ilRef}
               value={sample.il ?? ''}
               onChange={(e) => set('il', e.target.value)}
               error={ilOutOf}
@@ -227,6 +249,7 @@ export default function SampleDialog({
               type="number"
               fullWidth
               margin="normal"
+              inputRef={ipRef}
               value={sample.ip ?? ''}
               onChange={(e) => set('ip', e.target.value)}
               error={ipOutOf}
@@ -237,7 +260,8 @@ export default function SampleDialog({
           {/* 扰动土 / 粉砂判定：二选一单选（绑定本地 sample 状态） */}
           <Box
             sx={{
-              borderTop: '1px dashed #ccc',
+              borderTop: '1px dashed',
+              borderColor: 'divider',
               pt: 2,
               mt: 1,
               display: 'flex',
