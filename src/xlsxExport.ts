@@ -247,21 +247,21 @@ export async function buildWorkbook(
   const ws2 = wb.addWorksheet('液性指数_塑性指数_粉砂判定');
   ws2.columns = [
     { width: 14 }, // 土号
-    { width: 14 }, // 液性指数(IL)
     { width: 14 }, // 塑性指数(Ip)
+    { width: 14 }, // 液性指数(IL)
     { width: 12 }, // 粉砂判定
   ];
 
   // 标题行（整行合并，美观）
   {
     const cell = ws2.getCell(1, 1);
-    cell.value = '校对字段（液性指数 / 塑性指数 / 粉砂判定）';
+    cell.value = '校对字段（塑性指数 / 液性指数 / 粉砂判定）';
     styleCell(cell, { bold: true, size: 13, align: 'center' });
     ws2.mergeCells(1, 1, 1, 4);
   }
 
   // 表头行
-  const head2 = ['土号', '液性指数(IL)', '塑性指数(Ip)', '粉砂判定'];
+  const head2 = ['土号', '塑性指数(Ip)', '液性指数(IL)', '粉砂判定'];
   for (let c = 1; c <= 4; c++) {
     const cell = ws2.getCell(2, c);
     cell.value = head2[c - 1];
@@ -273,8 +273,8 @@ export async function buildWorkbook(
     const r = 3 + idx;
     const rows: [number, string][] = [
       [1, s.soilNumber],
-      [2, s.il],
-      [3, s.ip],
+      [2, s.ip],
+      [3, s.il],
       [4, siltySandSymbol(s.siltySand ?? 'none')],
     ];
     rows.forEach(([c, v]) => {
@@ -300,8 +300,8 @@ export async function buildWorkbook(
   const ws3 = wb.addWorksheet('颗分统计');
   ws3.columns = [
     { width: 14 }, // 土号
-    { width: 14 }, // 液性指数(IL)
     { width: 14 }, // 塑性指数(Ip)
+    { width: 14 }, // 液性指数(IL)
     { width: 12 }, // 扰动土
     { width: 12 }, // 纳入颗分
   ];
@@ -312,7 +312,7 @@ export async function buildWorkbook(
     styleCell(cell, { bold: true, size: 13, align: 'center' });
     ws3.mergeCells(1, 1, 1, 5);
   }
-  const head3 = ['土号', '液性指数(IL)', '塑性指数(Ip)', '扰动土', '纳入颗分'];
+  const head3 = ['土号', '塑性指数(Ip)', '液性指数(IL)', '扰动土', '纳入颗分'];
   for (let c = 1; c <= 5; c++) {
     const cell = ws3.getCell(2, c);
     cell.value = head3[c - 1];
@@ -328,8 +328,8 @@ export async function buildWorkbook(
     const r = ws3Row++;
     const rows3: [number, string][] = [
       [1, s.soilNumber],
-      [2, s.il],
-      [3, s.ip],
+      [2, s.ip],
+      [3, s.il],
       [4, s.disturbance],
       [5, '√'],
     ];

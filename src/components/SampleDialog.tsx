@@ -234,17 +234,6 @@ export default function SampleDialog({
               以下两项（液性指数 IL / 塑性指数 Ip）仅 App 内显示与本地保存，导出 xlsx 时不写入表格。
             </Typography>
             <TextField
-              label="液性指数 IL"
-              type="number"
-              fullWidth
-              margin="normal"
-              inputRef={ilRef}
-              value={sample.il ?? ''}
-              onChange={(e) => set('il', e.target.value)}
-              error={ilOutOf}
-              helperText={ilOutOf ? '超出规定值（0.10–1.50）' : '规定范围 0.10–1.50'}
-            />
-            <TextField
               label="塑性指数 Ip"
               type="number"
               fullWidth
@@ -254,6 +243,17 @@ export default function SampleDialog({
               onChange={(e) => set('ip', e.target.value)}
               error={ipOutOf}
               helperText={ipOutOf ? '超出规定值（4.0–25.0）' : '规定范围 4.0–25.0'}
+            />
+            <TextField
+              label="液性指数 IL"
+              type="number"
+              fullWidth
+              margin="normal"
+              inputRef={ilRef}
+              value={sample.il ?? ''}
+              onChange={(e) => set('il', e.target.value)}
+              error={ilOutOf}
+              helperText={ilOutOf ? '超出规定值（0.10–1.50）' : '规定范围 0.10–1.50'}
             />
           </Box>
 

@@ -712,17 +712,17 @@ export default function App() {
 
                   {/* IL / Ip 信息格：点击直接进入录入并定位到对应输入框，避免手机上滑误触试验项目 */}
                   <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                    <Box onClick={() => openEditSample(idx, 'il')} sx={infoTileSx}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        IL 液性指数
-                      </Typography>
-                      <Typography fontWeight={600}>{s.il || '—'}</Typography>
-                    </Box>
                     <Box onClick={() => openEditSample(idx, 'ip')} sx={infoTileSx}>
                       <Typography variant="caption" color="text.secondary" display="block">
                         Ip 塑性指数
                       </Typography>
                       <Typography fontWeight={600}>{s.ip || '—'}</Typography>
+                    </Box>
+                    <Box onClick={() => openEditSample(idx, 'il')} sx={infoTileSx}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        IL 液性指数
+                      </Typography>
+                      <Typography fontWeight={600}>{s.il || '—'}</Typography>
                     </Box>
                   </Box>
 
