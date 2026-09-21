@@ -80,6 +80,31 @@ export function newSamplesBatch(
 }
 
 /**
+ * 孔号变更时，将现有土样的土号前缀从 oldHole 实时替换为 newHole。
+ * - 仅改写「土号刚好等于 `${oldHole}-${seq}`」的土样（seq 为末尾 -数字），其余原样返回；
+ * - 若 oldHole 为空，则匹配纯 `-${seq}` 形式的土号；
+ * - 新土号 = `${newHole}-${seq}`（newHole 为空时退回 `-${seq}`）。
+ * 不修改入参，返回新的数组/对象副本。
+ */
+export function renumberSamplesByHole(
+  samples: SoilSample[],
+  oldHole: string,
+  newHole: string,
+): SoilSample[] {
+  const oldTrim = (oldHole ?? '').trim();
+  const newTrim = (newHole ?? '').trim();
+  return samples.map((s) => {
+    const seq = parseTrailingSeq(s.soilNumber);
+    if (seq == null) return s;
+    const expectedOld = oldTrim ? `${oldTrim}-${seq}` : `-${seq}`;
+    if (s.soilNumber !== expectedOld) return s;
+    const newSoil = newTrim ? `${newTrim}-${seq}` : `-${seq}`;
+    if (newSoil === s.soilNumber) return s;
+    return { ...s, soilNumber: newSoil };
+  });
+}
+
+/**
  * 扰动土联动规则：返回 sample 的克隆副本，绝不修改入参。
  * - disturbance === '扰动'：确保 testItems 中包含「颗分」（去重、保持原有顺序）。
  * - disturbance === '原状'：原样返回克隆（不改动 testItems）。

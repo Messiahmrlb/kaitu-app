@@ -46,10 +46,16 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import InboxIcon from '@mui/icons-material/Inbox';
 import Checkbox from '@mui/material/Checkbox';
-import { SoilRecord, SoilSample, RecordMode } from './types';
+import { SoilRecord, SoilSample, RecordMode, EngineeringInfo } from './types';
 import { MODE_LABELS, siltySandSymbol } from './constants';
 import { loadRecords, saveRecords } from './storage';
-import { newRecord, newSample, newSamplesBatch, sortRecordsByHole } from './utils';
+import {
+  newRecord,
+  newSample,
+  newSamplesBatch,
+  sortRecordsByHole,
+  renumberSamplesByHole,
+} from './utils';
 import { exportRecord } from './xlsxExport';
 import { parseDeliveryFile } from './importDelivery';
 import EngineeringInfoForm from './components/EngineeringInfoForm';
@@ -119,6 +125,20 @@ export default function App() {
 
   const updateEditing = (patch: Partial<SoilRecord>) =>
     setEditing((prev) => (prev ? { ...prev, ...patch, updatedAt: Date.now() } : prev));
+
+  /**
+   * 工程信息变更：孔号（holeCode）变化时，实时把现有土样的土号前缀同步为新孔号。
+   * 其余字段照常更新；若尚未录入任何土样则不触发重编号。
+   */
+  const handleEngineeringChange = (v: EngineeringInfo) => {
+    const oldHole = editing?.engineering.holeCode ?? '';
+    const newHole = (v.holeCode ?? '').trim();
+    const patch: Partial<SoilRecord> = { engineering: v };
+    if (newHole !== oldHole && (editing?.samples?.length ?? 0) > 0) {
+      patch.samples = renumberSamplesByHole(editing!.samples, oldHole, newHole);
+    }
+    updateEditing(patch);
+  };
 
   const saveEditing = async () => {
     if (!editing) return;
@@ -554,7 +574,7 @@ export default function App() {
 
           <EngineeringInfoForm
             value={editing.engineering}
-            onChange={(v) => updateEditing({ engineering: v })}
+            onChange={handleEngineeringChange}
           />
 
           <Divider sx={{ my: 2 }} />
@@ -655,6 +675,17 @@ export default function App() {
                         variant={isDisturb ? 'filled' : 'outlined'}
                         sx={{ height: 20 }}
                       />
+                      {(!s.siltySand || s.siltySand === 'none') &&
+                        (s.il ?? '').trim() === '' &&
+                        (s.ip ?? '').trim() === '' && (
+                          <Chip
+                            size="small"
+                            label="未描述"
+                            color="warning"
+                            variant="outlined"
+                            sx={{ height: 20 }}
+                          />
+                        )}
                     </Box>
                     <Box>
                       <IconButton size="small" aria-label="编辑" onClick={() => openEditSample(idx)}>
