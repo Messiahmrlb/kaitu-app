@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -110,6 +110,13 @@ export default function App() {
     setRecords(next);
     await saveRecords(next);
   };
+
+  // 启动时从本地存储恢复全部记录（Capacitor Preferences：Web 端为 localStorage，安卓原生端为 SharedPreferences）
+  useEffect(() => {
+    loadRecords()
+      .then(setRecords)
+      .catch(() => {});
+  }, []);
 
   // ---------- 新建 / 打开 ----------
   const handleModeSelect = (mode: RecordMode) => {
