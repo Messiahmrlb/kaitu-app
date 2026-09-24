@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -40,6 +40,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import TableChartIcon from '@mui/icons-material/TableChart';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -57,6 +58,7 @@ import {
   renumberSamplesByHole,
 } from './utils';
 import { exportRecord } from './xlsxExport';
+import { exportRecordPdf } from './pdfExport';
 import { parseDeliveryFile } from './importDelivery';
 import EngineeringInfoForm from './components/EngineeringInfoForm';
 import SampleDialog from './components/SampleDialog';
@@ -110,13 +112,6 @@ export default function App() {
     setRecords(next);
     await saveRecords(next);
   };
-
-  // 启动时从本地存储恢复全部记录（Capacitor Preferences：Web 端为 localStorage，安卓原生端为 SharedPreferences）
-  useEffect(() => {
-    loadRecords()
-      .then(setRecords)
-      .catch(() => {});
-  }, []);
 
   // ---------- 新建 / 打开 ----------
   const handleModeSelect = (mode: RecordMode) => {
@@ -214,6 +209,16 @@ export default function App() {
       setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
     } catch (e: any) {
       setSnack({ msg: '导出失败：' + (e?.message ?? String(e)), sev: 'error' });
+    }
+  };
+
+  /** 导出 PDF（A3 横向逐格模板） */
+  const handleExportPdf = async (rec: SoilRecord) => {
+    try {
+      const res = await exportRecordPdf(rec);
+      setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
+    } catch (e: any) {
+      setSnack({ msg: 'PDF 导出失败：' + (e?.message ?? String(e)), sev: 'error' });
     }
   };
 
@@ -503,6 +508,16 @@ export default function App() {
                               </IconButton>
                               <IconButton
                                 size="small"
+                                aria-label="导出pdf"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExportPdf(rec);
+                                }}
+                              >
+                                <PictureAsPdfIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
                                 color="error"
                                 aria-label="删除"
                                 onClick={(e) => {
@@ -566,6 +581,13 @@ export default function App() {
               onClick={() => handleExport(editing)}
             >
               导出xlsx
+            </Button>
+            <Button
+              color="inherit"
+              startIcon={<PictureAsPdfIcon />}
+              onClick={() => handleExportPdf(editing)}
+            >
+              导出PDF
             </Button>
           </Toolbar>
         </AppBar>
@@ -719,17 +741,17 @@ export default function App() {
 
                   {/* IL / Ip 信息格：点击直接进入录入并定位到对应输入框，避免手机上滑误触试验项目 */}
                   <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                    <Box onClick={() => openEditSample(idx, 'ip')} sx={infoTileSx}>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Ip 塑性指数
-                      </Typography>
-                      <Typography fontWeight={600}>{s.ip || '—'}</Typography>
-                    </Box>
                     <Box onClick={() => openEditSample(idx, 'il')} sx={infoTileSx}>
                       <Typography variant="caption" color="text.secondary" display="block">
                         IL 液性指数
                       </Typography>
                       <Typography fontWeight={600}>{s.il || '—'}</Typography>
+                    </Box>
+                    <Box onClick={() => openEditSample(idx, 'ip')} sx={infoTileSx}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Ip 塑性指数
+                      </Typography>
+                      <Typography fontWeight={600}>{s.ip || '—'}</Typography>
                     </Box>
                   </Box>
 
