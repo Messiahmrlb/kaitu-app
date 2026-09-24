@@ -133,9 +133,9 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** 竖排文字：逐字拆成纵向堆叠的块（html2canvas 对 writing-mode 支持不稳定，故用 flex 列） */
+/** 竖排文字：逐字拆成纵向堆叠（用 <br> 换行，保持 th 为正常表格单元，避免 flex 破坏表格布局） */
 function vchars(text: string): string {
-  return [...text].map((c) => `<span class="pdf-vc">${esc(c)}</span>`).join('');
+  return [...text].map((c) => esc(c)).join('<br>');
 }
 
 /** Uint8Array → base64（原生端写文件用，照抄 xlsxExport） */
@@ -164,20 +164,19 @@ function renderInfoLine(eng: SoilRecord['engineering']): string {
   const y = parts[0] ?? '';
   const m = parts[1] ?? '';
   const d = parts[2] ?? '';
-  const top = px(130.8);
-  const fs = px(11.1);
-  const common = `class="pdf-txt" style="top:${top}px;font-size:${fs}px;"`;
+  const txt = (leftPt: number, html: string): string =>
+    `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(130.8)}px;font-size:${px(11.1)}px;">${html}</div>`;
   return `
-    <div ${common} style="left:${px(54)}px;">工程编号：${esc(eng.projectCode ?? '')}</div>
-    <div ${common} style="left:${px(494.6)}px;">孔号：${esc(eng.holeCode ?? '')}</div>
-    <div ${common} style="left:${px(673.4)}px;">孔口标高${esc(eng.holeElevation ?? '')}</div>
-    <div ${common} style="left:${px(742.2)}px;">m</div>
-    <div ${common} style="left:${px(978.4)}px;">开土日期${esc(y)}</div>
-    <div ${common} style="left:${px(1104.8)}px;">年</div>
-    <div ${common} style="left:${px(1122)}px;">${esc(m)}</div>
-    <div ${common} style="left:${px(1137.8)}px;">月</div>
-    <div ${common} style="left:${px(1153)}px;">${esc(d)}</div>
-    <div ${common} style="left:${px(1170.8)}px;">日</div>`;
+    ${txt(54, `工程编号：${esc(eng.projectCode ?? '')}`)}
+    ${txt(494.6, `孔号：${esc(eng.holeCode ?? '')}`)}
+    ${txt(673.4, `孔口标高${esc(eng.holeElevation ?? '')}`)}
+    ${txt(742.2, 'm')}
+    ${txt(978.4, `开土日期${esc(y)}`)}
+    ${txt(1104.8, '年')}
+    ${txt(1122, esc(m))}
+    ${txt(1137.8, '月')}
+    ${txt(1153, esc(d))}
+    ${txt(1170.8, '日')}`;
 }
 
 function renderHeaderTexts(record: SoilRecord): string {
@@ -259,13 +258,12 @@ function renderTable(page: PdfPage, record: SoilRecord): string {
     .pdf-table *{box-sizing:border-box;}
     .pdf-th,.pdf-td{border:1px solid #000;margin:0;padding:0;text-align:center;
       vertical-align:middle;font-size:${px(9)}px;line-height:1.05;overflow:hidden;white-space:nowrap;}
-    .pdf-th{font-weight:bold;background:#f2f2f2;}
+    .pdf-th{font-weight:bold;background:#fff;}
     .pdf-grouprow th{height:${px(GROUP_ROW_H_PT)}px;}
     .pdf-subrow th{height:${px(subH)}px;}
     .pdf-datarow td{height:${px(DATA_ROW_H_PT)}px;}
     .pdf-whole{font-weight:bold;}
-    .pdf-vlabel{display:flex;flex-direction:column;align-items:center;justify-content:center;}
-    .pdf-vlabel>.pdf-vc{display:block;}
+    .pdf-vlabel{white-space:normal;line-height:1.05;}
     .pdf-vsmall{font-size:${px(9)}px;}`;
 
   return `
@@ -288,7 +286,7 @@ function buildPageElement(
   el.className = 'pdf-page';
   el.style.cssText =
     `position:absolute;left:-100000px;top:0;width:${PAGE_W_PX}px;height:${PAGE_H_PX}px;` +
-    `background:#fff;color:#000;font-family:'SimSun','宋体',serif;`;
+    `overflow:hidden;background:#fff;color:#000;font-family:'SimSun','宋体',serif;`;
   const pageCss = `
     .pdf-page *{box-sizing:border-box;}
     .pdf-txt{position:absolute;white-space:nowrap;}`;
@@ -317,6 +315,35 @@ function shrinkOverflow(root: HTMLElement): void {
 // ---------------------------------------------------------------------------
 // 导出入口
 // ---------------------------------------------------------------------------
+/** 生成 PDF Blob（不触发下载），便于测试与复用 */
+export async function buildRecordPdfBlob(record: SoilRecord): Promise<Blob> {
+  const pages = buildPdfPages(record);
+  const totalPages = pages.length;
+  const html2canvas = (await getHtml2Canvas()).default;
+  const { jsPDF } = await getJsPdf();
+
+  const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape' });
+  for (let i = 0; i < totalPages; i++) {
+    const el = buildPageElement(pages[i], record, i + 1, totalPages);
+    document.body.appendChild(el);
+    shrinkOverflow(el);
+    const canvas = await html2canvas(el, {
+      scale: 3,
+      backgroundColor: '#fff',
+      width: PAGE_W_PX,
+      height: PAGE_H_PX,
+      windowWidth: PAGE_W_PX,
+      windowHeight: PAGE_H_PX,
+    });
+    document.body.removeChild(el);
+    const img = canvas.toDataURL('image/png');
+    if (i > 0) pdf.addPage();
+    pdf.addImage(img, 'PNG', 0, 0, 420, 297);
+  }
+
+  return pdf.output('blob');
+}
+
 /**
  * 生成并导出 PDF（A3 横向，单孔成页，超 23 行另起页）。
  * - 原生端：写入文档目录后用系统分享菜单导出。
@@ -324,29 +351,12 @@ function shrinkOverflow(root: HTMLElement): void {
  */
 export async function exportRecordPdf(record: SoilRecord): Promise<ExportResult> {
   try {
-    const pages = buildPdfPages(record);
-    const totalPages = pages.length;
-    const html2canvas = (await getHtml2Canvas()).default;
-    const { jsPDF } = await getJsPdf();
-
-    const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape' });
-    for (let i = 0; i < totalPages; i++) {
-      const el = buildPageElement(pages[i], record, i + 1, totalPages);
-      document.body.appendChild(el);
-      shrinkOverflow(el);
-      const canvas = await html2canvas(el, { scale: 3, backgroundColor: '#fff' });
-      document.body.removeChild(el);
-      const img = canvas.toDataURL('image/png');
-      if (i > 0) pdf.addPage();
-      pdf.addImage(img, 'PNG', 0, 0, 420, 297);
-    }
-
-    const arrayBuffer = pdf.output('arraybuffer') as ArrayBuffer;
-    const uint8 = new Uint8Array(arrayBuffer);
+    const blob = await buildRecordPdfBlob(record);
     const fileName = buildPdfFileName(record);
 
     if (Capacitor.isNativePlatform()) {
-      const base64 = uint8ToBase64(uint8);
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64 = uint8ToBase64(new Uint8Array(arrayBuffer));
       const fsResult = await Filesystem.writeFile({
         path: fileName,
         data: base64,
@@ -360,7 +370,6 @@ export async function exportRecordPdf(record: SoilRecord): Promise<ExportResult>
       return { success: true, message: `已生成并保存到文档目录：${fileName}`, path: fsResult.uri };
     }
 
-    const blob = new Blob([uint8], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
