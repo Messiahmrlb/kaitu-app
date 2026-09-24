@@ -328,7 +328,7 @@ export async function buildRecordPdfBlob(record: SoilRecord): Promise<Blob> {
     document.body.appendChild(el);
     shrinkOverflow(el);
     const canvas = await html2canvas(el, {
-      scale: 3,
+      scale: 2,
       backgroundColor: '#fff',
       width: PAGE_W_PX,
       height: PAGE_H_PX,
@@ -336,9 +336,9 @@ export async function buildRecordPdfBlob(record: SoilRecord): Promise<Blob> {
       windowHeight: PAGE_H_PX,
     });
     document.body.removeChild(el);
-    const img = canvas.toDataURL('image/png');
+    const img = canvas.toDataURL('image/jpeg', 0.95);
     if (i > 0) pdf.addPage();
-    pdf.addImage(img, 'PNG', 0, 0, 420, 297);
+    pdf.addImage(img, 'JPEG', 0, 0, 420, 297);
   }
 
   return pdf.output('blob');
