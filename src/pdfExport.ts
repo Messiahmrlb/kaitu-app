@@ -58,13 +58,14 @@ export interface PdfPage {
   cells: Record<number, string>;
 }
 
-/** 把一条土样按 39 列数据映射写入某页某行的单元格 */
-function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B'): void {
+/** 把一条土样按 39 列数据映射写入某页某行的单元格；seq 为该土样在全记录中的序号（1 起） */
+function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number): void {
   const set = (col: number, v: string): void => {
     cells[cellKey(row, col)] = v;
   };
   const soilType = soilTypeOptions(mode);
-  set(1, s.soilNumber ?? '');
+  // 土号列：按全记录顺序输出 -1, -2 …（不含孔号前缀，与纸质开土记录表一致）
+  set(1, `-${seq}`);
   set(2, s.fieldRecord ?? '');
   set(3, ''); // 取样深度：模板留空手填
   set(4, ''); // 取样标高：模板留空手填
@@ -100,7 +101,7 @@ export function buildPdfPages(record: SoilRecord): PdfPage[] {
     const cells: Record<number, string> = {};
     for (let r = 0; r < ROWS_PER_PAGE; r++) {
       const s = samples[p * ROWS_PER_PAGE + r];
-      if (s) fillRow(cells, r, s, record.mode);
+      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1);
     }
     pages.push({ cells });
   }

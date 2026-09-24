@@ -93,11 +93,13 @@ export function renumberSamplesByHole(
 ): SoilSample[] {
   const oldTrim = (oldHole ?? '').trim();
   const newTrim = (newHole ?? '').trim();
+  if (newTrim === oldTrim) return samples;
   return samples.map((s) => {
     const seq = parseTrailingSeq(s.soilNumber);
+    // 只要土号带「-数字」后缀（无论当前前缀是孔号还是空），都按新孔号统一重编号。
+    // 这样导入的 D25-1 与 App 内手加的 -1 在改孔号时会一致跟随，不再出现「只改了几个」。
+    // 完全手工填写、不含 -数字 后缀的土号（如 'abc'）原样保留，不被误改。
     if (seq == null) return s;
-    const expectedOld = oldTrim ? `${oldTrim}-${seq}` : `-${seq}`;
-    if (s.soilNumber !== expectedOld) return s;
     const newSoil = newTrim ? `${newTrim}-${seq}` : `-${seq}`;
     if (newSoil === s.soilNumber) return s;
     return { ...s, soilNumber: newSoil };
