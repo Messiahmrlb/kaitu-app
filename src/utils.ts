@@ -80,6 +80,23 @@ export function newSamplesBatch(
 }
 
 /**
+ * 在指定位置插入土样后，从该位置起重新顺序编号（孔号前缀 + 序号）。
+ * - from 之前的土样保持原土号不动（避免误改已手工填写的编号）；
+ * - from 及之后：soilNumber = `${孔号}-${i+1}`（孔号为空则 `-${i+1}`）。
+ * 不修改入参，返回新数组/副本。用于「在孔内任意位置插入一条土样」后保持连续编号。
+ */
+export function renumberFrom(
+  samples: SoilSample[],
+  holeCode: string,
+  from: number,
+): SoilSample[] {
+  const hole = (holeCode ?? '').trim();
+  return samples.map((s, i) =>
+    i >= from ? { ...s, soilNumber: hole ? `${hole}-${i + 1}` : `-${i + 1}` } : { ...s },
+  );
+}
+
+/**
  * 孔号变更时，将现有土样的土号前缀从 oldHole 实时替换为 newHole。
  * - 仅改写「土号刚好等于 `${oldHole}-${seq}`」的土样（seq 为末尾 -数字），其余原样返回；
  * - 若 oldHole 为空，则匹配纯 `-${seq}` 形式的土号；

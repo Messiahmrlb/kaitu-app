@@ -46,6 +46,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import InboxIcon from '@mui/icons-material/Inbox';
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode, EngineeringInfo } from './types';
 import { MODE_LABELS, siltySandSymbol } from './constants';
@@ -56,6 +57,7 @@ import {
   newSamplesBatch,
   sortRecordsByHole,
   renumberSamplesByHole,
+  renumberFrom,
 } from './utils';
 import { exportRecord } from './xlsxExport';
 import { exportRecordPdf } from './pdfExport';
@@ -65,6 +67,7 @@ import SampleDialog from './components/SampleDialog';
 import ModeSelectDialog from './components/ModeSelectDialog';
 import BatchCheckDialog from './components/BatchCheckDialog';
 import ImportDeliveryDialog from './components/ImportDeliveryDialog';
+import NewRecordSetupDialog from './components/NewRecordSetupDialog';
 
 type View = 'list' | 'editor';
 
@@ -75,6 +78,9 @@ export default function App() {
 
   // 新建记录时的格式选择对话框
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
+  // 新建记录：选完格式后，再弹「孔号 + 数量」设置框
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [pendingMode, setPendingMode] = useState<RecordMode | null>(null);
 
   // 导入送样单对话框
   const [importOpen, setImportOpen] = useState(false);
@@ -84,6 +90,8 @@ export default function App() {
   const [editingSample, setEditingSample] = useState<SoilSample | null>(null);
   const [sampleIndex, setSampleIndex] = useState<number>(-1); // -1 表示新增
   const [sampleFocusField, setSampleFocusField] = useState<'il' | 'ip' | undefined>(undefined);
+  // 插入土样的位置（null=非插入；>=0=在该索引前插入，保存时按孔号重排编号）
+  const [insertIndex, setInsertIndex] = useState<number | null>(null);
 
   // 批量勾选对话框（试验项目 / 扰动土）
   const [batchCheckOpen, setBatchCheckOpen] = useState(false);
@@ -95,8 +103,8 @@ export default function App() {
   });
   const [deleteRecord, setDeleteRecord] = useState<SoilRecord | null>(null);
 
-  // 批量添加土样：数量输入与处理
-  const [batchCount, setBatchCount] = useState<number>(8);
+  // 批量添加土样：数量输入与处理（允许留空，点击添加时再兜底为 1）
+  const [batchCount, setBatchCount] = useState<string>('8');
 
   // 记录级排序方向（首页列表视图）
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -122,7 +130,21 @@ export default function App() {
   // ---------- 新建 / 打开 ----------
   const handleModeSelect = (mode: RecordMode) => {
     setModeDialogOpen(false);
-    setEditing(newRecord(mode));
+    setPendingMode(mode);
+    setSetupOpen(true);
+  };
+
+  /** 新建记录第二步确认：用孔号 + 数量直接生成一份已编好号的记录 */
+  const handleSetupConfirm = (holeCode: string, count: number) => {
+    const mode = pendingMode ?? 'A';
+    const rec = newRecord(mode);
+    const hole = holeCode.trim();
+    rec.engineering.holeCode = hole;
+    if (hole) rec.name = `开土记录 ${hole}`;
+    rec.samples = count > 0 ? newSamplesBatch(count, hole, []) : [];
+    setSetupOpen(false);
+    setPendingMode(null);
+    setEditing(rec);
     setView('editor');
   };
 
@@ -165,6 +187,7 @@ export default function App() {
     if (!editing) return;
     setEditingSample(newSample(editing.samples.length + 1));
     setSampleIndex(-1);
+    setInsertIndex(null);
     setSampleFocusField(undefined);
     setSampleDialogOpen(true);
   };
@@ -173,16 +196,37 @@ export default function App() {
     if (!editing) return;
     setEditingSample({ ...editing.samples[idx] });
     setSampleIndex(idx);
+    setInsertIndex(null);
     setSampleFocusField(focus);
+    setSampleDialogOpen(true);
+  };
+
+  /** 在 idx 之前插入一条新土样：打开空白录入框，保存时按孔号重排后续编号 */
+  const openInsertSample = (idx: number) => {
+    if (!editing) return;
+    setEditingSample(newSample(idx + 1));
+    setSampleIndex(-1);
+    setInsertIndex(idx);
+    setSampleFocusField(undefined);
     setSampleDialogOpen(true);
   };
 
   const saveSample = (s: SoilSample) => {
     if (!editing) return;
-    const samples = [...editing.samples];
-    if (sampleIndex < 0) samples.push(s);
-    else samples[sampleIndex] = s;
-    updateEditing({ samples });
+    if (insertIndex !== null) {
+      // 插入模式：在 insertIndex 处插入，并从该位置起重排连续编号
+      const hole = (editing.engineering.holeCode ?? '').trim();
+      const samples = [...editing.samples];
+      samples.splice(insertIndex, 0, s);
+      updateEditing({ samples: renumberFrom(samples, hole, insertIndex) });
+      setInsertIndex(null);
+    } else if (sampleIndex < 0) {
+      updateEditing({ samples: [...editing.samples, s] });
+    } else {
+      const samples = [...editing.samples];
+      samples[sampleIndex] = s;
+      updateEditing({ samples });
+    }
     setSampleDialogOpen(false);
   };
 
@@ -194,7 +238,7 @@ export default function App() {
   /** 批量添加 N 条土样，土号按孔号前缀自动编号（见 utils.newSamplesBatch） */
   const addBatchSamples = () => {
     if (!editing) return;
-    const count = Math.max(1, Math.floor(batchCount || 1));
+    const count = Math.max(1, Math.floor(Number(batchCount)) || 1);
     const added = newSamplesBatch(count, editing.engineering.holeCode, editing.samples);
     updateEditing({ samples: [...editing.samples, ...added] });
     setSnack({ msg: `已批量添加 ${added.length} 条土样`, sev: 'success' });
@@ -647,11 +691,11 @@ export default function App() {
               type="number"
               size="small"
               value={batchCount}
-              onChange={(e) => setBatchCount(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+              onChange={(e) => setBatchCount(e.target.value)}
               inputProps={{ min: 1, style: { width: 64 } }}
             />
             <Button variant="contained" onClick={addBatchSamples}>
-              添加 {batchCount} 个
+              添加 {Math.max(1, Math.floor(Number(batchCount)) || 1)} 个
             </Button>
             <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1, ml: 1 }}>
               土号按孔号自动生成（如 孔号 ZK1 → ZK1-1…；孔号为空 → -1…）
@@ -723,6 +767,13 @@ export default function App() {
                         )}
                     </Box>
                     <Box>
+                      <IconButton
+                        size="small"
+                        aria-label="在此前插入土样"
+                        onClick={() => openInsertSample(idx)}
+                      >
+                        <PlaylistAddIcon fontSize="small" />
+                      </IconButton>
                       <IconButton size="small" aria-label="编辑" onClick={() => openEditSample(idx)}>
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -825,7 +876,10 @@ export default function App() {
           initial={editingSample}
           autoFocusField={sampleFocusField}
           onSave={saveSample}
-          onClose={() => setSampleDialogOpen(false)}
+          onClose={() => {
+            setSampleDialogOpen(false);
+            setInsertIndex(null);
+          }}
           customTestItems={editing.customTestItems ?? []}
           onAddCustomTestItem={(name) => {
             const t = name.trim();
@@ -857,6 +911,16 @@ export default function App() {
         open={modeDialogOpen}
         onSelect={handleModeSelect}
         onClose={() => setModeDialogOpen(false)}
+      />
+
+      <NewRecordSetupDialog
+        open={setupOpen}
+        mode={pendingMode ?? 'A'}
+        onConfirm={handleSetupConfirm}
+        onClose={() => {
+          setSetupOpen(false);
+          setPendingMode(null);
+        }}
       />
 
       <ImportDeliveryDialog
