@@ -61,6 +61,7 @@ import {
   nextSeq,
   insertSampleAt,
   renumberDigitsOnly,
+  disturbedTestConflicts,
 } from './utils';
 import { exportRecord } from './xlsxExport';
 import { exportRecordPdf } from './pdfExport';
@@ -726,6 +727,8 @@ export default function App() {
 
           {editing.samples.map((s, idx) => {
             const isDisturb = s.disturbance === '扰动';
+            // 扰动土 + 固结/渗透/剪切/三轴 等不兼容试验项：在卡片上显著提示
+            const conflictedTests = disturbedTestConflicts(s);
             return (
               <Card
                 key={s.id}
@@ -797,6 +800,29 @@ export default function App() {
                       </IconButton>
                     </Box>
                   </Box>
+
+                  {/* 扰动土试验项目冲突：卡片上显著提示，点击可直接进入修改 */}
+                  {conflictedTests.length > 0 && (
+                    <Alert
+                      severity="warning"
+                      onClick={() => openEditSample(idx)}
+                      sx={{
+                        mt: 1,
+                        cursor: 'pointer',
+                        py: 0.5,
+                        '& .MuiAlert-icon': { py: 0.5 },
+                        '& .MuiAlert-message': { py: 0.25, width: '100%' },
+                      }}
+                    >
+                      <Typography variant="body2" fontWeight={700}>
+                        试验项目冲突：扰动土不应做 {conflictedTests.join('、')}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        扰动土仅适用「物性」「颗分」，点此修改
+                      </Typography>
+                    </Alert>
+                  )}
+
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     土类：{s.soilType.join('、') || '—'} ｜ 实验：{s.testItems.join('、') || '—'}
                     {s.otherTestItems.length > 0 && (
