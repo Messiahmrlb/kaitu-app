@@ -51,6 +51,7 @@ import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode, EngineeringInfo } from './types';
 import { MODE_LABELS, siltySandSymbol } from './constants';
 import { loadRecords, saveRecords } from './storage';
+import { App as CapacitorApp } from '@capacitor/app';
 import {
   newRecord,
   newSample,
@@ -250,6 +251,63 @@ export default function App() {
     setView('list');
     setEditing(null);
   };
+
+  // 安卓硬件返回键：优先关闭已打开的对话框；编辑页先自动保存再返回；列表页退出应用。
+  // 用 ref 保存「最新一版」处理器，避免监听器闭包拿到过期的 editing/records。
+  const hardwareBackRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    hardwareBackRef.current = () => {
+      if (deleteRecord) {
+        setDeleteRecord(null);
+        return;
+      }
+      if (batchConfirm) {
+        setBatchConfirm(null);
+        return;
+      }
+      if (sampleDialogOpen) {
+        setSampleDialogOpen(false);
+        setInsertIndex(null);
+        return;
+      }
+      if (batchCheckOpen) {
+        setBatchCheckOpen(false);
+        return;
+      }
+      if (importOpen) {
+        setImportOpen(false);
+        return;
+      }
+      if (setupOpen) {
+        setSetupOpen(false);
+        setPendingMode(null);
+        return;
+      }
+      if (modeDialogOpen) {
+        setModeDialogOpen(false);
+        return;
+      }
+      if (view === 'editor') {
+        void autoSaveAndBack();
+        return;
+      }
+      void CapacitorApp.exitApp();
+    };
+  });
+
+  useEffect(() => {
+    let disposed = false;
+    let remove: (() => Promise<void>) | undefined;
+    void CapacitorApp.addListener('backButton', () => hardwareBackRef.current()).then((h) => {
+      remove = () => h.remove();
+      // 组件已卸载才拿到句柄时立即移除，避免监听器泄漏
+      if (disposed) void remove();
+    });
+    return () => {
+      disposed = true;
+      if (remove) void remove();
+    };
+  }, []);
 
   // ---------- 土样增删改 ----------
   const openNewSample = () => {
