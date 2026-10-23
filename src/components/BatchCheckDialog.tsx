@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { SoilSample } from '../types';
 import { TEST_ITEMS, DISTURBED_APPLICABLE_TESTS } from '../constants';
-import { setDisturbance, isPermQuickConflict, isQuickShearBothConflict, pinchScale } from '../utils';
+import { setDisturbance, isPermQuickConflict, isQuickShearBothConflict } from '../utils';
 import { conflictBg } from '../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -47,9 +47,12 @@ const STICKY_HEAD = {
   backgroundColor: 'background.default',
 };
 
-/** 矩阵缩放范围：1 = 原始大小，4 = 放大 4 倍（双指缩放 / 按钮调节均夹紧在此区间） */
-const MIN_SCALE = 1;
+/** 矩阵缩放范围：MIN_SCALE = 缩小下限（一屏内看更多列），1 = 原始大小，MAX_SCALE = 放大上限（字更大好点按）。
+ *  按钮调节夹紧在此区间；手机屏小，主要用 <1 的缩放把整张矩阵塞进一屏。 */
+const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
+/** 每次点击 －/＋ 的步进 */
+const SCALE_STEP = 0.25;
 
 interface Props {
   open: boolean;
@@ -79,22 +82,12 @@ export default function BatchCheckDialog({
   // 工作副本（克隆），取消时丢弃，不影响外部 samples
   const [working, setWorking] = useState<SoilSample[]>([]);
 
-  // 矩阵缩放状态（双指缩放 / 按钮调节）。scaleRef 用于在原生事件回调里读取最新值，避免闭包过期。
+  // 矩阵缩放状态（按钮调节）。setZoom 夹紧在 [MIN_SCALE, MAX_SCALE] 区间。
   const [scale, setScale] = useState(1);
-  const scaleRef = useRef(1);
   const setZoom = (next: number) => {
     const clamped = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
-    scaleRef.current = clamped;
     setScale(clamped);
   };
-  // 滚动容器与表格引用；pinchRef 保存双指手势开始时的基线信息。
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const pinchRef = useRef<{
-    startDist: number;
-    startScale: number;
-    lastCx: number;
-    lastCy: number;
-  } | null>(null);
 
   // 打开时从 props 重新初始化工作副本，并把缩放复位为 1（每次进入都从原始大小开始）
   useEffect(() => {
@@ -104,76 +97,6 @@ export default function BatchCheckDialog({
       );
       setZoom(1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  /**
-   * 在滚动容器上挂原生触摸/滚轮监听（passive:false 才能 preventDefault 屏蔽浏览器自身的双指缩放），
-   * 实现：双指捏合 -> 缩放表格；双指中心拖动 -> 平移（滚动）表格；Ctrl/⌘ + 滚轮 -> 缩放（桌面/模拟器调试）。
-   * 单指仍走浏览器原生滚动，不影响常规上下/左右滑动浏览。
-   */
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const touchDist = (t: TouchList) =>
-      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    const touchMid = (t: TouchList) => ({
-      x: (t[0].clientX + t[1].clientX) / 2,
-      y: (t[0].clientY + t[1].clientY) / 2,
-    });
-
-    const onStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const d = touchDist(e.touches);
-        const m = touchMid(e.touches);
-        pinchRef.current = {
-          startDist: d,
-          startScale: scaleRef.current,
-          lastCx: m.x,
-          lastCy: m.y,
-        };
-      }
-    };
-    const onMove = (e: TouchEvent) => {
-      const g = pinchRef.current;
-      if (e.touches.length === 2 && g) {
-        e.preventDefault();
-        const d = touchDist(e.touches);
-        const m = touchMid(e.touches);
-        setZoom(pinchScale(g.startScale, g.startDist, d, MIN_SCALE, MAX_SCALE));
-        // 双指中心位移 -> 平移表格（反向滚动）
-        el.scrollLeft -= m.x - g.lastCx;
-        el.scrollTop -= m.y - g.lastCy;
-        g.lastCx = m.x;
-        g.lastCy = m.y;
-      }
-    };
-    const onEnd = (e: TouchEvent) => {
-      if (e.touches.length < 2) pinchRef.current = null;
-    };
-    const onWheel = (e: WheelEvent) => {
-      // 桌面/模拟器：Ctrl 或 ⌘ + 滚轮缩放，方便没有触摸屏时验证
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        setZoom(scaleRef.current - e.deltaY * 0.01);
-      }
-    };
-
-    el.addEventListener('touchstart', onStart, { passive: false });
-    el.addEventListener('touchmove', onMove, { passive: false });
-    el.addEventListener('touchend', onEnd);
-    el.addEventListener('touchcancel', onEnd);
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => {
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('touchmove', onMove);
-      el.removeEventListener('touchend', onEnd);
-      el.removeEventListener('touchcancel', onEnd);
-      el.removeEventListener('wheel', onWheel);
-    };
-    // 仅依赖 open：打开时容器已挂载、ref 可用；关闭时清理监听。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -342,14 +265,14 @@ export default function BatchCheckDialog({
           }}
         >
           <Typography variant="caption" color="text.secondary">
-            双指捏合可缩放表格；双指拖动可平移。当前缩放 {(scale * 100).toFixed(0)}%
+            点击 － 缩小可在一屏内看到更多列；＋ 放大让字/复选框更大好点按。当前缩放 {(scale * 100).toFixed(0)}%
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <IconButton
               size="small"
-              aria-label="缩小表格"
+              aria-label="缩小表格（一屏看更多）"
               disabled={scale <= MIN_SCALE + 1e-6}
-              onClick={() => setZoom(scale - 0.5)}
+              onClick={() => setZoom(scale - SCALE_STEP)}
             >
               <RemoveCircleOutlineIcon />
             </IconButton>
@@ -357,24 +280,21 @@ export default function BatchCheckDialog({
               size="small"
               aria-label="放大表格"
               disabled={scale >= MAX_SCALE - 1e-6}
-              onClick={() => setZoom(scale + 0.5)}
+              onClick={() => setZoom(scale + SCALE_STEP)}
             >
               <AddCircleOutlineIcon />
             </IconButton>
             <Button
               size="small"
               variant="text"
-              disabled={scale <= MIN_SCALE + 1e-6}
+              disabled={Math.abs(scale - 1) < 1e-6}
               onClick={() => setZoom(1)}
             >
               重置
             </Button>
           </Box>
         </Box>
-        <TableContainer
-          ref={containerRef}
-          sx={{ maxHeight: 440, touchAction: 'pan-x pan-y' }}
-        >
+        <TableContainer sx={{ maxHeight: 440 }}>
           <Table stickyHeader size="small" sx={{ zoom: scale, tableLayout: 'auto' }}>
             <TableHead>
               <TableRow>
