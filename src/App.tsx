@@ -57,6 +57,7 @@ import {
   newSamplesBatch,
   sortRecordsByHole,
   renumberSamplesByHole,
+  nextSeq,
   insertSampleAt,
   renumberDigitsOnly,
 } from './utils';
@@ -186,7 +187,12 @@ export default function App() {
   // ---------- 土样增删改 ----------
   const openNewSample = () => {
     if (!editing) return;
-    setEditingSample(newSample(editing.samples.length + 1));
+    // 默认编号取「当前最大数字编号 +1」（忽略 ZK1-R1 这类字母号），并带上孔号前缀，
+    // 避免插入 R 号后追加时按样本总数+1 跳号（如 5 个数字+1 个 R 后误给 -7）。
+    const hole = (editing.engineering.holeCode ?? '').trim();
+    const seq = nextSeq(editing.samples);
+    const defNumber = hole ? `${hole}-${seq}` : `-${seq}`;
+    setEditingSample(newSample(seq, defNumber));
     setSampleIndex(-1);
     setInsertIndex(null);
     setSampleFocusField(undefined);
