@@ -292,3 +292,23 @@ export function sortRecordsByHole(records: SoilRecord[], dir: 'asc' | 'desc'): S
   });
   return arr;
 }
+
+/**
+ * 将一条记录 upsert 进列表（同 id 覆盖、否则追加），返回新数组，不修改入参。
+ * 用于「返回/关闭时自动保存」把当前编辑记录写回记录列表。
+ */
+export function upsertRecord(records: SoilRecord[], rec: SoilRecord): SoilRecord[] {
+  return records.some((r) => r.id === rec.id)
+    ? records.map((r) => (r.id === rec.id ? rec : r))
+    : [...records, rec];
+}
+
+/**
+ * 判断当前编辑记录相对列表中的已存版本是否有改动：
+ * 列表中不存在（新记录）或 updatedAt 不同 => true。
+ * 用于自动保存时避免无改动也重复写入。
+ */
+export function isRecordDirty(records: SoilRecord[], rec: SoilRecord): boolean {
+  const stored = records.find((r) => r.id === rec.id);
+  return !stored || stored.updatedAt !== rec.updatedAt;
+}

@@ -28,6 +28,7 @@ __export(utils_exports, {
   isDisturbedTestConflict: () => isDisturbedTestConflict,
   isPermQuickConflict: () => isPermQuickConflict,
   isQuickShearBothConflict: () => isQuickShearBothConflict,
+  isRecordDirty: () => isRecordDirty,
   newRecord: () => newRecord,
   newSample: () => newSample,
   newSamplesBatch: () => newSamplesBatch,
@@ -37,7 +38,8 @@ __export(utils_exports, {
   renumberSamplesByHole: () => renumberSamplesByHole,
   setDisturbance: () => setDisturbance,
   sortRecordsByHole: () => sortRecordsByHole,
-  todayStr: () => todayStr
+  todayStr: () => todayStr,
+  upsertRecord: () => upsertRecord
 });
 module.exports = __toCommonJS(utils_exports);
 
@@ -229,6 +231,13 @@ function sortRecordsByHole(records, dir) {
   });
   return arr;
 }
+function upsertRecord(records, rec) {
+  return records.some((r) => r.id === rec.id) ? records.map((r) => r.id === rec.id ? rec : r) : [...records, rec];
+}
+function isRecordDirty(records, rec) {
+  const stored = records.find((r) => r.id === rec.id);
+  return !stored || stored.updatedAt !== rec.updatedAt;
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   buildRecordSamples,
@@ -239,6 +248,7 @@ function sortRecordsByHole(records, dir) {
   isDisturbedTestConflict,
   isPermQuickConflict,
   isQuickShearBothConflict,
+  isRecordDirty,
   newRecord,
   newSample,
   newSamplesBatch,
@@ -248,5 +258,6 @@ function sortRecordsByHole(records, dir) {
   renumberSamplesByHole,
   setDisturbance,
   sortRecordsByHole,
-  todayStr
+  todayStr,
+  upsertRecord
 });

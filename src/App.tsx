@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -62,6 +62,8 @@ import {
   insertSampleAt,
   renumberDigitsOnly,
   disturbedTestConflicts,
+  upsertRecord,
+  isRecordDirty,
 } from './utils';
 import { exportRecord } from './xlsxExport';
 import { exportRecordPdf } from './pdfExport';
@@ -131,6 +133,46 @@ export default function App() {
     loadRecords().then(setRecords).catch(() => {});
   }, []);
 
+  // 保持最新编辑态/记录列表引用，供「页面隐藏或关闭」时的兜底自动保存使用
+  const editingRef = useRef<SoilRecord | null>(null);
+  const recordsRef = useRef<SoilRecord[]>([]);
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+
+  /**
+   * 页面隐藏 / 关闭（切后台、关标签页、退出应用）时兜底保存当前编辑记录，
+   * 防止未点「保存」即关闭导致数据丢失。有改动才写，避免无谓写入。
+   */
+  useEffect(() => {
+    const flush = () => {
+      const rec = editingRef.current;
+      if (!rec) return;
+      const list = recordsRef.current;
+      // 无改动则跳过（新记录列表中没有，视为有改动）
+      if (!isRecordDirty(list, rec)) return;
+      const next = upsertRecord(list, rec);
+      recordsRef.current = next;
+      setRecords(next);
+      // Web 端底层为 localStorage（同步写入）；原生端异步写入尽力而为
+      void saveRecords(next);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+    };
+  }, []);
+
   // ---------- 新建 / 打开 ----------
   const handleModeSelect = (mode: RecordMode) => {
     setModeDialogOpen(false);
@@ -174,14 +216,37 @@ export default function App() {
     updateEditing(patch);
   };
 
+  /** 把当前编辑记录写回记录列表并落盘（不改变视图） */
+  const commitEditing = async (rec: SoilRecord): Promise<SoilRecord[]> => {
+    const next = upsertRecord(records, rec);
+    await persist(next);
+    return next;
+  };
+
   const saveEditing = async () => {
     if (!editing) return;
-    const exists = records.some((r) => r.id === editing.id);
-    const next = exists
-      ? records.map((r) => (r.id === editing.id ? editing : r))
-      : [...records, editing];
-    await persist(next);
+    await commitEditing(editing);
     setSnack({ msg: '记录已保存', sev: 'success' });
+    setView('list');
+    setEditing(null);
+  };
+
+  /**
+   * 返回列表：先自动保存再离开，避免误触返回丢失数据。
+   * 全新的空记录（无孔号、无土样）不落盘，避免产生无用空记录。
+   */
+  const autoSaveAndBack = async () => {
+    if (editing) {
+      const stored = records.find((r) => r.id === editing.id);
+      const pristineNew =
+        !stored &&
+        (editing.samples?.length ?? 0) === 0 &&
+        !(editing.engineering?.holeCode ?? '').trim();
+      if (!pristineNew && isRecordDirty(records, editing)) {
+        await commitEditing(editing);
+        setSnack({ msg: '已自动保存', sev: 'success' });
+      }
+    }
     setView('list');
     setEditing(null);
   };
@@ -625,11 +690,8 @@ export default function App() {
             <IconButton
               edge="start"
               color="inherit"
-              aria-label="back"
-              onClick={() => {
-                setView('list');
-                setEditing(null);
-              }}
+              aria-label="返回（自动保存）"
+              onClick={() => void autoSaveAndBack()}
             >
               <ArrowBackIcon />
             </IconButton>
