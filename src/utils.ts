@@ -201,6 +201,25 @@ function naturalSoilNumber(s: string): [string, number] {
  * 数字按数值比，保证 D25-2 < D25-10、M10 < M11。
  * dir 为 'desc' 时整体反转。空孔号不崩溃（归为前缀空串、数字 0）。
  */
+/**
+ * 双指缩放比例计算（纯函数，便于单测）：
+ * - startScale：手势开始时的缩放值
+ * - startDist：手势开始时两指间距（px）
+ * - curDist：当前两指间距（px）
+ * - min/max：缩放上下限（默认 1~4）
+ * 返回新的缩放值，夹紧在 [min, max] 区间。curDist <= 0 时退回 startScale 避免除零。
+ */
+export function pinchScale(
+  startScale: number,
+  startDist: number,
+  curDist: number,
+  min = 1,
+  max = 4,
+): number {
+  const next = startDist > 0 && curDist > 0 ? startScale * (curDist / startDist) : startScale;
+  return Math.min(max, Math.max(min, next));
+}
+
 export function sortRecordsByHole(records: SoilRecord[], dir: 'asc' | 'desc'): SoilRecord[] {
   const arr = [...records];
   arr.sort((a, b) => {
