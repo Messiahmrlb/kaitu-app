@@ -57,7 +57,8 @@ import {
   newSamplesBatch,
   sortRecordsByHole,
   renumberSamplesByHole,
-  renumberFrom,
+  insertSampleAt,
+  renumberDigitsOnly,
 } from './utils';
 import { exportRecord } from './xlsxExport';
 import { exportRecordPdf } from './pdfExport';
@@ -201,10 +202,12 @@ export default function App() {
     setSampleDialogOpen(true);
   };
 
-  /** 在 idx 之前插入一条新土样：打开空白录入框，保存时按孔号重排后续编号 */
+  /** 在 idx 之前插入一条新土样：打开空白录入框，保存时仅插入、不重排（保留 ZK1-R1 等手工编号） */
   const openInsertSample = (idx: number) => {
     if (!editing) return;
-    setEditingSample(newSample(idx + 1));
+    const hole = (editing.engineering.holeCode ?? '').trim();
+    const defNumber = hole ? `${hole}-${idx + 1}` : `-${idx + 1}`;
+    setEditingSample(newSample(idx + 1, defNumber));
     setSampleIndex(-1);
     setInsertIndex(idx);
     setSampleFocusField(undefined);
@@ -214,11 +217,11 @@ export default function App() {
   const saveSample = (s: SoilSample) => {
     if (!editing) return;
     if (insertIndex !== null) {
-      // 插入模式：在 insertIndex 处插入，并从该位置起重排连续编号
+      // 插入模式：在 insertIndex 处插入，然后仅重排纯数字编号（1,2,3…），
+      // 保留 ZK1-R1 这类含 R 的手工编号不动。
       const hole = (editing.engineering.holeCode ?? '').trim();
-      const samples = [...editing.samples];
-      samples.splice(insertIndex, 0, s);
-      updateEditing({ samples: renumberFrom(samples, hole, insertIndex) });
+      const inserted = insertSampleAt(editing.samples, insertIndex, s);
+      updateEditing({ samples: renumberDigitsOnly(inserted, hole) });
       setInsertIndex(null);
     } else if (sampleIndex < 0) {
       updateEditing({ samples: [...editing.samples, s] });
@@ -386,7 +389,7 @@ export default function App() {
               }}
             >
               <InboxIcon sx={{ fontSize: 64, color: 'action.disabled', mb: 1 }} />
-              <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle1" color="text.secondary">
                 还没有开土记录
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -498,7 +501,7 @@ export default function App() {
                           <Typography
                             variant="body2"
                             color="text.secondary"
-                            sx={{ mt: 0.5, fontSize: 13 }}
+                            sx={{ mt: 0.5 }}
                           >
                             {`工程编号：${rec.engineering.projectCode || '—'} ｜ 孔号：${
                               rec.engineering.holeCode || '—'
@@ -787,7 +790,7 @@ export default function App() {
                       </IconButton>
                     </Box>
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: 13 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     土类：{s.soilType.join('、') || '—'} ｜ 实验：{s.testItems.join('、') || '—'}
                     {s.otherTestItems.length > 0 && (
                       <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600 }}>
@@ -842,9 +845,9 @@ export default function App() {
           })}
 
           {editing.samples.length === 0 && (
-            <Box sx={{ color: 'text.secondary', fontSize: 14 }}>
+            <Typography variant="body2" color="text.secondary">
               暂无土样，点击“添加土样”开始录入。
-            </Box>
+            </Typography>
           )}
         </Container>
 
@@ -875,6 +878,7 @@ export default function App() {
           mode={editing.mode}
           initial={editingSample}
           autoFocusField={sampleFocusField}
+          title={insertIndex !== null ? '插入土样' : '土样录入'}
           onSave={saveSample}
           onClose={() => {
             setSampleDialogOpen(false);

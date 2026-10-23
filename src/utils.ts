@@ -80,20 +80,46 @@ export function newSamplesBatch(
 }
 
 /**
- * 在指定位置插入土样后，从该位置起重新顺序编号（孔号前缀 + 序号）。
- * - from 之前的土样保持原土号不动（避免误改已手工填写的编号）；
- * - from 及之后：soilNumber = `${孔号}-${i+1}`（孔号为空则 `-${i+1}`）。
- * 不修改入参，返回新数组/副本。用于「在孔内任意位置插入一条土样」后保持连续编号。
+ * 在指定位置插入一条土样，返回新数组（不修改入参）。
+ * 注意：只做插入，不改变任何已有土样的土号——用户（尤其扰动土用 ZK1-R1 这类编号时）
+ * 希望手工控制编号，自动重排会把 R 编号覆盖成数字，故插入不做重排。
  */
-export function renumberFrom(
+export function insertSampleAt(
+  samples: SoilSample[],
+  atIndex: number,
+  sample: SoilSample,
+): SoilSample[] {
+  const list = [...samples];
+  list.splice(atIndex, 0, sample);
+  return list;
+}
+
+/**
+ * 仅对「纯数字编号」的土样重新顺序编号（孔号前缀 + 序号 1,2,3…），
+ * 保留 ZK1-R1 这类含字母（R）的手工编号不动。用于插入土样后让数字编号连续、R 编号不被覆盖。
+ * 判定数字编号：去掉可选的「孔号-」前缀（无孔号则去掉前导「-」）后，剩余部分全为数字。
+ */
+export function renumberDigitsOnly(
   samples: SoilSample[],
   holeCode: string,
-  from: number,
 ): SoilSample[] {
   const hole = (holeCode ?? '').trim();
-  return samples.map((s, i) =>
-    i >= from ? { ...s, soilNumber: hole ? `${hole}-${i + 1}` : `-${i + 1}` } : { ...s },
-  );
+  let seq = 0;
+  return samples.map((s) => {
+    if (isDigitSoilNumber(s.soilNumber, hole)) {
+      seq += 1;
+      return { ...s, soilNumber: hole ? `${hole}-${seq}` : `-${seq}` };
+    }
+    return { ...s };
+  });
+}
+
+/** 判定土号是否为「纯数字编号」（去掉可选孔号前缀后剩余部分全为数字） */
+function isDigitSoilNumber(n: string, hole: string): boolean {
+  let rest = n ?? '';
+  if (hole && rest.startsWith(hole + '-')) rest = rest.slice(hole.length + 1);
+  else if (!hole && rest.startsWith('-')) rest = rest.slice(1);
+  return rest.length > 0 && /^\d+$/.test(rest);
 }
 
 /**

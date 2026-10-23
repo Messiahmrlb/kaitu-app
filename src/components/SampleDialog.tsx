@@ -44,6 +44,8 @@ interface Props {
   onRemoveCustomTestItem?: (name: string) => void;
   /** 打开时自动滚动并聚焦到该字段（用于从卡片 IL/Ip 格点击直接进入录入，避免手机上滑误触试验项目） */
   autoFocusField?: 'il' | 'ip';
+  /** 对话框标题：默认「土样录入」，插入场景传「插入土样」 */
+  title?: string;
 }
 
 /** 单条土样录入对话框：覆盖全部字段，含仅 App 内显示的 IL / Ip */
@@ -57,6 +59,7 @@ export default function SampleDialog({
   onAddCustomTestItem,
   onRemoveCustomTestItem,
   autoFocusField,
+  title = '土样录入',
 }: Props) {
   const [sample, setSample] = useState<SoilSample>(initial ?? ({} as SoilSample));
 
@@ -99,7 +102,7 @@ export default function SampleDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>土样录入</DialogTitle>
+      <DialogTitle>{title}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={0}>
           <TextField
