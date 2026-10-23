@@ -1,4 +1,5 @@
 import { SoilSample, SoilRecord, RecordMode } from './types';
+import { DISTURBED_INCOMPATIBLE_TESTS } from './constants';
 
 /** 生成短随机 id（时间与随机串组合） */
 export function genId(): string {
@@ -224,6 +225,22 @@ export function isPermQuickConflict(sample: SoilSample): boolean {
  */
 export function isQuickShearBothConflict(sample: SoilSample): boolean {
   return sample.testItems.includes('饱固快剪') && sample.testItems.includes('自然快剪');
+}
+
+/**
+ * 扰动土试验项目冲突判定：扰动土仅适用 物性/颗分，不应做固结/渗透/剪切/三轴等原状土项目。
+ * 返回当前 sample.testItems 中与扰动土不兼容的项目列表（disturbance 非「扰动」时返回空数组）。
+ * 用于在土样录入对话框中实时提示冲突（用户勾选两者任一即提示）。
+ */
+export function disturbedTestConflicts(sample: SoilSample): string[] {
+  if (sample.disturbance !== '扰动') return [];
+  const items = sample.testItems ?? [];
+  return DISTURBED_INCOMPATIBLE_TESTS.filter((t) => items.includes(t));
+}
+
+/** 是否处于「扰动土 + 不兼容试验项目」冲突状态 */
+export function isDisturbedTestConflict(sample: SoilSample): boolean {
+  return disturbedTestConflicts(sample).length > 0;
 }
 
 /** 创建一份空白记录（含一条默认土样） */

@@ -56,6 +56,11 @@ export const TEST_ITEMS: string[] = [
 /** 对扰动土也适用的试验项目：点「全选」时不跳过扰动土；其余项（固结/渗透/快剪/三轴）仅对原状土勾选 */
 export const DISTURBED_APPLICABLE_TESTS: string[] = ['物性', '颗分'];
 
+/** 扰动土不适用的试验项目：除 物性/颗分 外的所有项目（固结/两种渗透/两种剪切/三轴等），勾选时提示冲突 */
+export const DISTURBED_INCOMPATIBLE_TESTS: string[] = TEST_ITEMS.filter(
+  (t) => !DISTURBED_APPLICABLE_TESTS.includes(t),
+);
+
 /** 模式标签，用于列表/对话框展示 */
 export const MODE_LABELS: Record<'A' | 'B', string> = {
   A: '普通目力鉴别',

@@ -14,6 +14,7 @@ import {
   FormControl,
   ToggleButton,
   ToggleButtonGroup,
+  Alert,
 } from '@mui/material';
 import { SoilSample, RecordMode } from '../types';
 import {
@@ -25,8 +26,8 @@ import {
   SILTY_SAND,
 } from '../constants';
 import ChipMultiSelect from './ChipMultiSelect';
-import { setDisturbance } from '../utils';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import { setDisturbance, disturbedTestConflicts } from '../utils';
+import AddIcon from '@mui/icons-material/Add';
 
 interface Props {
   open: boolean;
@@ -94,6 +95,9 @@ export default function SampleDialog({
   const ipNum = parseFloat(sample.ip ?? '');
   const ipOutOf =
     (sample.ip ?? '').trim() !== '' && !Number.isNaN(ipNum) && (ipNum < 4.0 || ipNum > 25.0);
+
+  // 扰动土试验项目冲突：扰动土仅适用 物性/颗分，勾选 固结/渗透/剪切/三轴 等即提示
+  const disturbedConflicts = disturbedTestConflicts(sample);
 
   const set = (key: keyof SoilSample, v: string | string[]) =>
     setSample((prev) => ({ ...prev, [key]: v }));
@@ -221,7 +225,7 @@ export default function SampleDialog({
             <Button
               size="small"
               variant="outlined"
-              startIcon={<AddCircleOutlineIcon />}
+              startIcon={<AddIcon />}
               sx={{ mt: 1 }}
               onClick={() =>
                 onAddCustomTestItem(window.prompt('输入自定义试验项目名称') ?? '')
@@ -312,6 +316,13 @@ export default function SampleDialog({
               </ToggleButtonGroup>
             </FormControl>
           </Box>
+
+          {/* 扰动土试验项目冲突提示：扰动土不应做 固结/渗透/剪切/三轴，勾选其一即提示 */}
+          {sample.disturbance === '扰动' && disturbedConflicts.length > 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              扰动土不应做以下试验项目：{disturbedConflicts.join('、')}。扰动土仅适用「物性」「颗分」，请取消上述勾选。
+            </Alert>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

@@ -22,8 +22,10 @@ var utils_exports = {};
 __export(utils_exports, {
   buildRecordSamples: () => buildRecordSamples,
   coupleDisturbance: () => coupleDisturbance,
+  disturbedTestConflicts: () => disturbedTestConflicts,
   genId: () => genId,
   insertSampleAt: () => insertSampleAt,
+  isDisturbedTestConflict: () => isDisturbedTestConflict,
   isPermQuickConflict: () => isPermQuickConflict,
   isQuickShearBothConflict: () => isQuickShearBothConflict,
   newRecord: () => newRecord,
@@ -38,6 +40,24 @@ __export(utils_exports, {
   todayStr: () => todayStr
 });
 module.exports = __toCommonJS(utils_exports);
+
+// src/constants.ts
+var TEST_ITEMS = [
+  "\u7269\u6027",
+  "\u9897\u5206",
+  "\u56FA\u7ED3",
+  "\u5782\u76F4\u6E17\u900F",
+  "\u6C34\u5E73\u6E17\u900F",
+  "\u9971\u56FA\u5FEB\u526A",
+  "\u81EA\u7136\u5FEB\u526A",
+  "\u4E09\u8F74"
+];
+var DISTURBED_APPLICABLE_TESTS = ["\u7269\u6027", "\u9897\u5206"];
+var DISTURBED_INCOMPATIBLE_TESTS = TEST_ITEMS.filter(
+  (t) => !DISTURBED_APPLICABLE_TESTS.includes(t)
+);
+
+// src/utils.ts
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
@@ -164,6 +184,14 @@ function isPermQuickConflict(sample) {
 function isQuickShearBothConflict(sample) {
   return sample.testItems.includes("\u9971\u56FA\u5FEB\u526A") && sample.testItems.includes("\u81EA\u7136\u5FEB\u526A");
 }
+function disturbedTestConflicts(sample) {
+  if (sample.disturbance !== "\u6270\u52A8") return [];
+  const items = sample.testItems ?? [];
+  return DISTURBED_INCOMPATIBLE_TESTS.filter((t) => items.includes(t));
+}
+function isDisturbedTestConflict(sample) {
+  return disturbedTestConflicts(sample).length > 0;
+}
 function newRecord(mode) {
   return {
     id: genId(),
@@ -205,8 +233,10 @@ function sortRecordsByHole(records, dir) {
 0 && (module.exports = {
   buildRecordSamples,
   coupleDisturbance,
+  disturbedTestConflicts,
   genId,
   insertSampleAt,
+  isDisturbedTestConflict,
   isPermQuickConflict,
   isQuickShearBothConflict,
   newRecord,
