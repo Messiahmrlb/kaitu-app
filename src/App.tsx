@@ -55,6 +55,7 @@ import {
   newRecord,
   newSample,
   newSamplesBatch,
+  buildRecordSamples,
   sortRecordsByHole,
   renumberSamplesByHole,
   nextSeq,
@@ -137,13 +138,13 @@ export default function App() {
   };
 
   /** 新建记录第二步确认：用孔号 + 数量直接生成一份已编好号的记录 */
-  const handleSetupConfirm = (holeCode: string, count: number) => {
+  const handleSetupConfirm = (holeCode: string, count: number, rCount: number) => {
     const mode = pendingMode ?? 'A';
     const rec = newRecord(mode);
     const hole = holeCode.trim();
     rec.engineering.holeCode = hole;
     if (hole) rec.name = `开土记录 ${hole}`;
-    rec.samples = count > 0 ? newSamplesBatch(count, hole, []) : [];
+    rec.samples = buildRecordSamples(hole, count, rCount);
     setSetupOpen(false);
     setPendingMode(null);
     setEditing(rec);

@@ -80,6 +80,26 @@ export function newSamplesBatch(
 }
 
 /**
+ * 新建记录时生成土样列表：normalCount 条原状（孔号-1…孔号-N）+ rCount 条扰动（孔号-R1…孔号-Rn）。
+ * - 扰动土标记为「扰动」并联动「颗分」（与 SampleDialog 中 setDisturbance 规则一致）。
+ * - 不勾选 R 时 rCount=0，只生成原状编号。孔号空时前缀省略（-1 / -R1）。
+ */
+export function buildRecordSamples(
+  holeCode: string,
+  normalCount: number,
+  rCount: number,
+): SoilSample[] {
+  const hole = (holeCode ?? '').trim();
+  const list: SoilSample[] = newSamplesBatch(Math.max(0, normalCount), hole, []);
+  for (let i = 0; i < Math.max(0, rCount); i++) {
+    const s = newSample(i + 1, hole ? `${hole}-R${i + 1}` : `-R${i + 1}`);
+    s.disturbance = '扰动';
+    list.push(setDisturbance(s, '扰动'));
+  }
+  return list;
+}
+
+/**
  * 在指定位置插入一条土样，返回新数组（不修改入参）。
  * 注意：只做插入，不改变任何已有土样的土号——用户（尤其扰动土用 ZK1-R1 这类编号时）
  * 希望手工控制编号，自动重排会把 R 编号覆盖成数字，故插入不做重排。
