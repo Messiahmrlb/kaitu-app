@@ -3,6 +3,11 @@
 本仓库已配好 GitHub Actions，推送 `main` 分支即自动构建并发布到 GitHub Pages。
 发布后手机 / 平板 / 电脑浏览器都能打开同一个网址使用。
 
+**当前状态（2026-10-26 已上线）**：远程 `origin` 指向
+`https://github.com/Messiahmrlb/kaitu-app.git`，本地分支为 `main`，
+Pages 站点已创建，线上地址 **https://messiahmrlb.github.io/kaitu-app/**。
+日常只需要 `git add / commit / push`，二、三、四节仅为换仓库时的参考。
+
 > 注意：本方案**只解决"随处可打开"**，数据仍保存在每台设备各自的浏览器本地存储中，
 > 并不会跨设备自动同步。需要同步请另接共享后端（如 Supabase）。
 
@@ -36,11 +41,19 @@ git push -u origin main
 
 推送成功后会**自动触发**一次部署（仓库 Actions 标签页可见进度）。
 
-## 四、开启 GitHub Pages
+## 四、开启 GitHub Pages（首次必须手动做一次）
 
 1. 进入仓库 **Settings → Pages**。
 2. 在 "Build and deployment" 下，**Source** 选择 **GitHub Actions**。
-3. 等待 Actions 跑完（约 1–2 分钟），页面会显示已发布地址：
+3. 回到 **Actions** 标签，重新运行（Re-run jobs）刚才那次失败的部署。
+
+> **为什么必须手动**：CI 里的 `GITHUB_TOKEN` 没有创建 Pages 站点的权限，
+> `configure-pages` 的 `enablement: true` 会报
+> `Resource not accessible by integration`。站点创建之后，这一步会正常通过，
+> 以后 push 全自动，不再需要手动干预。
+> 若页面上找不到 Source 选项，先确认仓库是 **Public**（免费账号私有仓库不支持 Pages）。
+
+4. 等待 Actions 跑完（约 1–2 分钟），页面会显示已发布地址：
    `https://<用户名>.github.io/<仓库名>/`
 
 ## 五、使用

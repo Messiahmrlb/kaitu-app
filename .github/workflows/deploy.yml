@@ -38,8 +38,12 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
-          # 首次部署时自动创建/启用 Pages 站点（Source 自动设为 GitHub Actions），
-          # 免去在 Settings → Pages 里手动切换；仓库须为 Public。
+          # enablement: true 仅在 Pages 站点已存在时才安全通过；
+          # 若站点尚未创建，GITHUB_TOKEN 无权调用「创建 Pages 站点」接口，
+          # 会报 Resource not accessible by integration。
+          # => 首次上线必须先手动在 Settings → Pages 把 Source 选为 GitHub Actions
+          #    （或用有 repo 权限的 token 调一次 POST /repos/{owner}/{repo}/pages，
+          #      body: {"build_type":"workflow"}），之后本步骤即可正常通过。
           enablement: true
 
       - name: Upload artifact
