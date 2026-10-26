@@ -29,6 +29,9 @@ import ChipMultiSelect from './ChipMultiSelect';
 import { setDisturbance, disturbedTestConflicts } from '../utils';
 import AddIcon from '@mui/icons-material/Add';
 
+/** 从土样卡片信息格点击进入时，需要自动滚动/聚焦的目标字段 */
+export type SampleFocusField = 'il' | 'ip' | 'disturbance' | 'siltySand';
+
 interface Props {
   open: boolean;
   /** 当前记录的模式，决定目力鉴别土类选项 */
@@ -43,8 +46,8 @@ interface Props {
   onAddCustomTestItem: (name: string) => void;
   /** 删除一个全局自定义试验项目名称 */
   onRemoveCustomTestItem?: (name: string) => void;
-  /** 打开时自动滚动并聚焦到该字段（用于从卡片 IL/Ip 格点击直接进入录入，避免手机上滑误触试验项目） */
-  autoFocusField?: 'il' | 'ip';
+  /** 打开时自动滚动并聚焦到该字段（从卡片信息格点击进入时用，避免手机上滑误触其他项） */
+  autoFocusField?: SampleFocusField;
   /** 对话框标题：默认「土样录入」，插入场景传「插入土样」 */
   title?: string;
 }
@@ -64,9 +67,11 @@ export default function SampleDialog({
 }: Props) {
   const [sample, setSample] = useState<SoilSample>(initial ?? ({} as SoilSample));
 
-  // 底部 IL/Ip 输入框的 DOM 引用，用于点击卡片后自动滚动 + 聚焦
+  // 卡片信息格点击后要定位的 DOM 引用：IL/Ip 是输入框，扰动土/粉砂判定是整组
   const ilRef = useRef<HTMLInputElement>(null);
   const ipRef = useRef<HTMLInputElement>(null);
+  const disturbanceRef = useRef<HTMLDivElement>(null);
+  const siltySandRef = useRef<HTMLDivElement>(null);
 
   // 打开时同步初始数据；若指定 autoFocusField，则在渲染后滚到该字段并聚焦
   useEffect(() => {
@@ -74,10 +79,26 @@ export default function SampleDialog({
       setSample(initial ?? ({} as SoilSample));
       if (autoFocusField) {
         const id = window.setTimeout(() => {
-          const el = autoFocusField === 'il' ? ilRef.current : ipRef.current;
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            el.focus({ preventScroll: true });
+          const isInput = autoFocusField === 'il' || autoFocusField === 'ip';
+          const el: HTMLElement | null = isInput
+            ? autoFocusField === 'il'
+              ? ilRef.current
+              : ipRef.current
+            : autoFocusField === 'disturbance'
+              ? disturbanceRef.current
+              : siltySandRef.current;
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (isInput) {
+            // 输入框聚焦可直接唤起数字键盘
+            (el as HTMLInputElement).focus({ preventScroll: true });
+          } else {
+            // 按钮组：聚焦当前选中项（无选中则第一项），便于继续用键盘/点击调整
+            const group = el.querySelector<HTMLElement>('[role="group"]');
+            const btn =
+              group?.querySelector<HTMLElement>('button[aria-pressed="true"]') ??
+              group?.querySelector<HTMLElement>('button');
+            btn?.focus({ preventScroll: true });
           }
         }, 80);
         return () => window.clearTimeout(id);
@@ -276,45 +297,49 @@ export default function SampleDialog({
               flexWrap: 'wrap',
             }}
           >
-            <FormControl component="fieldset">
-              <Typography variant="caption" color="text.secondary">
-                扰动土（原状/扰动）
-              </Typography>
-              <ToggleButtonGroup
-                exclusive
-                size="small"
-                color="primary"
-                value={sample.disturbance ?? '原状'}
-                onChange={(_e, v: string | null) =>
-                  v && setSample((prev) => setDisturbance(prev, v as '原状' | '扰动'))
-                }
-              >
-                {DISTURBANCE.map((d) => (
-                  <ToggleButton key={d} value={d}>
-                    {d}
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
-            </FormControl>
+            <Box ref={disturbanceRef}>
+              <FormControl component="fieldset">
+                <Typography variant="caption" color="text.secondary">
+                  扰动土（原状/扰动）
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  color="primary"
+                  value={sample.disturbance ?? '原状'}
+                  onChange={(_e, v: string | null) =>
+                    v && setSample((prev) => setDisturbance(prev, v as '原状' | '扰动'))
+                  }
+                >
+                  {DISTURBANCE.map((d) => (
+                    <ToggleButton key={d} value={d}>
+                      {d}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </FormControl>
+            </Box>
 
-            <FormControl component="fieldset">
-              <Typography variant="caption" color="text.secondary">
-                粉砂判定（三角形/空心圆/空）
-              </Typography>
-              <ToggleButtonGroup
-                exclusive
-                size="small"
-                color="primary"
-                value={sample.siltySand ?? 'none'}
-                onChange={(_e, v: string | null) => v && set('siltySand', v)}
-              >
-                {SILTY_SAND.map((o) => (
-                  <ToggleButton key={o.value} value={o.value}>
-                    {o.label}
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
-            </FormControl>
+            <Box ref={siltySandRef}>
+              <FormControl component="fieldset">
+                <Typography variant="caption" color="text.secondary">
+                  粉砂判定（三角形/空心圆/空）
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  color="primary"
+                  value={sample.siltySand ?? 'none'}
+                  onChange={(_e, v: string | null) => v && set('siltySand', v)}
+                >
+                  {SILTY_SAND.map((o) => (
+                    <ToggleButton key={o.value} value={o.value}>
+                      {o.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </FormControl>
+            </Box>
           </Box>
 
           {/* 扰动土试验项目冲突提示：扰动土不应做 固结/渗透/剪切/三轴，勾选其一即提示 */}

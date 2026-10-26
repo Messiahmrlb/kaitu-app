@@ -71,6 +71,7 @@ import { exportRecordPdf } from './pdfExport';
 import { parseDeliveryFile } from './importDelivery';
 import EngineeringInfoForm from './components/EngineeringInfoForm';
 import SampleDialog from './components/SampleDialog';
+import type { SampleFocusField } from './components/SampleDialog';
 import ModeSelectDialog from './components/ModeSelectDialog';
 import BatchCheckDialog from './components/BatchCheckDialog';
 import ImportDeliveryDialog from './components/ImportDeliveryDialog';
@@ -96,7 +97,7 @@ export default function App() {
   const [sampleDialogOpen, setSampleDialogOpen] = useState(false);
   const [editingSample, setEditingSample] = useState<SoilSample | null>(null);
   const [sampleIndex, setSampleIndex] = useState<number>(-1); // -1 表示新增
-  const [sampleFocusField, setSampleFocusField] = useState<'il' | 'ip' | undefined>(undefined);
+  const [sampleFocusField, setSampleFocusField] = useState<SampleFocusField | undefined>(undefined);
   // 插入土样的位置（null=非插入；>=0=在该索引前插入，保存时按孔号重排编号）
   const [insertIndex, setInsertIndex] = useState<number | null>(null);
 
@@ -324,7 +325,7 @@ export default function App() {
     setSampleDialogOpen(true);
   };
 
-  const openEditSample = (idx: number, focus?: 'il' | 'ip') => {
+  const openEditSample = (idx: number, focus?: SampleFocusField) => {
     if (!editing) return;
     setEditingSample({ ...editing.samples[idx] });
     setSampleIndex(idx);
@@ -971,9 +972,9 @@ export default function App() {
                     </Box>
                   </Box>
 
-                  {/* 扰动土 / 粉砂判定 信息格 */}
+                  {/* 扰动土 / 粉砂判定 信息格：与 IL/Ip 一致，点击直接进入录入并定位到对应选项组 */}
                   <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                    <Box onClick={() => openEditSample(idx)} sx={infoTileSx}>
+                    <Box onClick={() => openEditSample(idx, 'disturbance')} sx={infoTileSx}>
                       <Typography variant="caption" color="text.secondary" display="block">
                         扰动土
                       </Typography>
@@ -984,7 +985,7 @@ export default function App() {
                         {s.disturbance || '—'}
                       </Typography>
                     </Box>
-                    <Box onClick={() => openEditSample(idx)} sx={infoTileSx}>
+                    <Box onClick={() => openEditSample(idx, 'siltySand')} sx={infoTileSx}>
                       <Typography variant="caption" color="text.secondary" display="block">
                         粉砂判定
                       </Typography>
