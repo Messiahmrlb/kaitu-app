@@ -184,7 +184,8 @@ function isPermQuickConflict(sample) {
   return hasPermeability && hasQuickShear;
 }
 function isQuickShearBothConflict(sample) {
-  return sample.testItems.includes("\u9971\u56FA\u5FEB\u526A") && sample.testItems.includes("\u81EA\u7136\u5FEB\u526A");
+  const items = sample.testItems ?? [];
+  return items.includes("\u9971\u56FA\u5FEB\u526A") && items.includes("\u81EA\u7136\u5FEB\u526A");
 }
 function disturbedTestConflicts(sample) {
   if (sample.disturbance !== "\u6270\u52A8") return [];

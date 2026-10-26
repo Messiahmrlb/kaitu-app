@@ -23,8 +23,8 @@ import { setDisturbance, isPermQuickConflict, isQuickShearBothConflict } from '.
 import { conflictBg } from '../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 /**
@@ -275,7 +275,7 @@ export default function BatchCheckDialog({
               disabled={scale <= MIN_SCALE + 1e-6}
               onClick={() => setZoom(scale - SCALE_STEP)}
             >
-              <RemoveCircleOutlineIcon />
+              <ZoomOutIcon />
             </IconButton>
             <IconButton
               size="small"
@@ -283,7 +283,7 @@ export default function BatchCheckDialog({
               disabled={scale >= MAX_SCALE - 1e-6}
               onClick={() => setZoom(scale + SCALE_STEP)}
             >
-              <AddCircleOutlineIcon />
+              <ZoomInIcon />
             </IconButton>
             <Button
               size="small"
@@ -419,12 +419,7 @@ export default function BatchCheckDialog({
                             color="error"
                             icon={<WarningAmberIcon style={{ fontSize: 14 }} />}
                             label="冲突"
-                            sx={{
-                              alignSelf: 'flex-start',
-                              height: 20,
-                              fontSize: 11,
-                              fontWeight: 700,
-                            }}
+                            sx={{ alignSelf: 'flex-start' }}
                           />
                         )}
                       </Box>

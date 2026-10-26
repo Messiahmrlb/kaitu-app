@@ -28,7 +28,7 @@ const infoTileSx: SxProps<Theme> = {
   flex: 1,
   border: '1px solid',
   borderColor: 'divider',
-  borderRadius: 8,
+  borderRadius: RADIUS.tile,
   p: 1,
   textAlign: 'center',
   cursor: 'pointer',
@@ -78,6 +78,7 @@ import {
   isRecordDirty,
 } from './utils';
 import { exportRecord } from './xlsxExport';
+import { RADIUS } from './theme';
 import { exportRecordPdf } from './pdfExport';
 import { parseDeliveryFile } from './importDelivery';
 import EngineeringInfoForm from './components/EngineeringInfoForm';
@@ -583,7 +584,6 @@ export default function App() {
                         selectMode ? () => toggleSelect(rec.id) : () => openExisting(rec)
                       }
                       sx={{
-                        borderRadius: 2,
                         cursor: 'pointer',
                         position: 'relative',
                         overflow: 'hidden',
@@ -821,29 +821,30 @@ export default function App() {
           {/* 批量添加土样：按孔号自动编号 */}
           <Box
             sx={{
-              display: 'flex',
-              alignItems: 'flex-end',
-              gap: 1,
               mb: 1.5,
               p: 1.5,
               border: '1px dashed',
               borderColor: 'divider',
-              borderRadius: 2,
+              borderRadius: RADIUS.tile,
               bgcolor: 'background.default',
             }}
           >
-            <TextField
-              label="批量数量"
-              type="number"
-              size="small"
-              value={batchCount}
-              onChange={(e) => setBatchCount(e.target.value)}
-              inputProps={{ min: 1, style: { width: 64 } }}
-            />
-            <Button variant="contained" onClick={addBatchSamples}>
-              添加 {Math.max(1, Math.floor(Number(batchCount)) || 1)} 个
-            </Button>
-            <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1, ml: 1 }}>
+            {/* 输入框与按钮单独一行并禁止收缩，避免窄屏下输入框被压扁、标签截断成「批…」 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                label="批量数量"
+                type="number"
+                size="small"
+                value={batchCount}
+                onChange={(e) => setBatchCount(e.target.value)}
+                inputProps={{ min: 1 }}
+                sx={{ width: 112, flexShrink: 0 }}
+              />
+              <Button variant="contained" onClick={addBatchSamples} sx={{ flexShrink: 0 }}>
+                添加 {Math.max(1, Math.floor(Number(batchCount)) || 1)} 个
+              </Button>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
               土号按孔号自动生成（如 孔号 ZK1 → ZK1-1…；孔号为空 → -1…）
             </Typography>
           </Box>
@@ -873,7 +874,6 @@ export default function App() {
                 key={s.id}
                 variant="outlined"
                 sx={{
-                  borderRadius: 3,
                   mb: 1.5,
                   position: 'relative',
                   overflow: 'hidden',
@@ -904,7 +904,6 @@ export default function App() {
                         label={isDisturb ? '扰动' : '原状'}
                         color={isDisturb ? 'error' : 'primary'}
                         variant="outlined"
-                        sx={{ height: 20 }}
                       />
                       {(!s.siltySand || s.siltySand === 'none') &&
                         (s.il ?? '').trim() === '' &&
@@ -914,7 +913,6 @@ export default function App() {
                             label="未描述"
                             color="default"
                             variant="outlined"
-                            sx={{ height: 20 }}
                           />
                         )}
                     </Box>

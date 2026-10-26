@@ -13,6 +13,7 @@ import CategoryIcon from '@mui/icons-material/Category';
 import ChangeHistoryIcon from '@mui/icons-material/ChangeHistory';
 import { alpha } from '@mui/material/styles';
 import { RecordMode } from '../types';
+import { RADIUS } from '../theme';
 
 interface Props {
   open: boolean;
@@ -37,7 +38,7 @@ export default function ModeSelectDialog({ open, onSelect, onClose }: Props) {
             sx={{
               p: 2,
               cursor: 'pointer',
-              borderRadius: 2,
+              borderRadius: RADIUS.card,
               borderColor: 'divider',
               transition: 'border-color .2s ease, background-color .2s ease',
               '&:hover': {
@@ -62,7 +63,7 @@ export default function ModeSelectDialog({ open, onSelect, onClose }: Props) {
             sx={{
               p: 2,
               cursor: 'pointer',
-              borderRadius: 2,
+              borderRadius: RADIUS.card,
               borderColor: 'divider',
               transition: 'border-color .2s ease, background-color .2s ease',
               '&:hover': {

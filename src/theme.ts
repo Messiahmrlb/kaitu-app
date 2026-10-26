@@ -11,6 +11,21 @@
  */
 import { createTheme } from '@mui/material/styles';
 
+/**
+ * 圆角 token（显式 px 字符串）。
+ *
+ * ⚠️ 为什么不用数字：`sx={{ borderRadius: 2 }}` 里的 2 不是 2px，而是
+ * 「theme.shape.borderRadius(12) × 2 = 24px」。同一份代码里写 2 / 3 / 8 会得到
+ * 24 / 36 / 96px 三种完全不同的效果（历史上信息格就因此变成了药丸形）。
+ * 因此业务代码统一引用这里的 px 字符串，含义只有一种。
+ */
+export const RADIUS = {
+  /** 卡片：记录卡片 / 土样卡片 / 模式选项卡 */
+  card: '24px',
+  /** 卡片内的信息格、内嵌区块（比卡片更小一档） */
+  tile: '8px',
+} as const;
+
 const theme = createTheme({
   palette: {
     mode: 'light',
@@ -90,13 +105,18 @@ const theme = createTheme({
     },
     MuiCard: {
       defaultProps: { elevation: 0 },
-      styleOverrides: { root: { borderRadius: 14 } },
+      styleOverrides: { root: { borderRadius: RADIUS.card } },
     },
     MuiPaper: {
       styleOverrides: { rounded: { borderRadius: 14 } },
     },
     MuiChip: {
-      styleOverrides: { root: { fontWeight: 600, borderRadius: 8 } },
+      styleOverrides: {
+        root: { fontWeight: 600, borderRadius: 8 },
+        // 字号对齐 caption 尺度（12px）。MUI 默认 13px 不在本文件的字阶内，
+        // 会在卡片与录入框里形成两套「看起来差不多但不同」的字号。
+        label: { fontSize: 12, letterSpacing: 0.2 },
+      },
     },
     MuiIconButton: {
       styleOverrides: {
