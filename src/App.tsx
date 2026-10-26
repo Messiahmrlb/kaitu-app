@@ -56,10 +56,13 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import InboxIcon from '@mui/icons-material/Inbox';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import SettingsIcon from '@mui/icons-material/Settings';
 import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode, EngineeringInfo } from './types';
 import { MODE_LABELS, siltySandSymbol } from './constants';
 import { loadRecords, saveRecords } from './storage';
+import { CMA_DEFAULT, CmaHeaderSettings } from './cmaHeader';
+import { loadCmaHeader, saveCmaHeader } from './cmaStorage';
 import { App as CapacitorApp } from '@capacitor/app';
 import {
   newRecord,
@@ -88,6 +91,7 @@ import ModeSelectDialog from './components/ModeSelectDialog';
 import BatchCheckDialog from './components/BatchCheckDialog';
 import ImportDeliveryDialog from './components/ImportDeliveryDialog';
 import NewRecordSetupDialog from './components/NewRecordSetupDialog';
+import CmaSettingsDialog from './components/CmaSettingsDialog';
 
 type View = 'list' | 'editor';
 
@@ -104,6 +108,10 @@ export default function App() {
 
   // 导入送样单对话框
   const [importOpen, setImportOpen] = useState(false);
+
+  // CMA 页眉设置（PDF 版本行 / 文件编号）：全局持久化，不跟随单条记录
+  const [cmaHeader, setCmaHeader] = useState<CmaHeaderSettings>(CMA_DEFAULT);
+  const [cmaOpen, setCmaOpen] = useState(false);
 
   // 土样编辑对话框
   const [sampleDialogOpen, setSampleDialogOpen] = useState(false);
@@ -145,6 +153,11 @@ export default function App() {
   // 避免「保存后刷新网页记录又消失」。仅挂载时执行一次。
   useEffect(() => {
     loadRecords().then(setRecords).catch(() => {});
+  }, []);
+
+  // 启动时恢复 CMA 页眉设置（版本行 / 文件编号）。全局设置，改一次长期生效。
+  useEffect(() => {
+    loadCmaHeader().then(setCmaHeader).catch(() => {});
   }, []);
 
   // 保持最新编辑态/记录列表引用，供「页面隐藏或关闭」时的兜底自动保存使用
@@ -409,10 +422,10 @@ export default function App() {
     }
   };
 
-  /** 导出 PDF（A3 横向逐格模板） */
+  /** 导出 PDF（A3 横向逐格模板），页眉版本行/编号取当前 CMA 设置 */
   const handleExportPdf = async (rec: SoilRecord) => {
     try {
-      const res = await exportRecordPdf(rec);
+      const res = await exportRecordPdf(rec, cmaHeader);
       setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
     } catch (e: any) {
       setSnack({ msg: 'PDF 导出失败：' + (e?.message ?? String(e)), sev: 'error' });
@@ -455,30 +468,53 @@ export default function App() {
     return (
       <Box>
         <AppBar position="sticky" color="primary">
-          <Toolbar>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
+          <Toolbar sx={{ px: { xs: 1, sm: 2 }, gap: { xs: 0.5, sm: 1 } }}>
+            <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
               开土记录录入
             </Typography>
             {!selectMode && (
               <Button
                 color="inherit"
+                size="small"
                 onClick={() => {
                   setSelectMode(true);
                   setSelected([]);
                 }}
-                sx={{ mr: 1 }}
+                sx={{
+                  minWidth: 0,
+                  px: { xs: 0.75, sm: 1.5 },
+                  whiteSpace: 'nowrap',
+                  fontSize: { xs: 13, sm: 14 },
+                }}
               >
                 批量删除
               </Button>
             )}
             <Button
               color="inherit"
+              size="small"
               startIcon={<UploadFileIcon />}
               onClick={() => setImportOpen(true)}
-              sx={{ mr: 1 }}
+              sx={{
+                minWidth: 0,
+                px: { xs: 0.75, sm: 1.5 },
+                whiteSpace: 'nowrap',
+                fontSize: { xs: 13, sm: 14 },
+                '& .MuiButton-startIcon': { mr: { xs: 0.5, sm: 1 }, ml: 0 },
+              }}
             >
               导入送样单
             </Button>
+            <IconButton
+              color="inherit"
+              size="small"
+              aria-label="CMA 设置"
+              title="CMA 设置（PDF 页眉版本行与文件编号）"
+              onClick={() => setCmaOpen(true)}
+              sx={{ flexShrink: 0 }}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
           </Toolbar>
         </AppBar>
 
@@ -1114,6 +1150,22 @@ export default function App() {
           await persist([...records, ...recs]);
           setImportOpen(false);
           setSnack({ msg: `已导入 ${recs.length} 份记录`, sev: 'success' });
+        }}
+      />
+
+      {/* CMA 设置：自定义 PDF 页眉的版本行与文件编号（本机持久化） */}
+      <CmaSettingsDialog
+        open={cmaOpen}
+        value={cmaHeader}
+        onClose={() => setCmaOpen(false)}
+        onSave={async (next) => {
+          try {
+            const saved = await saveCmaHeader(next);
+            setCmaHeader(saved);
+            setSnack({ msg: '页眉已更新，之后导出的 PDF 将使用新文头', sev: 'success' });
+          } catch (e: any) {
+            setSnack({ msg: '页眉保存失败：' + (e?.message ?? String(e)), sev: 'error' });
+          }
         }}
       />
 

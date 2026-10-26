@@ -21,6 +21,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { ExportResult } from './xlsxExport';
 import { importWithRecovery } from './pwaRecovery';
+import { CMA_DEFAULT, CmaHeaderSettings, fitHeaderFontSize } from './cmaHeader';
 
 // ---------------------------------------------------------------------------
 // 几何常量（单位 pt；px = pt × 4/3，96dpi）
@@ -182,13 +183,26 @@ function renderInfoLine(eng: SoilRecord['engineering']): string {
     ${txt(1170.8, '日')}`;
 }
 
-function renderHeaderTexts(record: SoilRecord): string {
+/**
+ * 渲染页眉固定文字（公司名 / 标题 / 版本行 / 文件编号 / 工程信息行）。
+ *
+ * 版本行与文件编号由「CMA 设置」维护（全局、持久化），导出时传入；
+ * 两者按页边可用宽度自动收窄字号，自定义文本变长时不会越出纸边。
+ * 导出为纯函数以便回归测试直接检查 HTML。
+ */
+export function renderHeaderTexts(
+  record: SoilRecord,
+  header: CmaHeaderSettings = CMA_DEFAULT,
+): string {
   const eng = record.engineering;
+  // 可用宽度：页面右边距约 1190.7pt，减去各自左边距并留 8pt 余量
+  const versionFs = fitHeaderFontSize(header.versionLine, 9, 1190.7 - 8 - 934.8);
+  const codeFs = fitHeaderFontSize(header.docCode, 10.4, 1190.7 - 8 - 1035.8);
   return `
     <div class="pdf-txt" style="left:${px(70.8)}px;top:${px(44.9)}px;font-size:${px(9)}px;">天津市水务规划勘测设计有限公司</div>
-    <div class="pdf-txt" style="left:${px(934.8)}px;top:${px(44.9)}px;font-size:${px(9)}px;">第 3 版 第 0 次修改 2024 年 12 月 1 日起实施</div>
+    <div class="pdf-txt" style="left:${px(934.8)}px;top:${px(44.9)}px;font-size:${px(versionFs)}px;">${esc(header.versionLine)}</div>
     <div class="pdf-txt" style="left:${px(550.2)}px;top:${px(73.5)}px;font-size:${px(18)}px;font-weight:bold;">开土记录表</div>
-    <div class="pdf-txt" style="left:${px(1035.8)}px;top:${px(94.4)}px;font-size:${px(10.4)}px;">SHLY-TR068-2024</div>
+    <div class="pdf-txt" style="left:${px(1035.8)}px;top:${px(94.4)}px;font-size:${px(codeFs)}px;">${esc(header.docCode)}</div>
     ${renderInfoLine(eng)}`;
 }
 
@@ -284,6 +298,7 @@ function buildPageElement(
   record: SoilRecord,
   pageIndex: number,
   totalPages: number,
+  header: CmaHeaderSettings,
 ): HTMLElement {
   const el = document.createElement('div');
   el.className = 'pdf-page';
@@ -295,7 +310,7 @@ function buildPageElement(
     .pdf-txt{position:absolute;white-space:nowrap;}`;
   el.innerHTML =
     `<style>${pageCss}</style>` +
-    renderHeaderTexts(record) +
+    renderHeaderTexts(record, header) +
     renderTable(page, record) +
     renderFooter(pageIndex, totalPages);
   return el;
@@ -318,8 +333,11 @@ function shrinkOverflow(root: HTMLElement): void {
 // ---------------------------------------------------------------------------
 // 导出入口
 // ---------------------------------------------------------------------------
-/** 生成 PDF Blob（不触发下载），便于测试与复用 */
-export async function buildRecordPdfBlob(record: SoilRecord): Promise<Blob> {
+/** 生成 PDF Blob（不触发下载），便于测试与复用；header 为 CMA 页眉设置 */
+export async function buildRecordPdfBlob(
+  record: SoilRecord,
+  header: CmaHeaderSettings = CMA_DEFAULT,
+): Promise<Blob> {
   const pages = buildPdfPages(record);
   const totalPages = pages.length;
   const html2canvas = (await getHtml2Canvas()).default;
@@ -327,7 +345,7 @@ export async function buildRecordPdfBlob(record: SoilRecord): Promise<Blob> {
 
   const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape' });
   for (let i = 0; i < totalPages; i++) {
-    const el = buildPageElement(pages[i], record, i + 1, totalPages);
+    const el = buildPageElement(pages[i], record, i + 1, totalPages, header);
     document.body.appendChild(el);
     shrinkOverflow(el);
     const canvas = await html2canvas(el, {
@@ -349,12 +367,16 @@ export async function buildRecordPdfBlob(record: SoilRecord): Promise<Blob> {
 
 /**
  * 生成并导出 PDF（A3 横向，单孔成页，超 23 行另起页）。
+ * - header 为 CMA 页眉设置（版本行 / 文件编号），由调用方从持久化设置传入。
  * - 原生端：写入文档目录后用系统分享菜单导出。
  * - Web：浏览器下载。
  */
-export async function exportRecordPdf(record: SoilRecord): Promise<ExportResult> {
+export async function exportRecordPdf(
+  record: SoilRecord,
+  header: CmaHeaderSettings = CMA_DEFAULT,
+): Promise<ExportResult> {
   try {
-    const blob = await buildRecordPdfBlob(record);
+    const blob = await buildRecordPdfBlob(record, header);
     const fileName = buildPdfFileName(record);
 
     if (Capacitor.isNativePlatform()) {
