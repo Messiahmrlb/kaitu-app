@@ -13,9 +13,11 @@ import {
   ListItem,
   ListItemText,
   Divider,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import { SoilRecord } from '../types';
+import { SoilRecord, RecordMode } from '../types';
 import { parseDeliveryFile, ImportedRecord } from '../importDelivery';
 import { isChunkLoadError } from '../pwaRecovery';
 
@@ -82,6 +84,13 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
   // 解析告警聚合（文件级 resultWarnings + 各送样单块 warnings），醒目展示
   const allWarnings = [...resultWarnings, ...preview.flatMap((r) => r.warnings)];
 
+  /** 修改某份送样单的鉴别格式（解析时按野外定名自动识别，用户可在此纠正） */
+  const setModeAt = (idx: number, mode: RecordMode) => {
+    setPreview((prev) =>
+      prev.map((r, i) => (i === idx ? { ...r, record: { ...r.record, mode } } : r)),
+    );
+  };
+
   const handleImport = () => {
     onImport(preview.map((r) => r.record));
     reset();
@@ -139,18 +148,46 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
 
         {preview.length > 0 && (
           <Box sx={{ mb: 1 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
               识别到 {preview.length} 份送样单，共 {totalSamples} 条土样：
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。
             </Typography>
             <List dense disablePadding>
               {preview.map((r, i) => (
-                <Box key={r.sheetName}>
+                <Box key={`${r.sheetName}-${r.holeCode || 'nohole'}-${i}`}>
                   {i > 0 && <Divider component="li" />}
-                  <ListItem divider={i < preview.length - 1} alignItems="flex-start">
+                  <ListItem
+                    divider={i < preview.length - 1}
+                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0.75, py: 1 }}
+                  >
                     <ListItemText
+                      sx={{ my: 0 }}
                       primary={`孔号 ${r.holeCode || '（空）'} ｜ ${r.sampleCount} 条土样 ｜ ${r.record.name}`}
                       secondary={`来源工作表：${r.sheetName}`}
                     />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        鉴别格式
+                      </Typography>
+                      <ToggleButtonGroup
+                        size="small"
+                        exclusive
+                        value={r.record.mode}
+                        onChange={(_, v: RecordMode | null) => {
+                          if (v) setModeAt(i, v);
+                        }}
+                        aria-label={`孔号 ${r.holeCode || '（空）'} 的鉴别格式`}
+                      >
+                        <ToggleButton value="A" sx={{ py: 0.25, px: 1 }}>
+                          普通目力鉴别
+                        </ToggleButton>
+                        <ToggleButton value="B" sx={{ py: 0.25, px: 1 }}>
+                          三角坐标定名
+                        </ToggleButton>
+                      </ToggleButtonGroup>
+                    </Box>
                   </ListItem>
                 </Box>
               ))}

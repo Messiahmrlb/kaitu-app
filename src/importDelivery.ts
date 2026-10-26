@@ -1,5 +1,6 @@
 import type ExcelJS from 'exceljs';
-import { SoilRecord, SoilSample } from './types';
+import { SoilRecord, SoilSample, RecordMode } from './types';
+import { SOIL_TYPE_A, SOIL_TYPE_B } from './constants';
 import { genId, newSample, coupleDisturbance, todayStr } from './utils';
 import { importWithRecovery } from './pwaRecovery';
 
@@ -96,6 +97,103 @@ export function isChecked(v: unknown): boolean {
   if (s === '' || NO_SET.has(s)) return false;
   if (s.includes('√') || s.includes('■') || s.includes('✓')) return true;
   return true;
+}
+
+/**
+ * 土名归一化：去空白，并把「粘 / 黏」统一为「黏」。
+ *
+ * 送样单模板对同一土名存在两种写法（粘土 / 黏土、粉粘土 / 粉质黏土），
+ * 归一化后再比对，避免因为一个异体字把整份表判成另一种鉴别格式。
+ */
+export function normalizeSoilName(s: unknown): string {
+  return cellText(s).replace(/\s+/g, '').replace(/粘/g, '黏');
+}
+
+/**
+ * 在给定土名选项表中查找「野外定名」对应的项（**宽松包含匹配**）。
+ * 精确匹配优先；否则取被包含的最长选项（如「含有机质轻粉质壤土」→「轻粉质壤土」）。
+ * 找不到返回 null。
+ *
+ * 注意：包含匹配会把「粉黏土」里的「黏土」也算命中，用于判定格式时
+ * 必须先用 {@link exactMatchSoilType} 做精确匹配，避免把「粉粘土」误判成 A。
+ */
+export function matchSoilTypeName(name: unknown, options: string[]): string | null {
+  const n = normalizeSoilName(name);
+  if (!n) return null;
+  let best: string | null = null;
+  let bestLen = 0;
+  for (const o of options) {
+    const no = normalizeSoilName(o);
+    if (!no) continue;
+    if (no === n) return o;
+    if (n.includes(no) && no.length > bestLen) {
+      best = o;
+      bestLen = no.length;
+    }
+  }
+  return best;
+}
+
+/** 精确匹配（归一化后整串相等），不做事后包含匹配 */
+function exactMatchSoilType(name: unknown, options: string[]): string | null {
+  const n = normalizeSoilName(name);
+  if (!n) return null;
+  for (const o of options) {
+    if (normalizeSoilName(o) === n) return o;
+  }
+  return null;
+}
+
+/**
+ * 判定一份送样单的「鉴别格式」。
+ *
+ * 判定顺序：
+ *  1) 表内出现「三角坐标」字样 → 模式 B（显式声明优先）；
+ *  2) 先对全部野外定名做**精确**匹配，命中多的一侧胜出；
+ *  3) 若精确匹配一条都没命中（定名带修饰语等），再退回包含匹配；
+ *  4) 平票 / 仍无命中 → 模式 A（普通目力鉴别）兜底。
+ *
+ * 第 2 步先于第 3 步很关键：「粉粘土」经「粘→黏」归一化后包含「黏土」，
+ * 若直接做包含匹配会同时命中 A 与 B 造成平票，最终误判成 A。
+ *
+ * 注意：只做「格式」判断，不会把野外定名写进 soilType（土类仍需导入后逐条手勾）。
+ *
+ * @param fieldRecords 各土样的野外定名
+ * @param contextText  表块头部文本（工作表名、工程名称等），用于识别显式声明
+ */
+export function detectRecordMode(fieldRecords: unknown[], contextText = ''): RecordMode {
+  if (contextText.replace(/\s+/g, '').includes('三角坐标')) return 'B';
+
+  let scoreA = 0;
+  let scoreB = 0;
+  for (const raw of fieldRecords) {
+    if (exactMatchSoilType(raw, SOIL_TYPE_A)) scoreA += 1;
+    if (exactMatchSoilType(raw, SOIL_TYPE_B)) scoreB += 1;
+  }
+
+  // 精确匹配全部落空时才启用包含匹配（兼容「含有机质…」这类带修饰的定名）。
+  // 同一条定名在两侧都命中时，只认命中长度更长的一侧，避免「粉黏土」里的
+  // 「黏土」把结果拉成平票。
+  if (scoreA + scoreB === 0) {
+    for (const raw of fieldRecords) {
+      const ma = matchSoilTypeName(raw, SOIL_TYPE_A);
+      const mb = matchSoilTypeName(raw, SOIL_TYPE_B);
+      if (!ma && !mb) continue;
+      if (ma && mb) {
+        const la = normalizeSoilName(ma).length;
+        const lb = normalizeSoilName(mb).length;
+        if (lb > la) scoreB += 1;
+        else if (la > lb) scoreA += 1;
+        else {
+          scoreA += 1;
+          scoreB += 1;
+        }
+      } else if (ma) scoreA += 1;
+      else scoreB += 1;
+    }
+  }
+
+  return scoreB > scoreA ? 'B' : 'A';
 }
 
 /** 在指定行中按归一化文本查找列号；找不到返回 -1 */
@@ -276,13 +374,25 @@ function parseOneBlock(
     warnings.push(`送样单含未知试验项目：${lbl}（已归入"其他试验项目"，不影响导出）`);
   }
 
+  // 鉴别格式：按野外定名自动判定，导入预览里允许用户改动。
+  // 表头区域文本一并传入，用于识别模板里显式写明的「三角坐标」。
+  const contextParts: string[] = [ws.name, projectName];
+  for (let r = Math.max(1, hr - 15); r <= sub; r++) {
+    const row = ws.getRow(r);
+    for (let c = 1; c <= row.cellCount; c++) contextParts.push(cellText(row.getCell(c).value));
+  }
+  const mode = detectRecordMode(
+    samples.map((s) => s.fieldRecord),
+    contextParts.join(' '),
+  );
+
   // 组装记录
   const now = Date.now();
   const name = (projectName ? projectName + ' ' : '') + holeCode;
   const record: SoilRecord = {
     id: genId(),
     name: name || `开土记录 ${todayStr()}`,
-    mode: 'A',
+    mode,
     engineering: {
       projectCode: '',
       holeCode,
