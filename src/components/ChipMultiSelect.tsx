@@ -1,4 +1,4 @@
-import { Box, Chip } from '@mui/material';
+import { Box, Chip, Typography } from '@mui/material';
 
 interface Props {
   /** 分组标题 */
@@ -26,7 +26,9 @@ export default function ChipMultiSelect({ label, options, value, onChange }: Pro
 
   return (
     <Box sx={{ mb: 2 }}>
-      <Box sx={{ fontSize: 14, color: 'text.secondary', mb: 1 }}>{label}</Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+        {label}
+      </Typography>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         {options.map((opt) => {
           const selected = value.includes(opt);

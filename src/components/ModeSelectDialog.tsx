@@ -37,7 +37,7 @@ export default function ModeSelectDialog({ open, onSelect, onClose }: Props) {
             sx={{
               p: 2,
               cursor: 'pointer',
-              borderRadius: 3,
+              borderRadius: 2,
               borderColor: 'divider',
               transition: 'border-color .2s ease, background-color .2s ease',
               '&:hover': {
@@ -62,7 +62,7 @@ export default function ModeSelectDialog({ open, onSelect, onClose }: Props) {
             sx={{
               p: 2,
               cursor: 'pointer',
-              borderRadius: 3,
+              borderRadius: 2,
               borderColor: 'divider',
               transition: 'border-color .2s ease, background-color .2s ease',
               '&:hover': {

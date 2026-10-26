@@ -22,6 +22,7 @@ import { TEST_ITEMS, DISTURBED_APPLICABLE_TESTS } from '../constants';
 import { setDisturbance, isPermQuickConflict, isQuickShearBothConflict } from '../utils';
 import { conflictBg } from '../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -248,7 +249,7 @@ export default function BatchCheckDialog({
           <Button
             size="small"
             variant="outlined"
-            startIcon={<AddCircleOutlineIcon />}
+            startIcon={<AddIcon />}
             onClick={addCustomItem}
           >
             添加自定义试验项目
@@ -298,8 +299,10 @@ export default function BatchCheckDialog({
           <Table stickyHeader size="small" sx={{ zoom: scale, tableLayout: 'auto' }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ ...STICKY_HEAD, minWidth: 90, fontWeight: 700 }}>
-                  土号
+                <TableCell sx={{ ...STICKY_HEAD, minWidth: 90 }}>
+                  <Typography variant="caption" fontWeight={700}>
+                    土号
+                  </Typography>
                 </TableCell>
                 <TableCell align="center" sx={{ minWidth: 90 }}>
                   <Box

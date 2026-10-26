@@ -571,7 +571,7 @@ export default function App() {
                         selectMode ? () => toggleSelect(rec.id) : () => openExisting(rec)
                       }
                       sx={{
-                        borderRadius: 3,
+                        borderRadius: 2,
                         cursor: 'pointer',
                         position: 'relative',
                         overflow: 'hidden',
@@ -608,6 +608,7 @@ export default function App() {
                               fontWeight={700}
                               noWrap
                               sx={{
+                                flexShrink: 1,
                                 minWidth: 0,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -619,6 +620,7 @@ export default function App() {
                               size="small"
                               label={MODE_LABELS[rec.mode]}
                               color={rec.mode === 'A' ? 'primary' : 'secondary'}
+                              sx={{ flexShrink: 0 }}
                             />
                             {disturb > 0 && (
                               <Chip
@@ -626,6 +628,7 @@ export default function App() {
                                 label={`扰动 ${disturb}`}
                                 color="error"
                                 variant="outlined"
+                                sx={{ flexShrink: 0 }}
                               />
                             )}
                           </Box>
@@ -884,7 +887,7 @@ export default function App() {
                         size="small"
                         label={isDisturb ? '扰动' : '原状'}
                         color={isDisturb ? 'error' : 'primary'}
-                        variant={isDisturb ? 'filled' : 'outlined'}
+                        variant="outlined"
                         sx={{ height: 20 }}
                       />
                       {(!s.siltySand || s.siltySand === 'none') &&
@@ -893,7 +896,7 @@ export default function App() {
                           <Chip
                             size="small"
                             label="未描述"
-                            color="warning"
+                            color="default"
                             variant="outlined"
                             sx={{ height: 20 }}
                           />

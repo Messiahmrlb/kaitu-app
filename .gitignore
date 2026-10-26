@@ -10,3 +10,6 @@ _dist_*
 *.timestamp-*.mjs
 _inspect_*.cjs
 *.log
+
+# 本地工作区数据（不参与部署）
+.workbuddy/
