@@ -37,6 +37,10 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # 首次部署时自动创建/启用 Pages 站点（Source 自动设为 GitHub Actions），
+          # 免去在 Settings → Pages 里手动切换；仓库须为 Public。
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
