@@ -1,0 +1,608 @@
+[
+  {
+    "width": 320,
+    "batch": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 399.55,
+          "bottom": 430.3,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 320,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "hitCls": "MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-s",
+        "dialog": {
+          "scrollWidth": 256,
+          "clientWidth": 256,
+          "paper": {
+            "left": 32,
+            "right": 288,
+            "top": 87.03,
+            "bottom": 756.97,
+            "width": 256,
+            "height": 669.94
+          },
+          "innerWidth": 320,
+          "docScrollWidth": 320
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 264,
+          "top": 375.55,
+          "bottom": 415.55,
+          "width": 208,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 423.55,
+          "bottom": 454.3,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 128,
+          "right": 192,
+          "top": 423.55,
+          "bottom": 454.3,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 256,
+          "clientWidth": 256,
+          "paper": {
+            "left": 32,
+            "right": 288,
+            "top": 63.03,
+            "bottom": 780.97,
+            "width": 256,
+            "height": 717.94
+          },
+          "innerWidth": 320,
+          "docScrollWidth": 320
+        },
+        "innerWidth": 320
+      },
+      "typedValue": "探针B320",
+      "added": true,
+      "formClosed": true
+    },
+    "sample": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 320,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "dialog": {
+          "scrollWidth": 256,
+          "clientWidth": 256,
+          "paper": {
+            "left": 32,
+            "right": 288,
+            "top": 32,
+            "bottom": 812,
+            "width": 256,
+            "height": 780
+          },
+          "innerWidth": 320,
+          "docScrollWidth": 320
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 264,
+          "top": 408,
+          "bottom": 448,
+          "width": 208,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 128,
+          "right": 192,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 256,
+          "clientWidth": 256,
+          "paper": {
+            "left": 32,
+            "right": 288,
+            "top": 32,
+            "bottom": 812,
+            "width": 256,
+            "height": 780
+          },
+          "innerWidth": 320,
+          "docScrollWidth": 320
+        },
+        "innerWidth": 320
+      },
+      "added": true
+    },
+    "failures": [],
+    "batchScreenshot": "qa_harness/_emit/qa_batch_320.png",
+    "sampleScreenshot": "qa_harness/_emit/qa_sample_320.png"
+  },
+  {
+    "width": 360,
+    "batch": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 399.55,
+          "bottom": 430.3,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 360,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "hitCls": "MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-s",
+        "dialog": {
+          "scrollWidth": 296,
+          "clientWidth": 296,
+          "paper": {
+            "left": 32,
+            "right": 328,
+            "top": 107.42,
+            "bottom": 736.58,
+            "width": 296,
+            "height": 629.16
+          },
+          "innerWidth": 360,
+          "docScrollWidth": 360
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 304,
+          "top": 375.55,
+          "bottom": 415.55,
+          "width": 248,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 423.55,
+          "bottom": 454.3,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 128,
+          "right": 192,
+          "top": 423.55,
+          "bottom": 454.3,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 296,
+          "clientWidth": 296,
+          "paper": {
+            "left": 32,
+            "right": 328,
+            "top": 83.42,
+            "bottom": 760.58,
+            "width": 296,
+            "height": 677.16
+          },
+          "innerWidth": 360,
+          "docScrollWidth": 360
+        },
+        "innerWidth": 360
+      },
+      "typedValue": "探针B360",
+      "added": true,
+      "formClosed": true
+    },
+    "sample": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 360,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "dialog": {
+          "scrollWidth": 296,
+          "clientWidth": 296,
+          "paper": {
+            "left": 32,
+            "right": 328,
+            "top": 32,
+            "bottom": 812,
+            "width": 296,
+            "height": 780
+          },
+          "innerWidth": 360,
+          "docScrollWidth": 360
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 304,
+          "top": 408,
+          "bottom": 448,
+          "width": 248,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 128,
+          "right": 192,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 296,
+          "clientWidth": 296,
+          "paper": {
+            "left": 32,
+            "right": 328,
+            "top": 32,
+            "bottom": 812,
+            "width": 296,
+            "height": 780
+          },
+          "innerWidth": 360,
+          "docScrollWidth": 360
+        },
+        "innerWidth": 360
+      },
+      "added": true
+    },
+    "failures": []
+  },
+  {
+    "width": 390,
+    "batch": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 399.55,
+          "bottom": 430.3,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 390,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "hitCls": "MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-s",
+        "dialog": {
+          "scrollWidth": 326,
+          "clientWidth": 326,
+          "paper": {
+            "left": 32,
+            "right": 358,
+            "top": 107.42,
+            "bottom": 736.58,
+            "width": 326,
+            "height": 629.16
+          },
+          "innerWidth": 390,
+          "docScrollWidth": 390
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 262,
+          "top": 375.55,
+          "bottom": 415.55,
+          "width": 206,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 270,
+          "right": 334,
+          "top": 380.17,
+          "bottom": 410.92,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 423.55,
+          "bottom": 454.3,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 326,
+          "clientWidth": 326,
+          "paper": {
+            "left": 32,
+            "right": 358,
+            "top": 83.42,
+            "bottom": 760.58,
+            "width": 326,
+            "height": 677.16
+          },
+          "innerWidth": 390,
+          "docScrollWidth": 390
+        },
+        "innerWidth": 390
+      },
+      "typedValue": "探针B390",
+      "added": true,
+      "formClosed": true
+    },
+    "sample": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 390,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "dialog": {
+          "scrollWidth": 326,
+          "clientWidth": 326,
+          "paper": {
+            "left": 32,
+            "right": 358,
+            "top": 32,
+            "bottom": 812,
+            "width": 326,
+            "height": 780
+          },
+          "innerWidth": 390,
+          "docScrollWidth": 390
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 262,
+          "top": 408,
+          "bottom": 448,
+          "width": 206,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 270,
+          "right": 334,
+          "top": 412.63,
+          "bottom": 443.38,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 326,
+          "clientWidth": 326,
+          "paper": {
+            "left": 32,
+            "right": 358,
+            "top": 32,
+            "bottom": 812,
+            "width": 326,
+            "height": 780
+          },
+          "innerWidth": 390,
+          "docScrollWidth": 390
+        },
+        "innerWidth": 390
+      },
+      "added": true
+    },
+    "failures": []
+  },
+  {
+    "width": 430,
+    "batch": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 373.34,
+          "bottom": 404.09,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 430,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "hitCls": "MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedPrimary MuiButton-s",
+        "dialog": {
+          "scrollWidth": 366,
+          "clientWidth": 366,
+          "paper": {
+            "left": 32,
+            "right": 398,
+            "top": 133.61,
+            "bottom": 710.38,
+            "width": 366,
+            "height": 576.77
+          },
+          "innerWidth": 430,
+          "docScrollWidth": 430
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 302,
+          "top": 349.34,
+          "bottom": 389.34,
+          "width": 246,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 310,
+          "right": 374,
+          "top": 353.97,
+          "bottom": 384.72,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 397.34,
+          "bottom": 428.09,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 366,
+          "clientWidth": 366,
+          "paper": {
+            "left": 32,
+            "right": 398,
+            "top": 109.61,
+            "bottom": 734.38,
+            "width": 366,
+            "height": 624.77
+          },
+          "innerWidth": 430,
+          "docScrollWidth": 430
+        },
+        "innerWidth": 430
+      },
+      "typedValue": "探针B430",
+      "added": true,
+      "formClosed": true
+    },
+    "sample": {
+      "unfolded": {
+        "rect": {
+          "left": 56,
+          "right": 217,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 161,
+          "height": 30.75
+        },
+        "innerWidth": 430,
+        "hitOk": true,
+        "hitTag": "BUTTON",
+        "dialog": {
+          "scrollWidth": 366,
+          "clientWidth": 366,
+          "paper": {
+            "left": 32,
+            "right": 398,
+            "top": 32,
+            "bottom": 812,
+            "width": 366,
+            "height": 780
+          },
+          "innerWidth": 430,
+          "docScrollWidth": 430
+        }
+      },
+      "expanded": {
+        "input": {
+          "left": 56,
+          "right": 302,
+          "top": 408,
+          "bottom": 448,
+          "width": 246,
+          "height": 40
+        },
+        "addBtn": {
+          "left": 310,
+          "right": 374,
+          "top": 412.63,
+          "bottom": 443.38,
+          "width": 64,
+          "height": 30.75
+        },
+        "cancelBtn": {
+          "left": 56,
+          "right": 120,
+          "top": 412,
+          "bottom": 442.75,
+          "width": 64,
+          "height": 30.75
+        },
+        "addHitOk": true,
+        "dialog": {
+          "scrollWidth": 366,
+          "clientWidth": 366,
+          "paper": {
+            "left": 32,
+            "right": 398,
+            "top": 32,
+            "bottom": 812,
+            "width": 366,
+            "height": 780
+          },
+          "innerWidth": 430,
+          "docScrollWidth": 430
+        },
+        "innerWidth": 430
+      },
+      "added": true
+    },
+    "failures": []
+  }
+]

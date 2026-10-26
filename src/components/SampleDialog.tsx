@@ -12,6 +12,7 @@ import {
   Chip,
   Divider,
   FormControl,
+  IconButton,
   ToggleButton,
   ToggleButtonGroup,
   Alert,
@@ -28,6 +29,8 @@ import {
 import ChipMultiSelect from './ChipMultiSelect';
 import { setDisturbance, disturbedTestConflicts, isPermQuickConflict, isQuickShearBothConflict } from '../utils';
 import AddIcon from '@mui/icons-material/Add';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 
 /** 从土样卡片信息格点击进入时，需要自动滚动/聚焦的目标字段 */
 export type SampleFocusField = 'il' | 'ip' | 'disturbance' | 'siltySand';
@@ -72,6 +75,20 @@ export default function SampleDialog({
   const ipRef = useRef<HTMLInputElement>(null);
   const disturbanceRef = useRef<HTMLDivElement>(null);
   const siltySandRef = useRef<HTMLDivElement>(null);
+
+  // 自定义试验项目：内联新增 / 内联删除确认（替代原生 prompt/confirm，保持与批量勾选对话框一致）
+  const [newItemName, setNewItemName] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  /** 内联提交新增自定义试验项目（空值则忽略；onAddCustomTestItem 内部已 trim 去重） */
+  const submitNewItem = () => {
+    const name = newItemName.trim();
+    setNewItemName('');
+    setAdding(false);
+    if (!name) return;
+    onAddCustomTestItem(name);
+  };
 
   // 打开时同步初始数据；若指定 autoFocusField，则在渲染后滚到该字段并聚焦
   useEffect(() => {
@@ -228,25 +245,57 @@ export default function SampleDialog({
             />
             {customTestItems.length > 0 && (
               <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                {customTestItems.map((item) => (
-                  <Chip
-                    key={item}
-                    size="small"
-                    label={item}
-                    color="secondary"
-                    variant="outlined"
-                    onDelete={() => {
-                      if (
-                        !window.confirm(
-                          `删除自定义试验项目「${item}」？\n将从全局列表移除；当前土样中已勾选该项会同步取消。`,
-                        )
-                      )
-                        return;
-                      onRemoveCustomTestItem?.(item);
-                      set('otherTestItems', (sample.otherTestItems ?? []).filter((t) => t !== item));
-                    }}
-                  />
-                ))}
+                {customTestItems.map((item) =>
+                  confirmDelete === item ? (
+                    <Box
+                      key={item}
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.25,
+                        px: 1,
+                        py: 0.5,
+                        border: '1px solid',
+                        borderColor: 'error.main',
+                        borderRadius: '8px',
+                      }}
+                    >
+                      <Typography variant="caption" color="error.main">
+                        删除?
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => {
+                          onRemoveCustomTestItem?.(item);
+                          set('otherTestItems', (sample.otherTestItems ?? []).filter((t) => t !== item));
+                          setConfirmDelete(null);
+                        }}
+                        sx={{ p: 0.25 }}
+                        aria-label={`确认删除 ${item}`}
+                      >
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => setConfirmDelete(null)}
+                        sx={{ p: 0.25 }}
+                        aria-label="取消删除"
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ) : (
+                    <Chip
+                      key={item}
+                      size="small"
+                      label={item}
+                      color="secondary"
+                      variant="outlined"
+                      onDelete={() => setConfirmDelete(item)}
+                    />
+                  ),
+                )}
               </Box>
             )}
             {customTestItems.length === 0 && (
@@ -254,17 +303,48 @@ export default function SampleDialog({
                 暂无自定义项，可在下方添加。
               </Typography>
             )}
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<AddIcon />}
-              sx={{ mt: 1 }}
-              onClick={() =>
-                onAddCustomTestItem(window.prompt('输入自定义试验项目名称') ?? '')
-              }
-            >
-              添加自定义试验项目
-            </Button>
+            {adding ? (
+              <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+                <TextField
+                  autoFocus
+                  size="small"
+                  label="自定义试验项目名称"
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitNewItem();
+                    if (e.key === 'Escape') {
+                      setAdding(false);
+                      setNewItemName('');
+                    }
+                  }}
+                  sx={{ flex: '1 1 180px', minWidth: 0 }}
+                />
+                <Button size="small" variant="contained" onClick={submitNewItem}>
+                  添加
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => {
+                    setAdding(false);
+                    setNewItemName('');
+                  }}
+                >
+                  取消
+                </Button>
+              </Box>
+            ) : (
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<AddIcon />}
+                sx={{ mt: 1 }}
+                onClick={() => setAdding(true)}
+              >
+                添加自定义试验项目
+              </Button>
+            )}
           </Box>
 
           {/* 仅 App 内显示/保存，不写入导出表格 */}

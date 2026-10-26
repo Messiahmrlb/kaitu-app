@@ -513,7 +513,7 @@ export default function App() {
             >
               删除选中
             </Button>
-            <Button size="small" color="warning" onClick={() => setBatchConfirm('all')}>
+            <Button size="small" onClick={() => setBatchConfirm('all')}>
               清空全部
             </Button>
             <Button size="small" onClick={() => { setSelectMode(false); setSelected([]); }}>

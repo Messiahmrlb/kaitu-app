@@ -21,7 +21,7 @@ import { createTheme } from '@mui/material/styles';
  */
 export const RADIUS = {
   /** 卡片：记录卡片 / 土样卡片 / 模式选项卡 */
-  card: '24px',
+  card: '16px',
   /** 卡片内的信息格、内嵌区块（比卡片更小一档） */
   tile: '8px',
 } as const;
@@ -48,6 +48,14 @@ const theme = createTheme({
     },
     success: {
       main: '#16A34A',
+    },
+    // 警示色：与辅色 secondary（琥珀 #D97706）同源，统一「注意/警示」语义。
+    // 不定义时 MUI 的 severity="warning" 会用默认橙 #ED6C02，与我们禁用的默认橙冲突。
+    warning: {
+      main: '#D97706',
+      light: '#F59E0B',
+      dark: '#B45309',
+      contrastText: '#FFFFFF',
     },
     background: {
       default: '#F1F5F4',
@@ -139,7 +147,13 @@ const theme = createTheme({
       },
     },
     MuiOutlinedInput: {
-      styleOverrides: { root: { borderRadius: 10 } },
+      styleOverrides: {
+        root: { borderRadius: 10 },
+        // 默认（未聚焦）描边加清晰：MUI 默认 rgba(0,0,0,0.23) 在浅灰底几乎看不见，
+        // 统一加深到 0.35，保证输入框在静止状态下也清晰可辨（移动端尤其明显）。
+        // 悬停/聚焦仍有更高优先级的选择器覆盖为更深的灰 / primary，不受影响。
+        notchedOutline: { borderColor: 'rgba(0, 0, 0, 0.35)' },
+      },
     },
     MuiToggleButton: {
       styleOverrides: {

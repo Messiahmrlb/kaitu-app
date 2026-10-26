@@ -10,6 +10,7 @@ import {
   TableRow,
   TableCell,
   TableContainer,
+  TextField,
   Checkbox,
   Box,
   Typography,
@@ -26,6 +27,8 @@ import AddIcon from '@mui/icons-material/Add';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 
 /**
  * 冻结首列（土号）样式：横向滚动时始终贴左可见。
@@ -89,6 +92,11 @@ export default function BatchCheckDialog({
     const clamped = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
     setScale(clamped);
   };
+
+  // 自定义试验项目：内联新增 / 内联删除确认（替代原生 prompt/confirm，移动端更顺手）
+  const [newItemName, setNewItemName] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   // 打开时从 props 重新初始化工作副本，并把缩放复位为 1（每次进入都从原始大小开始）
   useEffect(() => {
@@ -196,26 +204,23 @@ export default function BatchCheckDialog({
       }),
     );
 
-  /** 新增一个全局自定义试验项目（空值或已存在则忽略） */
-  const addCustomItem = () => {
-    const name = (window.prompt('输入自定义试验项目名称') ?? '').trim();
+  /** 内联提交新增自定义试验项目（空值或已存在则忽略） */
+  const submitNewItem = () => {
+    const name = newItemName.trim();
+    setNewItemName('');
+    setAdding(false);
     if (!name) return;
     if (customTestItems.includes(name)) return;
     onCustomTestItemsChange([...customTestItems, name]);
   };
 
-  /** 删除一个全局自定义试验项目：从全局列表移除，并同步取消当前记录中已勾选该项的土样 */
-  const removeCustomItem = (name: string) => {
-    if (
-      !window.confirm(
-        `删除自定义试验项目「${name}」？\n将从全局列表移除；当前记录中已勾选该项的土样会同步取消（其他记录不受影响）。`,
-      )
-    )
-      return;
+  /** 内联确认删除自定义试验项目：从全局列表移除，并同步取消当前记录中已勾选该项的土样 */
+  const doRemoveItem = (name: string) => {
     onCustomTestItemsChange(customTestItems.filter((x) => x !== name));
     setWorking((prev) =>
       prev.map((s) => ({ ...s, otherTestItems: (s.otherTestItems ?? []).filter((t) => t !== name) })),
     );
+    setConfirmDelete(null);
   };
 
   const handleSave = () => {
@@ -234,38 +239,70 @@ export default function BatchCheckDialog({
           <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}> 标红 </Box>
           （可能的冲突组合）。
         </Typography>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 1,
-            mb: 1,
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            自定义/额外试验项目为全局项，可在下方表格逐列勾选，或点此新增。
-          </Typography>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={addCustomItem}
+        {/* 说明文字独占一行：与下方按钮/表单上下排布，避免窄屏被挤成竖排 */}
+        <Box sx={{ display: 'block', mb: 1 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            sx={{ mb: 1, lineHeight: 1.7 }}
           >
-            添加自定义试验项目
-          </Button>
+            自定义/额外试验项目为全局项，可在下方表格逐列勾选，或内联新增。
+          </Typography>
+          {adding ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+              <TextField
+                autoFocus
+                size="small"
+                label="自定义试验项目名称"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitNewItem();
+                  if (e.key === 'Escape') {
+                    setAdding(false);
+                    setNewItemName('');
+                  }
+                }}
+                sx={{ flex: '1 1 180px', minWidth: 0 }}
+              />
+              <Button size="small" variant="contained" onClick={submitNewItem}>
+                添加
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  setAdding(false);
+                  setNewItemName('');
+                }}
+              >
+                取消
+              </Button>
+            </Box>
+          ) : (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => setAdding(true)}
+            >
+              添加自定义试验项目
+            </Button>
+          )}
         </Box>
+        {/* 缩放说明同样独占一行：窄屏下不与缩放按钮抢宽度（避免说明被压成竖排） */}
         <Box
           sx={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
             gap: 1,
             mb: 1,
             mt: 1,
           }}
         >
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.7 }}>
             点击 － 缩小可在一屏内看到更多列；＋ 放大让字/复选框更大好点按。当前缩放 {(scale * 100).toFixed(0)}%
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -363,7 +400,7 @@ export default function BatchCheckDialog({
                           display: 'flex',
                           alignItems: 'center',
                           gap: 0.25,
-                          maxWidth: 120,
+                          maxWidth: 160,
                         }}
                       >
                         <Typography
@@ -375,15 +412,44 @@ export default function BatchCheckDialog({
                         >
                           {item}
                         </Typography>
-                        <IconButton
-                          size="small"
-                          color="secondary"
-                          onClick={() => removeCustomItem(item)}
-                          sx={{ p: 0.25 }}
-                          aria-label={`删除自定义项 ${item}`}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                        {confirmDelete === item ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                            <Typography
+                              variant="caption"
+                              color="error.main"
+                              sx={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                            >
+                              删除?
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => doRemoveItem(item)}
+                              sx={{ p: 0.25 }}
+                              aria-label={`确认删除 ${item}`}
+                            >
+                              <CheckIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={() => setConfirmDelete(null)}
+                              sx={{ p: 0.25 }}
+                              aria-label="取消删除"
+                            >
+                              <CloseIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ) : (
+                          <IconButton
+                            size="small"
+                            color="secondary"
+                            onClick={() => setConfirmDelete(item)}
+                            sx={{ p: 0.25 }}
+                            aria-label={`删除自定义项 ${item}`}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
                       </Box>
                       <Checkbox
                         size="small"
