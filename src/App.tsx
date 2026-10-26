@@ -36,6 +36,15 @@ const infoTileSx: SxProps<Theme> = {
   transition: 'background .15s',
   '&:hover': { bgcolor: (t) => alpha(t.palette.primary.main, 0.06) },
 };
+
+/** 土样卡片上的「试验项目冲突」提示条统一样式：整条可点，点击进入录入修改 */
+const sampleConflictAlertSx: SxProps<Theme> = {
+  mt: 1,
+  cursor: 'pointer',
+  py: 0.5,
+  '& .MuiAlert-icon': { py: 0.5 },
+  '& .MuiAlert-message': { py: 0.25, width: '100%' },
+};
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -63,6 +72,8 @@ import {
   insertSampleAt,
   renumberDigitsOnly,
   disturbedTestConflicts,
+  isPermQuickConflict,
+  isQuickShearBothConflict,
   upsertRecord,
   isRecordDirty,
 } from './utils';
@@ -853,6 +864,10 @@ export default function App() {
             const isDisturb = s.disturbance === '扰动';
             // 扰动土 + 固结/渗透/剪切/三轴 等不兼容试验项：在卡片上显著提示
             const conflictedTests = disturbedTestConflicts(s);
+            // 剪切 / 渗透互斥冲突：①渗透与快剪同时勾选 ②饱固快剪与自然快剪同时勾选
+            const shearPermConflicts: string[] = [];
+            if (isPermQuickConflict(s)) shearPermConflicts.push('渗透与快剪同时勾选');
+            if (isQuickShearBothConflict(s)) shearPermConflicts.push('饱固快剪与自然快剪同时勾选');
             return (
               <Card
                 key={s.id}
@@ -930,19 +945,29 @@ export default function App() {
                     <Alert
                       severity="warning"
                       onClick={() => openEditSample(idx)}
-                      sx={{
-                        mt: 1,
-                        cursor: 'pointer',
-                        py: 0.5,
-                        '& .MuiAlert-icon': { py: 0.5 },
-                        '& .MuiAlert-message': { py: 0.25, width: '100%' },
-                      }}
+                      sx={sampleConflictAlertSx}
                     >
                       <Typography variant="body2" fontWeight={700}>
                         试验项目冲突：扰动土不应做 {conflictedTests.join('、')}
                       </Typography>
                       <Typography variant="caption" display="block">
                         扰动土仅适用「物性」「颗分」，点此修改
+                      </Typography>
+                    </Alert>
+                  )}
+
+                  {/* 剪切 / 渗透判定冲突：与批量勾选对话框的标红规则一致，同样在卡片上提示 */}
+                  {shearPermConflicts.length > 0 && (
+                    <Alert
+                      severity="warning"
+                      onClick={() => openEditSample(idx)}
+                      sx={sampleConflictAlertSx}
+                    >
+                      <Typography variant="body2" fontWeight={700}>
+                        试验项目冲突：{shearPermConflicts.join('；')}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        渗透与快剪、两种快剪一般不同时做，点此修改
                       </Typography>
                     </Alert>
                   )}
