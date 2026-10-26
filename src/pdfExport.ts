@@ -20,6 +20,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { ExportResult } from './xlsxExport';
+import { importWithRecovery } from './pwaRecovery';
 
 // ---------------------------------------------------------------------------
 // 几何常量（单位 pt；px = pt × 4/3，96dpi）
@@ -113,13 +114,14 @@ export function buildPdfPages(record: SoilRecord): PdfPage[] {
 // ---------------------------------------------------------------------------
 let _h2c: typeof import('html2canvas') | null = null;
 async function getHtml2Canvas(): Promise<typeof import('html2canvas')> {
-  if (!_h2c) _h2c = await import('html2canvas');
+  // 分块 404（旧页面指向已删除的构建产物）时自动清缓存并刷新
+  if (!_h2c) _h2c = await importWithRecovery(() => import('html2canvas'));
   return _h2c;
 }
 
 let _jspdf: typeof import('jspdf') | null = null;
 async function getJsPdf(): Promise<typeof import('jspdf')> {
-  if (!_jspdf) _jspdf = await import('jspdf');
+  if (!_jspdf) _jspdf = await importWithRecovery(() => import('jspdf'));
   return _jspdf;
 }
 

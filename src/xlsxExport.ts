@@ -1,5 +1,6 @@
 import type ExcelJS from 'exceljs';
 import { Capacitor } from '@capacitor/core';
+import { importWithRecovery } from './pwaRecovery';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { SoilRecord } from './types';
@@ -40,7 +41,9 @@ import {
  */
 let _exceljs: typeof import('exceljs') | null = null;
 async function getExcelJS(): Promise<typeof import('exceljs')> {
-  if (!_exceljs) _exceljs = (await import('exceljs')).default as typeof import('exceljs');
+  // 分块 404（旧页面指向已删除的构建产物）时自动清缓存并刷新
+  if (!_exceljs)
+    _exceljs = (await importWithRecovery(() => import('exceljs'))).default as typeof import('exceljs');
   return _exceljs;
 }
 

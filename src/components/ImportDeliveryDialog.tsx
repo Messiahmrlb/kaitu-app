@@ -17,6 +17,7 @@ import {
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { SoilRecord } from '../types';
 import { parseDeliveryFile, ImportedRecord } from '../importDelivery';
+import { isChunkLoadError } from '../pwaRecovery';
 
 interface Props {
   open: boolean;
@@ -68,7 +69,11 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
         setPreview(result.records);
       }
     } catch (e: any) {
-      setError('解析失败：' + (e?.message ?? String(e)));
+      setError(
+        isChunkLoadError(e)
+          ? '解析组件加载失败（页面是旧版本，脚本已被新版本替换）。正在自动刷新，请稍候重新导入。'
+          : '解析失败：' + (e?.message ?? String(e)),
+      );
     } finally {
       setLoading(false);
     }

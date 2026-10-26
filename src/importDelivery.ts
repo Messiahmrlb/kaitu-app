@@ -1,6 +1,7 @@
 import type ExcelJS from 'exceljs';
 import { SoilRecord, SoilSample } from './types';
 import { genId, newSample, coupleDisturbance, todayStr } from './utils';
+import { importWithRecovery } from './pwaRecovery';
 
 /**
  * 送样单（电子送样单 / 土工试验送样单 表一）解析逻辑。
@@ -309,7 +310,8 @@ function parseOneBlock(
  * 各自解析为一条 SoilRecord。无数据行的块会被跳过并记入 warnings。
  */
 export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryParseResult> {
-  const XL = (await import('exceljs')).default;
+  // 分块可能因「页面停留在旧版本」而 404，此处带自愈：清缓存并自动刷新
+  const XL = (await importWithRecovery(() => import('exceljs'))).default;
   const wb = new XL.Workbook();
   await wb.xlsx.load(buffer);
 

@@ -35,6 +35,12 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
         navigateFallback: 'index.html',
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        // 每次激活新 SW 时清掉上一版预缓存：旧 index.js 与其懒加载分块必须同时被淘汰，
+        // 否则会出现「旧页面指向已被删除的分块 → 动态 import 404」的错配
+        cleanupOutdatedCaches: true,
+        // 新版本立即接管，配合 main.tsx 的 controllerchange 重载
+        skipWaiting: true,
+        clientsClaim: true,
       },
       // 开发模式不启用 SW，避免干扰 npm run dev 调试；仅 build 后生效
       devOptions: {
