@@ -26,7 +26,7 @@ import {
   SILTY_SAND,
 } from '../constants';
 import ChipMultiSelect from './ChipMultiSelect';
-import { setDisturbance, disturbedTestConflicts } from '../utils';
+import { setDisturbance, disturbedTestConflicts, isPermQuickConflict, isQuickShearBothConflict } from '../utils';
 import AddIcon from '@mui/icons-material/Add';
 
 /** 从土样卡片信息格点击进入时，需要自动滚动/聚焦的目标字段 */
@@ -119,6 +119,17 @@ export default function SampleDialog({
 
   // 扰动土试验项目冲突：扰动土仅适用 物性/颗分，勾选 固结/渗透/剪切/三轴 等即提示
   const disturbedConflicts = disturbedTestConflicts(sample);
+
+  // 剪切 / 渗透判定冲突：与土样卡片、批量勾选对话框共用同一套判定规则
+  const permQuickConflict = isPermQuickConflict(sample);
+  const shearBothConflict = isQuickShearBothConflict(sample);
+  // 提示里点出具体勾了哪几项，便于对照取消（渗透：垂直/水平；快剪：饱固/自然）
+  const selectedPermItems = (sample.testItems ?? []).filter(
+    (t) => t === '垂直渗透' || t === '水平渗透',
+  );
+  const selectedShearItems = (sample.testItems ?? []).filter(
+    (t) => t === '饱固快剪' || t === '自然快剪',
+  );
 
   const set = (key: keyof SoilSample, v: string | string[]) =>
     setSample((prev) => ({ ...prev, [key]: v }));
@@ -346,6 +357,19 @@ export default function SampleDialog({
           {sample.disturbance === '扰动' && disturbedConflicts.length > 0 && (
             <Alert severity="warning" sx={{ mt: 2 }}>
               扰动土不应做以下试验项目：{disturbedConflicts.join('、')}。扰动土仅适用「物性」「颗分」，请取消上述勾选。
+            </Alert>
+          )}
+
+          {/* 剪切 / 渗透判定冲突提示：实时随勾选变化，规则与土样卡片一致 */}
+          {permQuickConflict && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              {`已同时勾选渗透（${selectedPermItems.join('、')}）与快剪（${selectedShearItems.join('、')}）：两者一般不同时做，请取消其中一项。`}
+            </Alert>
+          )}
+
+          {shearBothConflict && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              已同时勾选「饱固快剪」与「自然快剪」：两种快剪一般不同时做，请取消其中一项。
             </Alert>
           )}
         </Stack>

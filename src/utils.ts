@@ -222,9 +222,13 @@ export function isPermQuickConflict(sample: SoilSample): boolean {
 /**
  * 快剪项互斥冲突判定：当 sample 同时勾选「饱固快剪」与「自然快剪」时返回 true。
  * 用于在批量勾选对话框中对冲突行标红提示（二者一般不同时做）。
+ *
+ * 注意：testItems 可能为空（如土样录入框在关闭状态下以空对象占位），必须做空值保护，
+ * 否则 `undefined.includes` 会让整个页面渲染崩溃。
  */
 export function isQuickShearBothConflict(sample: SoilSample): boolean {
-  return sample.testItems.includes('饱固快剪') && sample.testItems.includes('自然快剪');
+  const items = sample.testItems ?? [];
+  return items.includes('饱固快剪') && items.includes('自然快剪');
 }
 
 /**
