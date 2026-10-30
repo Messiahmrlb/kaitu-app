@@ -25,7 +25,8 @@ __export(exportNaming_exports, {
   groupXlsxRecords: () => groupXlsxRecords,
   mergedSoilNumber: () => mergedSoilNumber,
   parseHolePrefix: () => parseHolePrefix,
-  sanitizeFileNamePart: () => sanitizeFileNamePart
+  sanitizeFileNamePart: () => sanitizeFileNamePart,
+  stripSoilNumber: () => stripSoilNumber
 });
 module.exports = __toCommonJS(exportNaming_exports);
 var ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|\u0000-\u001f]/g;
@@ -61,18 +62,26 @@ function groupXlsxRecords(records) {
   }
   return groups;
 }
+function stripSoilNumber(holeCode, soilNumber) {
+  const hole = String(holeCode ?? "").trim();
+  const sn = String(soilNumber ?? "").trim();
+  if (!sn) return "";
+  if (hole && sn.startsWith(hole + "-")) return sn.slice(hole.length + 1);
+  let m = sn.match(/^原(\d+)$/);
+  if (m) return m[1];
+  m = sn.match(/^(?:扰|[rR])(\d+)$/);
+  if (m) return `R${m[1]}`;
+  if (sn.startsWith("-")) return sn.slice(1);
+  return sn;
+}
+var NORMALIZABLE_SN = /^(?:原\d+|扰\d+|[rR]\d+|-?\d+)$/;
 function mergedSoilNumber(holeCode, soilNumber) {
   const hole = String(holeCode ?? "").trim();
   const sn = String(soilNumber ?? "").trim();
   if (!hole || !sn) return sn;
   if (sn.startsWith(hole)) return sn;
-  let m = sn.match(/^原(\d+)$/);
-  if (m) return `${hole}-${m[1]}`;
-  m = sn.match(/^(?:扰|[rR])(\d+)$/);
-  if (m) return `${hole}-R${m[1]}`;
-  m = sn.match(/^-?(\d+)$/);
-  if (m) return `${hole}-${m[1]}`;
-  return sn;
+  if (!NORMALIZABLE_SN.test(sn)) return sn;
+  return `${hole}-${stripSoilNumber(hole, sn)}`;
 }
 function buildXlsxGroupFileName(records) {
   const first = records?.[0];
@@ -89,5 +98,6 @@ function buildXlsxGroupFileName(records) {
   groupXlsxRecords,
   mergedSoilNumber,
   parseHolePrefix,
-  sanitizeFileNamePart
+  sanitizeFileNamePart,
+  stripSoilNumber
 });

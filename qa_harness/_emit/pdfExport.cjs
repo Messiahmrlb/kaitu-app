@@ -186,6 +186,18 @@ function sanitizeFileNamePart(input, fallback = "\u672A\u547D\u540D") {
   const cleaned = String(input ?? "").replace(ILLEGAL_FILENAME_CHARS, "-").trim();
   return cleaned || fallback;
 }
+function stripSoilNumber(holeCode, soilNumber) {
+  const hole = String(holeCode ?? "").trim();
+  const sn = String(soilNumber ?? "").trim();
+  if (!sn) return "";
+  if (hole && sn.startsWith(hole + "-")) return sn.slice(hole.length + 1);
+  let m = sn.match(/^原(\d+)$/);
+  if (m) return m[1];
+  m = sn.match(/^(?:扰|[rR])(\d+)$/);
+  if (m) return `R${m[1]}`;
+  if (sn.startsWith("-")) return sn.slice(1);
+  return sn;
+}
 
 // src/pdfExport.ts
 var PT = 4 / 3;
@@ -247,14 +259,7 @@ function fillRow(cells, row, s, mode, seq, testKeys, holeCode) {
     cells[cellKey(row, col)] = v;
   };
   const soilType = soilTypeOptions(mode);
-  const raw = (s.soilNumber ?? "").trim();
-  let short = "";
-  if (raw) {
-    const hole = (holeCode ?? "").trim();
-    if (hole && raw.startsWith(hole + "-")) short = raw.slice(hole.length + 1);
-    else if (raw.startsWith("-")) short = raw.slice(1);
-    else short = raw;
-  }
+  const short = stripSoilNumber(holeCode, s.soilNumber);
   set(1, short ? `-${short}` : `-${seq}`);
   set(2, s.fieldRecord ?? "");
   set(3, "");

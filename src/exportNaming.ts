@@ -79,6 +79,31 @@ export function groupXlsxRecords(records: SoilRecord[]): SoilRecord[][] {
 }
 
 /**
+ * 土号「短编号」归一（2026-10-30 用户反馈：PDF/Word 土号列不应带「原/扰」字）：
+ * - `原1` → `1`（去掉「原」字）；
+ * - `扰1` / `R1` / `r1` → `R1`（扰动样 R 前缀）；
+ * - 已带孔号前缀（`ZK1-3`）→ `3`；
+ * - 前导 `-`（`-1`、`-R1`）→ 去掉 `-`；
+ * - 纯数字原样（`1`、`01`）；其他复杂编号（`ZK38-1.65`、`abc`）原样保留。
+ * 空土号返回空串。PDF / Word 导出显示时在前面补 `-`（空土号按行序兜底 -seq）。
+ */
+export function stripSoilNumber(holeCode: unknown, soilNumber: unknown): string {
+  const hole = String(holeCode ?? '').trim();
+  const sn = String(soilNumber ?? '').trim();
+  if (!sn) return '';
+  if (hole && sn.startsWith(hole + '-')) return sn.slice(hole.length + 1);
+  let m = sn.match(/^原(\d+)$/);
+  if (m) return m[1];
+  m = sn.match(/^(?:扰|[rR])(\d+)$/);
+  if (m) return `R${m[1]}`;
+  if (sn.startsWith('-')) return sn.slice(1);
+  return sn;
+}
+
+/** 可归一形态：原N / 扰N / R N / 纯数字 / 前导-，其余（复杂编号）不补孔号前缀 */
+const NORMALIZABLE_SN = /^(?:原\d+|扰\d+|[rR]\d+|-?\d+)$/;
+
+/**
  * 合并表内的土样编号归一（用户确认规则）：土号补上孔号前缀，跨孔不重号：
  * - 已以孔号开头（`ZK1-1`、`ZK1-1-01`）→ 原样保留；
  * - `原1` → `ZK1-1`（去掉「原」字）；
@@ -92,13 +117,8 @@ export function mergedSoilNumber(holeCode: unknown, soilNumber: unknown): string
   const sn = String(soilNumber ?? '').trim();
   if (!hole || !sn) return sn;
   if (sn.startsWith(hole)) return sn;
-  let m = sn.match(/^原(\d+)$/);
-  if (m) return `${hole}-${m[1]}`;
-  m = sn.match(/^(?:扰|[rR])(\d+)$/);
-  if (m) return `${hole}-R${m[1]}`;
-  m = sn.match(/^-?(\d+)$/);
-  if (m) return `${hole}-${m[1]}`;
-  return sn;
+  if (!NORMALIZABLE_SN.test(sn)) return sn;
+  return `${hole}-${stripSoilNumber(hole, sn)}`;
 }
 
 /**

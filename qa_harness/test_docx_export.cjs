@@ -17,6 +17,8 @@
 const fs = require('fs');
 const path = require('path');
 const dx = require(path.join(__dirname, '_emit', 'docxExport.cjs'));
+const pdfMod = require(path.join(__dirname, '_emit', 'pdfExport.cjs'));
+const namingMod = require(path.join(__dirname, '_emit', 'exportNaming.cjs'));
 
 let pass = 0;
 let fail = 0;
@@ -217,6 +219,36 @@ function mkRecord(id, hole, samples, extra = {}) {
     const multi = [mkRecord('a', 'ZK1', []), mkRecord('b', 'ZK2', []), mkRecord('c', 'ZK3', [])];
     check('多孔合并文件名', dx.buildMergedDocxFileName(multi, '2026-10-30') === '开土记录_3孔_2026-10-30.docx');
     check('多孔合并：单孔回落单孔名', dx.buildMergedDocxFileName([mkRecord('a', 'ZK1', [])]) === '2026-10-30_ZK1.docx');
+
+    // ---------- 9. 土号「原/扰」归一 + 显式字号 + 超宽自适应（2026-10-30 用户反馈） ----------
+    // stripSoilNumber 矩阵（PDF/Word 共用，xlsx mergedSoilNumber 同源）
+    const stripCases = [
+      ['ZK1', '原1', '1'], ['ZK1', '原12', '12'], ['ZK1', '扰1', 'R1'],
+      ['ZK1', 'R1', 'R1'], ['ZK1', 'r2', 'R2'], ['ZK1', 'ZK1-3', '3'],
+      ['ZK1', '-1', '1'], ['ZK1', '-R1', 'R1'], ['ZK1', '1', '1'],
+      ['ZK1', '01', '01'], ['ZK1', 'ZK38-1.65', 'ZK38-1.65'], ['ZK1', '', ''],
+    ];
+    for (const [hole, sn, want] of stripCases) {
+      check(`stripSoilNumber(${hole}, ${sn})`, namingMod.stripSoilNumber(hole, sn) === want, namingMod.stripSoilNumber(hole, sn));
+    }
+    // docx 土号渲染：原1→-1、扰1→-R1，且 run 显式带 sz=18（防继承模板默认 15pt 撑爆行高）
+    const recN = mkRecord('r1', 'ZK1', [mkSample('原1'), mkSample('扰1')]);
+    const xmlN = dx.buildDocxBody(XML_A, [recN]);
+    const rowsN = bodyRows(xmlN);
+    check('docx 土号：原1 → -1', rowTcs(rowsN[3])[0] === '-1', rowTcs(rowsN[3])[0]);
+    check('docx 土号：扰1 → -R1', rowTcs(rowsN[4])[0] === '-R1', rowTcs(rowsN[4])[0]);
+    check('docx 数据行 run 显式 sz=18', xmlN.includes('<w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">-1</w:t>'));
+    // PDF 土号同规则
+    const recPdf = mkRecord('r1', 'ZK1', [mkSample('原1'), mkSample('扰1')]);
+    const pdfPages = pdfMod.buildPdfPages(recPdf);
+    check('PDF 土号：原1 → -1', pdfPages[0].cells[1] === '-1', pdfPages[0].cells[1]);
+    check('PDF 土号：扰1 → -R1', pdfPages[0].cells[1001] === '-R1', pdfPages[0].cells[1001]);
+    // 信息行超宽自适应：孔口标高12.5 在 69pt 格内应缩字号（sz < 22）
+    const recInfo = mkRecord('r1', 'ZK1', [mkSample('1')], { engineering: { projectCode: 'EX26T2211', holeCode: 'ZK1', holeElevation: '12.5', openDate: '2026-10-30' } });
+    const xmlInfo = dx.buildDocxBody(XML_A, [recInfo]);
+    const infoTc9 = (bodyRows(xmlInfo)[0].match(TC_RE) || [])[9];
+    const szs = (infoTc9.match(/<w:sz w:val="(\d+)"\/>/g) || []).map((x) => x.match(/\d+/)[0]);
+    check('信息行孔口标高超宽缩字号（sz<22）', szs.some((v) => Number(v) < 22), szs.join(','));
 
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);

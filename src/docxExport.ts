@@ -16,6 +16,12 @@
  * - 表格为浮动定位（horzAnchor=page），多页/多孔 = 复制整表 + 分页段落。
  *
  * 每页固定 22 行数据（模板即 22 行），与 PDF 的 23 行/页不同——各自忠于模板。
+ *
+ * 受控版式保护（2026-10-30 用户反馈「Word 导出变 3 页」的修复）：
+ * 模板多数格带 <w:noWrap/>，内容超宽会把整页布局撑破（表格行溢出到下一页）。
+ * 因此所有填充文本按「格宽（tblGrid × gridSpan）自适应缩小字号」保证单行——
+ * 行列宽完全不变，与 PDF 的 shrinkOverflow 同哲学。兜底手段（未启用）：
+ * 夹杂物/颜色/备注列宽可小幅收窄让给超宽列。
  */
 import type { SoilRecord, SoilSample } from './types';
 import { INCLUSIONS, SOIL_STATES, recordTestColumns, soilTypeOptions } from './constants';
@@ -24,7 +30,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { ExportResult } from './xlsxExport';
 import { withOpenDate } from './pdfExport';
-import { sanitizeFileNamePart } from './exportNaming';
+import { sanitizeFileNamePart, stripSoilNumber } from './exportNaming';
 
 /** 每页数据行数：模板 row3..row24 共 22 行 */
 export const DOCX_ROWS_PER_PAGE = 22;
@@ -42,13 +48,19 @@ function esc(s: string): string {
 
 const TR_RE = /<w:tr(?: [^>]*)?>[\s\S]*?<\/w:tr>/g;
 const TC_RE = /<w:tc>[\s\S]*?<\/w:tc>/g;
+const GRIDCOL_RE = /<w:gridCol w:w="(\d+)"\/>/g;
+const SPAN_RE = /<w:gridSpan w:val="(\d+)"\/>/;
 const P_RE = /<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/;
 const RUN_RE = /<w:r>[\s\S]*?<\/w:r>/;
 const RPR_RE = /<w:rPr>[\s\S]*?<\/w:rPr>/;
 const PPR_RE = /<w:pPr>[\s\S]*?<\/w:pPr>/;
+const SZ_RE = /<w:sz w:val="\d+"\/>/;
+const SZCS_RE = /<w:szCs w:val="\d+"\/>/;
+const LANG_RE = /<w:lang [^>]*\/>/;
 
-/** 页与页之间的分页段落 */
-const PAGE_BREAK_P = '<w:p><w:pPr><w:rPr><w:lang w:val="en-US"/></w:rPr></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>';
+/** 页与页之间的分页段落（近零高：不占版面行位，防止把浮动表锚点往下顶） */
+const PAGE_BREAK_P =
+  '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="14" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr><w:br w:type="page"/></w:r></w:p>';
 
 /** 剥离克隆时会重复的元数据（书签 / paraId / textId），避免产出非法 XML */
 function cleanCloneXml(xml: string): string {
@@ -65,38 +77,100 @@ function trHead(tr: string): string {
   return i >= 0 ? tr.slice(0, i) : tr;
 }
 
-/**
- * 把 tc 内第一个段落的所有 run 替换为单个 run（保留原段落属性与字体），
- * 空文本不动（保留模板空白格）。文本含前后空格时用 xml:space="preserve"。
- */
-function fillTc(tcXml: string, text: string): string {
-  if (!text) return tcXml;
-  return tcXml.replace(P_RE, (p) => {
-    const pPr = p.match(PPR_RE)?.[0] ?? '';
-    const run = p.match(RUN_RE)?.[0] ?? '';
-    const rPr = run.match(RPR_RE)?.[0] ?? '';
-    return `<w:p>${pPr}<w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p>`;
-  });
-}
-
 /** 按替换后的 tc 数组重组一行 */
 function rebuildTr(tr: string, tcs: string[]): string {
   return trHead(tr) + tcs.join('') + '</w:tr>';
 }
 
 // ---------------------------------------------------------------------------
-// 单元格取值（与 pdfExport.fillRow 同一语义，列位对应 docx 模板 39tc）
+// 字号自适应（受控版式：列宽行高不变，超宽内容缩字号保证单行）
 // ---------------------------------------------------------------------------
-/** 土号去孔号前缀/前导「-」：1→-1、R1→-R1、ZK1-3→-3；空土号按行序兜底 -seq */
-function shortSoilNumber(soilNumber: string, holeCode: string): string {
-  const raw = (soilNumber ?? '').trim();
-  if (!raw) return '';
-  const hole = (holeCode ?? '').trim();
-  if (hole && raw.startsWith(hole + '-')) return raw.slice(hole.length + 1);
-  if (raw.startsWith('-')) return raw.slice(1);
-  return raw;
+/** 估算文本渲染宽度（pt）：全角 1em、半角 0.55em（保守偏大） */
+function estimateWidthPt(text: string, halfPt: number): number {
+  const em = halfPt / 2;
+  let w = 0;
+  for (const ch of text) {
+    w += ch.charCodeAt(0) > 0xff ? em : em * 0.55;
+  }
+  return w;
 }
 
+/** 把目标字号写入 run rPr（保持子元素顺序：sz/szCs 在 lang 之前；无 rPr 时新建包裹） */
+function applySz(rPr: string, halfPt: number): string {
+  const sz = `<w:sz w:val="${halfPt}"/><w:szCs w:val="${halfPt}"/>`;
+  if (SZ_RE.test(rPr)) {
+    return rPr.replace(SZ_RE, `<w:sz w:val="${halfPt}"/>`).replace(SZCS_RE, `<w:szCs w:val="${halfPt}"/>`);
+  }
+  if (rPr) {
+    if (LANG_RE.test(rPr)) return rPr.replace(LANG_RE, `${sz}`);
+    return rPr + sz;
+  }
+  return `<w:rPr>${sz}</w:rPr>`;
+}
+
+/**
+ * 替换 tc 内第一个段落的所有 run 为单个 run（保留原段落属性与字体），
+ * 空文本不动（保留模板空白格）。
+ *
+ * 字号规则（2026-10-30「Word 导出变 3 页」修复的关键）：
+ * - 基准字号继承自原段落：原 run rPr 的 sz → 原段落标记 rPr 的 sz → defaultHalfPt；
+ *   模板 Normal 默认 15pt（sz=30），不显式写 sz 会继承 15pt，两位数土号/野外记录
+ *   在窄格内换行、行高翻倍、整表溢出到下一页；
+ * - 无论是否缩小，都把 sz/szCs 显式写入 run（避免继承 15pt）；
+ * - widthTwips 提供时做自适应：内容估算宽度超过格内可用宽度就逐级缩小字号
+ *   （最低 6.5pt）确保单行——noWrap 格超宽会撑破整页版式。
+ */
+function fillTc(tcXml: string, text: string, widthTwips = 0, defaultHalfPt = 18): string {
+  if (!text) return tcXml;
+  return tcXml.replace(P_RE, (p) => {
+    const pPr = p.match(PPR_RE)?.[0] ?? '';
+    const run = p.match(RUN_RE)?.[0] ?? '';
+    const rPr0 = run.match(RPR_RE)?.[0] ?? '';
+    const halfOf = (xml: string): number =>
+      Number(xml.match(SZ_RE)?.[0]?.match(/\d+/)?.[0] ?? 0);
+    const base = halfOf(rPr0) || halfOf(pPr) || defaultHalfPt;
+    let halfPt = base;
+    if (widthTwips > 0) {
+      // 模板单元格边距左右各 108 twips，再留 2pt 余量
+      const availPt = widthTwips / 20 - 216 / 20 - 2;
+      while (halfPt > 13 && estimateWidthPt(text, halfPt) > availPt) halfPt -= 1;
+    }
+    return `<w:p>${pPr}<w:r>${applySz(rPr0, halfPt)}<w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p>`;
+  });
+}
+
+/**
+ * 按填充映射重写一行：fill 为 tc 下标 → 文本；遍历 tc 时累加 gridSpan 计算各格
+ * 在 tblGrid 中的实际宽度（twips），供字号自适应使用。
+ * defaultHalfPt 为该行填充文本的默认字号（半点）：信息行 22（11pt）、数据行 20（10pt）。
+ */
+function fillRowCells(
+  rowXml: string,
+  gridWidths: number[],
+  fill: Record<number, string>,
+  defaultHalfPt: number,
+): string {
+  const tcs = rowXml.match(TC_RE) ?? [];
+  let gridIdx = 0;
+  for (let i = 0; i < tcs.length; i++) {
+    const tc = tcs[i];
+    const span = Number(tc.match(SPAN_RE)?.[1] ?? 1);
+    const text = fill[i];
+    if (text) {
+      let widthTwips = 0;
+      for (let k = gridIdx; k < gridIdx + span && k < gridWidths.length; k++) {
+        widthTwips += gridWidths[k] ?? 0;
+      }
+      tcs[i] = fillTc(tc, text, widthTwips, defaultHalfPt);
+    }
+    gridIdx += span;
+  }
+  return rebuildTr(cleanCloneXml(rowXml), tcs);
+}
+
+// ---------------------------------------------------------------------------
+// 单元格取值（与 pdfExport.fillRow 同一语义，列位对应 docx 模板 39tc）
+// ---------------------------------------------------------------------------
 /** 一条土样 → 39 个数据格文本（下标即 tc 下标；空串表示留白） */
 export function sampleDocxCells(
   s: SoilSample,
@@ -107,7 +181,9 @@ export function sampleDocxCells(
 ): string[] {
   const v: string[] = new Array(39).fill('');
   const soilType = soilTypeOptions(mode);
-  const short = shortSoilNumber(s.soilNumber, holeCode);
+  // 土号统一归一（与 PDF/Excel 同规则 stripSoilNumber）：原1→-1、扰1/R1→-R1、
+  // ZK1-3→-3；空土号按行序兜底 -seq（2026-10-30 用户反馈：不应带「原/扰」字）
+  const short = stripSoilNumber(holeCode, s.soilNumber);
   v[0] = short ? `-${short}` : `-${seq}`;
   v[1] = s.fieldRecord ?? '';
   // tc2 取样深度 / tc3 取样标高：模板留空手填
@@ -138,26 +214,24 @@ function infoParts(openDate: string): { y: string; m: string; d: string } {
 }
 
 /** 填 row0 信息行：工程编号 / 孔号 / 孔口标高 / 开土日期（与 PDF 信息行一致） */
-export function fillInfoRow(row0: string, record: SoilRecord): string {
+export function fillInfoRow(row0: string, gridWidths: number[], record: SoilRecord): string {
   const tcs = row0.match(TC_RE) ?? [];
   if (tcs.length < 13) throw new Error('docx 模板信息行结构异常');
   const eng = record.engineering;
   const { y, m, d } = infoParts(eng?.openDate ?? '');
-  const tc0 = tcs[0] ?? '';
-  const tc5 = tcs[5] ?? '';
-  const tc9 = tcs[9] ?? '';
-  const tc12 = tcs[12] ?? '';
-  tcs[0] = fillTc(tc0, `工程编号：${eng?.projectCode ?? ''}`);
-  tcs[5] = fillTc(tc5, `孔号：${eng?.holeCode ?? ''}`);
-  tcs[9] = fillTc(tc9, `孔口标高${eng?.holeElevation ?? ''}`);
-  tcs[12] = fillTc(tc12, `开土日期${y || '    '}年${m || '  '}月${d || '  '}日`);
-  return rebuildTr(cleanCloneXml(row0), tcs);
+  return fillRowCells(row0, gridWidths, {
+    0: `工程编号：${eng?.projectCode ?? ''}`,
+    5: `孔号：${eng?.holeCode ?? ''}`,
+    9: `孔口标高${eng?.holeElevation ?? ''}`,
+    12: `开土日期${y || '    '}年${m || '  '}月${d || '  '}日`,
+  }, 22);
 }
 
 /**
  * 填 row2 子项行的 8 个试验列标题（tc31-38）：与 PDF 一致，
  * 列名随记录的固结/剪切别名（recordTestColumns 的 label，如「回弹压缩」「慢剪」）
  * 自动修正；√ 落位本就按列 key 判定，此处让表头文字与勾选列保持一致。
+ * 竖排格不做字号自适应（行高由最高子项格决定，别名长度 ≤ 既有最长子项）。
  */
 function fillTestHeaderRow(row2: string, labels: string[]): string {
   const tcs = row2.match(TC_RE) ?? [];
@@ -169,16 +243,29 @@ function fillTestHeaderRow(row2: string, labels: string[]): string {
   return rebuildTr(cleanCloneXml(row2), tcs);
 }
 
-/** 填一条数据行（values 为 null 时输出模板空白行） */
-function fillDataRow(rowTpl: string, values: string[] | null): string {
-  if (!values) return rowTpl;
-  const tcs = rowTpl.match(TC_RE) ?? [];
-  if (tcs.length !== 39) throw new Error('docx 模板数据行结构异常');
-  for (let i = 0; i < 39; i++) {
-    const val = values[i];
-    if (val) tcs[i] = fillTc(tcs[i], val);
+/**
+ * 填一条数据行（fill 为 null 时输出模板空白行）。
+ * defaultHalfPt=18（9pt）必须显式写 sz：模板 Normal 默认 15pt（sz=30），不写会
+ * 继承 15pt 导致两位数土号/野外记录在窄格内换行、行高翻倍、整表溢出到下一页
+ * （2026-10-30「Word 导出变 3 页」根因）。9pt 与 PDF 数据字号一致，且单行内容
+ * 行高与空段落同样贴齐 docGrid 408 网格，表格总高与模板完全一致。
+ */
+function fillDataRow(
+  rowTpl: string,
+  gridWidths: number[],
+  fill: Record<number, string> | null,
+): string {
+  if (!fill) return cleanCloneXml(rowTpl);
+  return fillRowCells(rowTpl, gridWidths, fill, 18);
+}
+
+/** 把 sampleDocxCells 的数组转成 {tc下标: 文本} 映射 */
+function cellsToFill(cells: string[]): Record<number, string> {
+  const fill: Record<number, string> = {};
+  for (let i = 0; i < cells.length; i++) {
+    if (cells[i]) fill[i] = cells[i];
   }
-  return rebuildTr(rowTpl, tcs);
+  return fill;
 }
 
 /**
@@ -194,6 +281,8 @@ export function buildDocxBody(tplXml: string, records: SoilRecord[]): string {
   const tbl = tplXml.slice(tblStart, tblEnd + TBL_END.length);
   const firstTr = tbl.indexOf('<w:tr');
   const tblOpen = tbl.slice(0, firstTr); // <w:tbl><w:tblPr>…</w:tblGrid>
+  const gridWidths = Array.from(tblOpen.matchAll(GRIDCOL_RE), (m) => Number(m[1]));
+  if (gridWidths.length === 0) throw new Error('docx 模板缺少 tblGrid');
   const trs = tbl.slice(firstTr, tbl.length - TBL_END.length).match(TR_RE) ?? [];
   if (trs.length < 26) throw new Error(`docx 模板行数异常：${trs.length}`);
   const tailRow = cleanCloneXml(trs[25] ?? '');
@@ -211,13 +300,18 @@ export function buildDocxBody(tplXml: string, records: SoilRecord[]): string {
     const holeCode = record.engineering?.holeCode ?? '';
     const totalPages = Math.max(1, Math.ceil(samples.length / DOCX_ROWS_PER_PAGE));
     for (let p = 0; p < totalPages; p++) {
-      const rows: string[] = [fillInfoRow(infoRowTpl, record), headRow1, fillTestHeaderRow(subRowTpl, testLabels)];
+      const rows: string[] = [
+        fillInfoRow(infoRowTpl, gridWidths, record),
+        headRow1,
+        fillTestHeaderRow(subRowTpl, testLabels),
+      ];
       for (let r = 0; r < DOCX_ROWS_PER_PAGE; r++) {
         const idx = p * DOCX_ROWS_PER_PAGE + r;
         const s = samples[idx];
-        rows.push(
-          fillDataRow(rowTpl, s ? sampleDocxCells(s, record.mode, idx + 1, testKeys, holeCode) : null),
-        );
+        const fill = s
+          ? cellsToFill(sampleDocxCells(s, record.mode, idx + 1, testKeys, holeCode))
+          : null;
+        rows.push(fillDataRow(rowTpl, gridWidths, fill));
       }
       pages.push(tblOpen + rows.join('') + tailRow + TBL_END);
     }

@@ -22,7 +22,7 @@ import { Share } from '@capacitor/share';
 import type { ExportResult } from './xlsxExport';
 import { importWithRecovery } from './pwaRecovery';
 import { CMA_DEFAULT, CmaHeaderSettings, fitHeaderFontSize } from './cmaHeader';
-import { sanitizeFileNamePart } from './exportNaming';
+import { sanitizeFileNamePart, stripSoilNumber } from './exportNaming';
 
 // 保留对外导出（历史测试/调用可能直接引用），实现统一收敛到 exportNaming
 export { sanitizeFileNamePart } from './exportNaming';
@@ -72,18 +72,11 @@ function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode
     cells[cellKey(row, col)] = v;
   };
   const soilType = soilTypeOptions(mode);
-  // 土号列：显示记录土号（去掉孔号前缀/前导「-」后补「-」，与纸质开土记录表一致）。
-  // 2026-10-30 用户确认：送样单里的 R1/R2 扰动样编号在 PDF 相应位置原样显示（-R1/-R2），
-  // 数字编号跳过 R 样顺位（数字样显示忠实于记录土号，App 内插入重排后即连续）。
+  // 土号列：显示记录土号（统一归一，与 Excel/Word 同规则 stripSoilNumber）——
+  // 原1→-1、扰1/R1→-R1、ZK1-3→-3、-1→-1（2026-10-30 用户反馈：不应带「原/扰」字）；
+  // 数字编号跳过 R 样顺位（数字样显示忠实于归一结果，App 内插入重排后即连续）。
   // 土号未填时按行序兜底 -1、-2…。
-  const raw = (s.soilNumber ?? '').trim();
-  let short = '';
-  if (raw) {
-    const hole = (holeCode ?? '').trim();
-    if (hole && raw.startsWith(hole + '-')) short = raw.slice(hole.length + 1);
-    else if (raw.startsWith('-')) short = raw.slice(1);
-    else short = raw;
-  }
+  const short = stripSoilNumber(holeCode, s.soilNumber);
   set(1, short ? `-${short}` : `-${seq}`);
   set(2, s.fieldRecord ?? '');
   set(3, ''); // 取样深度：模板留空手填
