@@ -53,6 +53,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import DescriptionIcon from '@mui/icons-material/Description';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
@@ -87,6 +88,7 @@ import {
   todayStr,
 } from './utils';
 import { exportRecordsXlsx } from './xlsxExport';
+import { exportRecordsDocx } from './docxExport';
 import { RADIUS } from './theme';
 import { exportRecordsPdf } from './pdfExport';
 import EngineeringInfoForm from './components/EngineeringInfoForm';
@@ -123,9 +125,9 @@ export default function App() {
 
   // 导入 / 导出下拉菜单（锚点即顶部按钮）
   const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
-  // 勾选式导出对话框（pdf = 多孔合并一个文件；xlsx = 每孔一个文件）
+  // 勾选式导出对话框（pdf/docx = 多孔合并一个文件；xlsx = 按孔号前缀分组多个文件）
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportMode, setExportMode] = useState<'pdf' | 'xlsx'>('pdf');
+  const [exportMode, setExportMode] = useState<'pdf' | 'xlsx' | 'docx'>('pdf');
 
   // CMA 页眉设置（PDF 版本行 / 文件编号）：全局持久化，不跟随单条记录
   const [cmaHeader, setCmaHeader] = useState<CmaHeaderSettings>(CMA_DEFAULT);
@@ -440,7 +442,8 @@ export default function App() {
   /**
    * 导出勾选的记录：
    * - pdf  → 多孔合并为一个 PDF；
-   * - xlsx → 每个孔一个文件（连续下载）。
+   * - docx → 多孔合并为一个 Word（模板手术，可在 Word/WPS 编辑）；
+   * - xlsx → 按字母孔号前缀分组，每组一个文件（连续下载）。
    * 导出结束后由对话框关闭自身，结果统一用 Snackbar 提示。
    */
   const handleExportSelected = async (
@@ -451,7 +454,9 @@ export default function App() {
       const res =
         exportMode === 'pdf'
           ? await exportRecordsPdf(selected, cmaHeader, openDateOverride)
-          : await exportRecordsXlsx(selected);
+          : exportMode === 'docx'
+            ? await exportRecordsDocx(selected, openDateOverride)
+            : await exportRecordsXlsx(selected);
       setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
     } catch (e: any) {
       setSnack({ msg: '导出失败：' + (e?.message ?? String(e)), sev: 'error' });
@@ -603,6 +608,18 @@ export default function App() {
                   <PictureAsPdfIcon fontSize="small" />
                 </ListItemIcon>
                 导出 PDF…
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setExportMenuAnchor(null);
+                  setExportMode('docx');
+                  setExportOpen(true);
+                }}
+              >
+                <ListItemIcon>
+                  <DescriptionIcon fontSize="small" />
+                </ListItemIcon>
+                导出 Word…
               </MenuItem>
               <MenuItem
                 onClick={() => {
@@ -1354,7 +1371,7 @@ export default function App() {
             sx={{ mb: 1.5, lineHeight: 1.7 }}
           >
             将把已选 {selected.length} 份记录的开土日期统一改为该日期，并立即写入本机记录；
-            之后导出 PDF 都使用它。
+            之后导出 PDF / Word 都使用它。
           </Typography>
           <TextField
             autoFocus
@@ -1396,7 +1413,7 @@ export default function App() {
             sx={{ mb: 1.5, lineHeight: 1.7 }}
           >
             将把已选 {selected.length} 份记录的工程编号统一改为该编号，并立即写入本机记录；
-            之后导出 PDF / Excel 表头与文件名都使用它。
+            之后导出 PDF / Word / Excel 表头与文件名都使用它。
           </Typography>
           <TextField
             autoFocus

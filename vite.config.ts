@@ -34,7 +34,8 @@ export default defineConfig({
       },
       workbox: {
         // 离线缓存构建产物；exceljs 单 chunk ~938KB，上限放宽到 3MB 以防后续变大
-        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
+        // docx：Word 导出模板（tpl-normal / tpl-triangle，~43KB×2）必须离线可用
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2,docx}'],
         navigateFallback: 'index.html',
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // 每次激活新 SW 时清掉上一版预缓存：旧 index.js 与其懒加载分块必须同时被淘汰，

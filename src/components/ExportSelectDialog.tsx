@@ -20,10 +20,10 @@ import { todayStr } from '../utils';
 
 interface Props {
   open: boolean;
-  mode: 'pdf' | 'xlsx';
+  mode: 'pdf' | 'xlsx' | 'docx';
   records: SoilRecord[];
   onClose: () => void;
-  /** 导出回传：selected 为勾选记录；openDateOverride 仅 PDF 模式使用（可选日期覆盖） */
+  /** 导出回传：selected 为勾选记录；openDateOverride 仅 PDF / Word 模式使用（可选日期覆盖） */
   onExport: (selected: SoilRecord[], openDateOverride: string) => void | Promise<void>;
 }
 
@@ -37,12 +37,12 @@ function holeLabel(record: SoilRecord): string {
  *
  * - 每次打开默认全选，关闭后清空选择；
  * - 支持全选 / 半选 / 全不选，列表整行可点；
- * - PDF 多孔合并为一个文件，xlsx 按字母孔号前缀分组合并，说明文案随 mode 切换。
+ * - PDF / Word 多孔合并为一个文件，xlsx 按字母孔号前缀分组合并，说明文案随 mode 切换。
  */
 export default function ExportSelectDialog({ open, mode, records, onClose, onExport }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
-  /** PDF 模式可选：统一本次导出的开土日期（留空按各记录自身日期） */
+  /** PDF / Word 模式可选：统一本次导出的开土日期（留空按各记录自身日期） */
   const [dateOverride, setDateOverride] = useState('');
 
   // 打开时默认全选、日期默认当天；关闭时重置，避免下次打开残留上次的勾选
@@ -87,17 +87,19 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
     if (exporting || selectedCount === 0) return;
     setExporting(true);
     try {
-      await onExport(selected, mode === 'pdf' ? dateOverride.trim() : '');
+      await onExport(selected, mode === 'xlsx' ? '' : dateOverride.trim());
     } finally {
       setExporting(false);
     }
   };
 
-  const title = mode === 'pdf' ? '导出 PDF' : '导出电子表格';
+  const title = mode === 'pdf' ? '导出 PDF' : mode === 'docx' ? '导出 Word' : '导出电子表格';
   const hint =
     mode === 'pdf'
       ? '多个孔会合并为一个 PDF；单个孔命名为「日期_孔号.pdf」'
-      : '同字母孔号前缀的孔合并为一张表（土号自动补孔号），请允许多个文件下载';
+      : mode === 'docx'
+        ? '多个孔会合并为一个 Word 文件；单个孔命名为「日期_孔号.docx」，可在 Word/WPS 中编辑'
+        : '同字母孔号前缀的孔合并为一张表（土号自动补孔号），请允许多个文件下载';
 
   return (
     <Dialog
@@ -187,7 +189,7 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
           </>
         )}
 
-        {mode === 'pdf' && totalCount > 0 && (
+        {mode !== 'xlsx' && totalCount > 0 && (
           <Box sx={{ mt: 1.5 }}>
             <Typography
               variant="caption"
