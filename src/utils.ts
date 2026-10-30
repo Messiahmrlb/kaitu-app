@@ -1,5 +1,5 @@
 import { SoilSample, SoilRecord, RecordMode } from './types';
-import { DISTURBED_INCOMPATIBLE_TESTS } from './constants';
+import { DISTURBED_INCOMPATIBLE_TESTS, SHEAR_TEST_KEYS } from './constants';
 
 /** 生成短随机 id（时间与随机串组合） */
 export function genId(): string {
@@ -208,15 +208,15 @@ export function setDisturbance(sample: SoilSample, next: '原状' | '扰动'): S
 }
 
 /**
- * 渗透/快剪冲突判定：当 sample 同时包含「渗透」（垂直渗透 或 水平渗透）
- * 与「快剪」（饱固快剪 或 自然快剪）时返回 true，否则 false。
+ * 渗透/剪切冲突判定：当 sample 同时包含「渗透」（垂直渗透 或 水平渗透）
+ * 与任一剪切类试验（饱固快剪/固结快剪/自然快剪/慢剪，SHEAR_TEST_KEYS）时返回 true。
  * 用于在批量勾选对话框中对冲突行标红提示。
  */
 export function isPermQuickConflict(sample: SoilSample): boolean {
   const items = sample.testItems ?? [];
   const hasPermeability = items.includes('垂直渗透') || items.includes('水平渗透');
-  const hasQuickShear = items.includes('饱固快剪') || items.includes('自然快剪');
-  return hasPermeability && hasQuickShear;
+  const hasShear = SHEAR_TEST_KEYS.some((k) => items.includes(k));
+  return hasPermeability && hasShear;
 }
 
 /**

@@ -1,6 +1,7 @@
 import type ExcelJS from 'exceljs';
 import { SoilRecord, SoilSample, RecordMode } from './types';
-import { SOIL_TYPE_A, SOIL_TYPE_B } from './constants';
+import { SOIL_TYPE_A, SOIL_TYPE_B, DEFAULT_SHEAR_LABELS } from './constants';
+import { classifyShearLabel, classifyConsolidationAlias } from './testHeader';
 import { genId, newSample, coupleDisturbance, todayStr } from './utils';
 import { importWithRecovery } from './pwaRecovery';
 
@@ -55,9 +56,11 @@ const TEST_LABEL_MAP: { label: string; item: string }[] = [
   { label: '液塑限', item: '物性' }, // 液塑限折叠进「物性」
   { label: '颗分', item: '颗分' },
   { label: '压缩系数压缩模量', item: '固结' },
+  { label: '固结', item: '固结' }, // 有的送样单直接写「固结」二字
   { label: '垂直渗透', item: '垂直渗透' },
   { label: '水平渗透', item: '水平渗透' },
   { label: '饱和固结快剪', item: '饱固快剪' },
+  { label: '饱固快剪', item: '饱固快剪' }, // 有的送样单写简称（此前漏识别，已补）
   { label: '自然快剪', item: '自然快剪' },
 ];
 
@@ -156,6 +159,21 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
     const isMerged = group.items.length > 1;
     const mergedWarnings = uniqueStrings(group.items.flatMap((x) => x.warnings ?? []));
     const mergedErrors = uniqueStrings(group.items.flatMap((x) => x.errors ?? []));
+
+    // 同孔多块表头一致性校验（用户确认：表头不一致 = 来源错误，按重复编号同级提示）。
+    // 对比各块的固结列显示名与剪切两列显示名（未覆盖按默认名参与对比）；取第一块，不阻止合并。
+    const describeHeader = (r: SoilRecord) =>
+      `固结列「${r.consolidationLabel ?? '固结'}」、剪切两列「${(r.shearLabels ?? DEFAULT_SHEAR_LABELS).join('／')}」`;
+    const firstHeader = describeHeader(first.record);
+    const headerMismatchIdx: number[] = [];
+    group.items.forEach((x, i) => {
+      if (i > 0 && describeHeader(x.record) !== firstHeader) headerMismatchIdx.push(i + 1);
+    });
+    if (headerMismatchIdx.length > 0) {
+      mergedErrors.push(
+        `孔号 ${group.hole || '(空)'} 的多份送样单试验表头不一致（第 1 份：${firstHeader}；第 ${headerMismatchIdx.join('、')} 份不同），疑似送样单来源有误，已按第 1 份表头合并，请核对。`,
+      );
+    }
 
     if (!isMerged) {
       records.push({
@@ -411,7 +429,13 @@ function isHeaderRow(ws: ExcelJS.Worksheet, r: number): boolean {
   for (let c = 1; c <= sub.cellCount; c++) {
     const n = normalizeHeader(sub.getCell(c).value);
     if (n === '原状') hasYuan = true;
-    if (TEST_LABEL_MAP.some((m) => m.label === n)) hasTest = true;
+    // 已知标签，或剪试验/固结别名（固结快剪、慢剪、回弹压缩、固结系数等）都算试验子表头
+    if (
+      TEST_LABEL_MAP.some((m) => m.label === n) ||
+      classifyShearLabel(n) !== null ||
+      classifyConsolidationAlias(n) !== null
+    )
+      hasTest = true;
   }
   return hasYuan && hasTest;
 }
@@ -450,12 +474,13 @@ function parseOneBlock(
   const toCol = findColByText(ws, sub, '至');
   const distCol = findColByText(ws, sub, '扰动');
   const testCols: { col: number; item: string }[] = [];
-  for (const m of TEST_LABEL_MAP) {
-    const col = findColByText(ws, sub, m.label);
-    if (col >= 0) testCols.push({ col, item: m.item });
-  }
+  // 剪试验槽位分配：按子表头出现顺序，第 1 个剪列 → 槽1（默认 饱固快剪 位），
+  // 第 2 个 → 槽2（默认 自然快剪 位）；槽显示名仅在别名（固结快剪/慢剪）时记原文。
+  const shearSlots: { kind: string; label: string }[] = [];
+  let consolidationAlias: string | null = null;
 
-  // 未知试验项目列：子表头中所有「非已知 label、非结构标签」的非空列头，归入「其他试验项目」
+  // 子表头统一扫描：已知标签精确匹配 / 剪试验别名归一 / 固结别名归一 / 其余归「未知试验项目」。
+  // 注意必须先判剪试验再判固结：「固结快剪」含「固结」二字，包含匹配会误命中固结列。
   const KNOWN_TEST_LABELS = new Set(TEST_LABEL_MAP.map((m) => m.label));
   const STRUCT_LABELS = new Set([
     '自',
@@ -474,11 +499,54 @@ function parseOneBlock(
     if (c === 1) continue; // 忽略 A 列常量模板碎片「6」（页面边距，非数据列）
     const label = normalizeHeader(subRow.getCell(c).value);
     if (label === '') continue;
-    if (KNOWN_TEST_LABELS.has(label)) continue;
     if (STRUCT_LABELS.has(label)) continue;
+    if (KNOWN_TEST_LABELS.has(label)) {
+      const item = TEST_LABEL_MAP.find((m) => m.label === label)!.item;
+      // 精确匹配到的剪试验列同样要占槽位：否则同一张表同时出现
+      // 「饱和固结快剪」与「固结快剪」时，饱固快剪的 √ 会因槽位键不符而丢失
+      if (item === '饱固快剪' || item === '自然快剪') {
+        if (shearSlots.some((s) => s.kind === item)) {
+          unknownCols.push({ col: c, label });
+          continue;
+        }
+        shearSlots.push({ kind: item, label: item }); // 默认名不覆盖显示
+      }
+      testCols.push({ col: c, item });
+      continue;
+    }
+    const shearKind = classifyShearLabel(label);
+    if (shearKind !== null) {
+      // 同一种剪试验出现两列（如「饱固快剪」+「饱和固结快剪」）：第 2 列按未知项目留底，避免 √ 数据互相覆盖
+      if (shearSlots.some((s) => s.kind === shearKind)) {
+        unknownCols.push({ col: c, label });
+        continue;
+      }
+      shearSlots.push({ kind: shearKind, label: shearKind });
+      testCols.push({ col: c, item: shearKind });
+      continue;
+    }
+    const consAlias = classifyConsolidationAlias(label);
+    if (consAlias !== null) {
+      // 固结别名（回弹压缩 / 固结系数）：数据归「固结」键，表头显示记原文
+      consolidationAlias = consolidationAlias ?? consAlias;
+      testCols.push({ col: c, item: '固结' });
+      continue;
+    }
     unknownCols.push({ col: c, label });
   }
   const unknownSeen = new Set<string>();
+
+  // 记录级表头覆盖：仅当剪槽/固结列出现非默认名时写入（默认名不写，行为与旧版一致）
+  const shearLabels: [string, string] | undefined =
+    shearSlots.length > 0
+      ? [
+          shearSlots[0]?.label ?? DEFAULT_SHEAR_LABELS[0],
+          shearSlots[1]?.label ?? DEFAULT_SHEAR_LABELS[1],
+        ]
+      : undefined;
+  const hasShearOverride =
+    !!shearLabels &&
+    (shearLabels[0] !== DEFAULT_SHEAR_LABELS[0] || shearLabels[1] !== DEFAULT_SHEAR_LABELS[1]);
 
   // 孔号 / 工程名称（HR 之前的若干行）
   const ownHoleCode = findInfoValue(ws, hr, '孔号', holeSearchStart);
@@ -555,6 +623,17 @@ function parseOneBlock(
     warnings.push(`送样单含未知试验项目：${lbl}（已归入"其他试验项目"，不影响导出）`);
   }
 
+  // 表头按送样单原文显示的提示（黄色 warning，导入预览可见）
+  const overrideParts: string[] = [];
+  if (consolidationAlias) overrideParts.push(`固结列显示「${consolidationAlias}」`);
+  if (hasShearOverride)
+    overrideParts.push(`剪切两列显示「${shearLabels![0]}／${shearLabels![1]}」`);
+  if (overrideParts.length > 0) {
+    warnings.push(
+      `表头按送样单原文显示：${overrideParts.join('，')}（勾选数据与导出表头保持一致）`,
+    );
+  }
+
   // 鉴别格式：按野外定名自动判定，导入预览里允许用户改动。
   // 表头区域文本一并传入，用于识别模板里显式写明的「三角坐标」。
   const contextParts: string[] = [ws.name, projectName];
@@ -585,6 +664,9 @@ function parseOneBlock(
     createdAt: now,
     updatedAt: now,
   };
+  // 表头覆盖：仅非默认名时写入（旧数据 / 默认表头不带这两个字段，行为不变）
+  if (hasShearOverride) record.shearLabels = shearLabels;
+  if (consolidationAlias) record.consolidationLabel = consolidationAlias;
 
   return {
     record,

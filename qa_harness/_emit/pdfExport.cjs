@@ -84,6 +84,16 @@ var TEST_ITEMS = [
   "\u4E09\u8F74"
 ];
 var DISTURBED_APPLICABLE_TESTS = ["\u7269\u6027", "\u9897\u5206"];
+function recordTestColumns(record) {
+  const [s1, s2] = record?.shearLabels ?? [];
+  const cons = record?.consolidationLabel;
+  return TEST_ITEMS.map((t) => {
+    if (t === "\u56FA\u7ED3") return { key: "\u56FA\u7ED3", label: cons || "\u56FA\u7ED3" };
+    if (t === "\u9971\u56FA\u5FEB\u526A") return { key: s1 || "\u9971\u56FA\u5FEB\u526A", label: s1 || "\u9971\u56FA\u5FEB\u526A" };
+    if (t === "\u81EA\u7136\u5FEB\u526A") return { key: s2 || "\u81EA\u7136\u5FEB\u526A", label: s2 || "\u81EA\u7136\u5FEB\u526A" };
+    return { key: t, label: t };
+  });
+}
 var DISTURBED_INCOMPATIBLE_TESTS = TEST_ITEMS.filter(
   (t) => !DISTURBED_APPLICABLE_TESTS.includes(t)
 );
@@ -231,7 +241,7 @@ var ROWS_PER_PAGE = 23;
 var TOTAL_COLS = 39;
 var SUB_ROW_H_PT = { A: 98.2, B: 103 };
 var cellKey = (row, col) => row * 1e3 + col;
-function fillRow(cells, row, s, mode, seq) {
+function fillRow(cells, row, s, mode, seq, testKeys) {
   const set = (col, v) => {
     cells[cellKey(row, col)] = v;
   };
@@ -254,19 +264,20 @@ function fillRow(cells, row, s, mode, seq) {
     set(26 + i, s.soilState.includes(SOIL_STATES[i]) ? "\u221A" : "");
   }
   set(31, s.soilStateNote ?? "");
-  for (let i = 0; i < TEST_ITEMS.length; i++) {
-    set(32 + i, s.testItems.includes(TEST_ITEMS[i]) ? "\u221A" : "");
+  for (let i = 0; i < testKeys.length; i++) {
+    set(32 + i, s.testItems.includes(testKeys[i]) ? "\u221A" : "");
   }
 }
 function buildPdfPages(record) {
   const samples = record.samples ?? [];
+  const testKeys = recordTestColumns(record).map((c) => c.key);
   const totalPages = Math.max(1, Math.ceil(samples.length / ROWS_PER_PAGE));
   const pages = [];
   for (let p = 0; p < totalPages; p++) {
     const cells = {};
     for (let r = 0; r < ROWS_PER_PAGE; r++) {
       const s = samples[p * ROWS_PER_PAGE + r];
-      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1);
+      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1, testKeys);
     }
     pages.push({ cells });
   }
@@ -389,7 +400,7 @@ function renderTable(page, record) {
       ${INCLUSIONS.map((t) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(t)}</th>`).join("")}
       ${SOIL_STATES.map((t) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(t)}</th>`).join("")}
       <th class="pdf-th pdf-vlabel pdf-vsmall">${vchars("\u5907\u6CE8")}</th>
-      ${TEST_ITEMS.map((t) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(t)}</th>`).join("")}
+      ${recordTestColumns(record).map((c) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(c.label)}</th>`).join("")}
     </tr>`;
   const dataRows = [];
   for (let r = 0; r < ROWS_PER_PAGE; r++) {

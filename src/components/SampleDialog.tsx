@@ -22,6 +22,8 @@ import {
   INCLUSIONS,
   SOIL_STATES,
   TEST_ITEMS,
+  SHEAR_TEST_KEYS,
+  TestColumn,
   soilTypeOptions,
   DISTURBANCE,
   SILTY_SAND,
@@ -53,6 +55,8 @@ interface Props {
   autoFocusField?: SampleFocusField;
   /** 对话框标题：默认「土样录入」，插入场景传「插入土样」 */
   title?: string;
+  /** 记录级试验列（固结/剪切两列显示名可覆盖，见 constants.recordTestColumns） */
+  testColumns?: TestColumn[];
 }
 
 /** 单条土样录入对话框：覆盖全部字段，含仅 App 内显示的 IL / Ip */
@@ -67,8 +71,15 @@ export default function SampleDialog({
   onRemoveCustomTestItem,
   autoFocusField,
   title = '土样录入',
+  testColumns,
 }: Props) {
   const [sample, setSample] = useState<SoilSample>(initial ?? ({} as SoilSample));
+
+  // 试验列：未传时按默认 8 项（向后兼容旧调用）；
+  // 显示用 label、存储用 key（固结列显示「回弹压缩」等别名时二者不同）
+  const testCols: TestColumn[] = testColumns ?? TEST_ITEMS.map((t) => ({ key: t, label: t }));
+  const labelByKey = new Map(testCols.map((c) => [c.key, c.label]));
+  const keyByLabel = new Map(testCols.map((c) => [c.label, c.key]));
 
   // 卡片信息格点击后要定位的 DOM 引用：IL/Ip 是输入框，扰动土/粉砂判定是整组
   const ilRef = useRef<HTMLInputElement>(null);
@@ -140,12 +151,12 @@ export default function SampleDialog({
   // 剪切 / 渗透判定冲突：与土样卡片、批量勾选对话框共用同一套判定规则
   const permQuickConflict = isPermQuickConflict(sample);
   const shearBothConflict = isQuickShearBothConflict(sample);
-  // 提示里点出具体勾了哪几项，便于对照取消（渗透：垂直/水平；快剪：饱固/自然）
+  // 提示里点出具体勾了哪几项，便于对照取消（渗透：垂直/水平；剪切：四种归一名任一）
   const selectedPermItems = (sample.testItems ?? []).filter(
     (t) => t === '垂直渗透' || t === '水平渗透',
   );
-  const selectedShearItems = (sample.testItems ?? []).filter(
-    (t) => t === '饱固快剪' || t === '自然快剪',
+  const selectedShearItems = (sample.testItems ?? []).filter((t) =>
+    SHEAR_TEST_KEYS.includes(t),
   );
 
   const set = (key: keyof SoilSample, v: string | string[]) =>
@@ -230,9 +241,14 @@ export default function SampleDialog({
           />
           <ChipMultiSelect
             label="要求实验项目（多选）"
-            options={TEST_ITEMS}
-            value={sample.testItems ?? []}
-            onChange={(v) => set('testItems', v)}
+            options={testCols.map((c) => c.label)}
+            value={(sample.testItems ?? []).map((k) => labelByKey.get(k) ?? k)}
+            onChange={(labels) =>
+              set(
+                'testItems',
+                labels.map((l) => keyByLabel.get(l) ?? l),
+              )
+            }
           />
 
           {/* 额外 / 自定义试验项目：勾选写入 sample.otherTestItems，不进 40 列主表，导出到「额外试验项目」工作表 */}
@@ -443,7 +459,7 @@ export default function SampleDialog({
           {/* 剪切 / 渗透判定冲突提示：实时随勾选变化，规则与土样卡片一致 */}
           {permQuickConflict && (
             <Alert severity="warning" sx={{ mt: 2 }}>
-              {`已同时勾选渗透（${selectedPermItems.join('、')}）与快剪（${selectedShearItems.join('、')}）：两者一般不同时做，请取消其中一项。`}
+              {`已同时勾选渗透（${selectedPermItems.join('、')}）与剪切（${selectedShearItems.join('、')}）：两者一般不同时做，请取消其中一项。`}
             </Alert>
           )}
 

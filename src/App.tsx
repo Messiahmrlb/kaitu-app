@@ -63,7 +63,7 @@ import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import SettingsIcon from '@mui/icons-material/Settings';
 import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode, EngineeringInfo } from './types';
-import { MODE_LABELS, siltySandSymbol } from './constants';
+import { MODE_LABELS, siltySandSymbol, recordTestColumns } from './constants';
 import { loadRecords, saveRecords } from './storage';
 import { CMA_DEFAULT, CmaHeaderSettings } from './cmaHeader';
 import { loadCmaHeader, saveCmaHeader } from './cmaStorage';
@@ -1136,6 +1136,7 @@ export default function App() {
           onRemoveCustomTestItem={(name) =>
             updateEditing({ customTestItems: (editing.customTestItems ?? []).filter((x) => x !== name) })
           }
+          testColumns={recordTestColumns(editing)}
         />
 
         <BatchCheckDialog
@@ -1145,6 +1146,7 @@ export default function App() {
           onClose={() => setBatchCheckOpen(false)}
           customTestItems={editing.customTestItems ?? []}
           onCustomTestItemsChange={(items) => updateEditing({ customTestItems: items })}
+          testColumns={recordTestColumns(editing)}
         />
       </Box>
     );

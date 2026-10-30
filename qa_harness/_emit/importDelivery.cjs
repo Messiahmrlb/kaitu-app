@@ -69,9 +69,29 @@ var TEST_ITEMS = [
   "\u4E09\u8F74"
 ];
 var DISTURBED_APPLICABLE_TESTS = ["\u7269\u6027", "\u9897\u5206"];
+var DEFAULT_SHEAR_LABELS = ["\u9971\u56FA\u5FEB\u526A", "\u81EA\u7136\u5FEB\u526A"];
 var DISTURBED_INCOMPATIBLE_TESTS = TEST_ITEMS.filter(
   (t) => !DISTURBED_APPLICABLE_TESTS.includes(t)
 );
+
+// src/testHeader.ts
+function classifyShearLabel(n) {
+  const s = String(n ?? "").replace(/\s+/g, "");
+  if (!s) return null;
+  if (s.includes("\u6162\u526A")) return "\u6162\u526A";
+  if (s.includes("\u5FEB\u526A") || s === "\u56FA\u5FEB") {
+    if (s.includes("\u9971")) return "\u9971\u56FA\u5FEB\u526A";
+    if (s.includes("\u56FA")) return "\u56FA\u7ED3\u5FEB\u526A";
+    return "\u81EA\u7136\u5FEB\u526A";
+  }
+  return null;
+}
+function classifyConsolidationAlias(n) {
+  const s = String(n ?? "").replace(/\s+/g, "");
+  if (!s) return null;
+  if (s.includes("\u56DE\u5F39") || s.includes("\u56FA\u7ED3\u7CFB\u6570")) return s;
+  return null;
+}
 
 // src/utils.ts
 function genId() {
@@ -167,9 +187,13 @@ var TEST_LABEL_MAP = [
   // 液塑限折叠进「物性」
   { label: "\u9897\u5206", item: "\u9897\u5206" },
   { label: "\u538B\u7F29\u7CFB\u6570\u538B\u7F29\u6A21\u91CF", item: "\u56FA\u7ED3" },
+  { label: "\u56FA\u7ED3", item: "\u56FA\u7ED3" },
+  // 有的送样单直接写「固结」二字
   { label: "\u5782\u76F4\u6E17\u900F", item: "\u5782\u76F4\u6E17\u900F" },
   { label: "\u6C34\u5E73\u6E17\u900F", item: "\u6C34\u5E73\u6E17\u900F" },
   { label: "\u9971\u548C\u56FA\u7ED3\u5FEB\u526A", item: "\u9971\u56FA\u5FEB\u526A" },
+  { label: "\u9971\u56FA\u5FEB\u526A", item: "\u9971\u56FA\u5FEB\u526A" },
+  // 有的送样单写简称（此前漏识别，已补）
   { label: "\u81EA\u7136\u5FEB\u526A", item: "\u81EA\u7136\u5FEB\u526A" }
 ];
 var NO_SET = /* @__PURE__ */ new Set(["", "\u2014", "\u2013", "\xD7", "/", "\uFF0F", "\u65E0", "\u5426"]);
@@ -224,6 +248,17 @@ function mergeImportedByHole(items) {
     const isMerged = group.items.length > 1;
     const mergedWarnings = uniqueStrings(group.items.flatMap((x) => x.warnings ?? []));
     const mergedErrors = uniqueStrings(group.items.flatMap((x) => x.errors ?? []));
+    const describeHeader = (r) => `\u56FA\u7ED3\u5217\u300C${r.consolidationLabel ?? "\u56FA\u7ED3"}\u300D\u3001\u526A\u5207\u4E24\u5217\u300C${(r.shearLabels ?? DEFAULT_SHEAR_LABELS).join("\uFF0F")}\u300D`;
+    const firstHeader = describeHeader(first.record);
+    const headerMismatchIdx = [];
+    group.items.forEach((x, i) => {
+      if (i > 0 && describeHeader(x.record) !== firstHeader) headerMismatchIdx.push(i + 1);
+    });
+    if (headerMismatchIdx.length > 0) {
+      mergedErrors.push(
+        `\u5B54\u53F7 ${group.hole || "(\u7A7A)"} \u7684\u591A\u4EFD\u9001\u6837\u5355\u8BD5\u9A8C\u8868\u5934\u4E0D\u4E00\u81F4\uFF08\u7B2C 1 \u4EFD\uFF1A${firstHeader}\uFF1B\u7B2C ${headerMismatchIdx.join("\u3001")} \u4EFD\u4E0D\u540C\uFF09\uFF0C\u7591\u4F3C\u9001\u6837\u5355\u6765\u6E90\u6709\u8BEF\uFF0C\u5DF2\u6309\u7B2C 1 \u4EFD\u8868\u5934\u5408\u5E76\uFF0C\u8BF7\u6838\u5BF9\u3002`
+      );
+    }
     if (!isMerged) {
       records.push({
         ...first,
@@ -385,7 +420,8 @@ function isHeaderRow(ws, r) {
   for (let c = 1; c <= sub.cellCount; c++) {
     const n = normalizeHeader(sub.getCell(c).value);
     if (n === "\u539F\u72B6") hasYuan = true;
-    if (TEST_LABEL_MAP.some((m) => m.label === n)) hasTest = true;
+    if (TEST_LABEL_MAP.some((m) => m.label === n) || classifyShearLabel(n) !== null || classifyConsolidationAlias(n) !== null)
+      hasTest = true;
   }
   return hasYuan && hasTest;
 }
@@ -406,10 +442,8 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
   const toCol = findColByText(ws, sub, "\u81F3");
   const distCol = findColByText(ws, sub, "\u6270\u52A8");
   const testCols = [];
-  for (const m of TEST_LABEL_MAP) {
-    const col = findColByText(ws, sub, m.label);
-    if (col >= 0) testCols.push({ col, item: m.item });
-  }
+  const shearSlots = [];
+  let consolidationAlias = null;
   const KNOWN_TEST_LABELS = new Set(TEST_LABEL_MAP.map((m) => m.label));
   const STRUCT_LABELS = /* @__PURE__ */ new Set([
     "\u81EA",
@@ -428,11 +462,43 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
     if (c === 1) continue;
     const label = normalizeHeader(subRow.getCell(c).value);
     if (label === "") continue;
-    if (KNOWN_TEST_LABELS.has(label)) continue;
     if (STRUCT_LABELS.has(label)) continue;
+    if (KNOWN_TEST_LABELS.has(label)) {
+      const item = TEST_LABEL_MAP.find((m) => m.label === label).item;
+      if (item === "\u9971\u56FA\u5FEB\u526A" || item === "\u81EA\u7136\u5FEB\u526A") {
+        if (shearSlots.some((s) => s.kind === item)) {
+          unknownCols.push({ col: c, label });
+          continue;
+        }
+        shearSlots.push({ kind: item, label: item });
+      }
+      testCols.push({ col: c, item });
+      continue;
+    }
+    const shearKind = classifyShearLabel(label);
+    if (shearKind !== null) {
+      if (shearSlots.some((s) => s.kind === shearKind)) {
+        unknownCols.push({ col: c, label });
+        continue;
+      }
+      shearSlots.push({ kind: shearKind, label: shearKind });
+      testCols.push({ col: c, item: shearKind });
+      continue;
+    }
+    const consAlias = classifyConsolidationAlias(label);
+    if (consAlias !== null) {
+      consolidationAlias = consolidationAlias ?? consAlias;
+      testCols.push({ col: c, item: "\u56FA\u7ED3" });
+      continue;
+    }
     unknownCols.push({ col: c, label });
   }
   const unknownSeen = /* @__PURE__ */ new Set();
+  const shearLabels = shearSlots.length > 0 ? [
+    shearSlots[0]?.label ?? DEFAULT_SHEAR_LABELS[0],
+    shearSlots[1]?.label ?? DEFAULT_SHEAR_LABELS[1]
+  ] : void 0;
+  const hasShearOverride = !!shearLabels && (shearLabels[0] !== DEFAULT_SHEAR_LABELS[0] || shearLabels[1] !== DEFAULT_SHEAR_LABELS[1]);
   const ownHoleCode = findInfoValue(ws, hr, "\u5B54\u53F7", holeSearchStart);
   const inherited = !ownHoleCode && !!inheritedHole;
   const holeCode = ownHoleCode || inheritedHole;
@@ -489,6 +555,15 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
   for (const lbl of unknownSeen) {
     warnings.push(`\u9001\u6837\u5355\u542B\u672A\u77E5\u8BD5\u9A8C\u9879\u76EE\uFF1A${lbl}\uFF08\u5DF2\u5F52\u5165"\u5176\u4ED6\u8BD5\u9A8C\u9879\u76EE"\uFF0C\u4E0D\u5F71\u54CD\u5BFC\u51FA\uFF09`);
   }
+  const overrideParts = [];
+  if (consolidationAlias) overrideParts.push(`\u56FA\u7ED3\u5217\u663E\u793A\u300C${consolidationAlias}\u300D`);
+  if (hasShearOverride)
+    overrideParts.push(`\u526A\u5207\u4E24\u5217\u663E\u793A\u300C${shearLabels[0]}\uFF0F${shearLabels[1]}\u300D`);
+  if (overrideParts.length > 0) {
+    warnings.push(
+      `\u8868\u5934\u6309\u9001\u6837\u5355\u539F\u6587\u663E\u793A\uFF1A${overrideParts.join("\uFF0C")}\uFF08\u52FE\u9009\u6570\u636E\u4E0E\u5BFC\u51FA\u8868\u5934\u4FDD\u6301\u4E00\u81F4\uFF09`
+    );
+  }
   const contextParts = [ws.name, projectName];
   for (let r = Math.max(1, hr - 15); r <= sub; r++) {
     const row = ws.getRow(r);
@@ -515,6 +590,8 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
     createdAt: now,
     updatedAt: now
   };
+  if (hasShearOverride) record.shearLabels = shearLabels;
+  if (consolidationAlias) record.consolidationLabel = consolidationAlias;
   return {
     record,
     sheetName: ws.name,

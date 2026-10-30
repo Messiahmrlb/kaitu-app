@@ -19,7 +19,7 @@ import {
   Chip,
 } from '@mui/material';
 import { SoilSample } from '../types';
-import { TEST_ITEMS, DISTURBED_APPLICABLE_TESTS } from '../constants';
+import { TEST_ITEMS, DISTURBED_APPLICABLE_TESTS, TestColumn } from '../constants';
 import { setDisturbance, isPermQuickConflict, isQuickShearBothConflict } from '../utils';
 import { conflictBg } from '../theme';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -69,6 +69,8 @@ interface Props {
   customTestItems: string[];
   /** 自定义试验项目列表变化时的回调（由父组件持久化） */
   onCustomTestItemsChange: (items: string[]) => void;
+  /** 记录级试验列（固结/剪切两列显示名可覆盖，见 constants.recordTestColumns） */
+  testColumns?: TestColumn[];
 }
 
 /**
@@ -82,7 +84,10 @@ export default function BatchCheckDialog({
   onClose,
   customTestItems,
   onCustomTestItemsChange,
+  testColumns,
 }: Props) {
+  // 试验列：未传时按默认 8 项（向后兼容旧调用）
+  const cols: TestColumn[] = testColumns ?? TEST_ITEMS.map((t) => ({ key: t, label: t }));
   // 工作副本（克隆），取消时丢弃，不影响外部 samples
   const [working, setWorking] = useState<SoilSample[]>([]);
 
@@ -234,8 +239,8 @@ export default function BatchCheckDialog({
       <DialogContent dividers>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.7 }}>
           逐列「全选」可快速应用到全部土样；勾选「扰动土」会自动联动「颗分」。
-          对扰动土不适用的试验项目（固结/渗透/快剪/三轴）点「全选」时自动跳过扰动土（仅勾原状）。
-          同时含「渗透+快剪」或「饱固快剪+自然快剪」的行将
+          对扰动土不适用的试验项目（固结/渗透/剪切/三轴）点「全选」时自动跳过扰动土（仅勾原状）。
+          同时含「渗透+剪切」或「饱固快剪+自然快剪」的行将
           <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}> 标红 </Box>
           （可能的冲突组合）。
         </Typography>
@@ -360,8 +365,8 @@ export default function BatchCheckDialog({
                     />
                   </Box>
                 </TableCell>
-                {TEST_ITEMS.map((item) => (
-                  <TableCell key={item} align="center" sx={{ minWidth: 78 }}>
+                {cols.map((col) => (
+                  <TableCell key={col.key} align="center" sx={{ minWidth: 78 }}>
                     <Box
                       sx={{
                         display: 'flex',
@@ -371,12 +376,12 @@ export default function BatchCheckDialog({
                       }}
                     >
                       <Typography variant="caption" fontWeight={700}>
-                        {item}
+                        {col.label}
                       </Typography>
                       <Checkbox
                         size="small"
-                        checked={itemAllChecked(item)}
-                        onChange={(e) => toggleAllItem(item, e.target.checked)}
+                        checked={itemAllChecked(col.key)}
+                        onChange={(e) => toggleAllItem(col.key, e.target.checked)}
                       />
                     </Box>
                   </TableCell>
@@ -499,13 +504,13 @@ export default function BatchCheckDialog({
                         }
                       />
                     </TableCell>
-                    {TEST_ITEMS.map((item) => (
-                      <TableCell key={item} align="center">
+                    {cols.map((col) => (
+                      <TableCell key={col.key} align="center">
                         <Checkbox
                           size="small"
-                          checked={s.testItems.includes(item)}
+                          checked={s.testItems.includes(col.key)}
                           onChange={(e) =>
-                            toggleItem(s.id, item, e.target.checked)
+                            toggleItem(s.id, col.key, e.target.checked)
                           }
                         />
                       </TableCell>

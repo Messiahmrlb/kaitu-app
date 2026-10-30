@@ -13,7 +13,7 @@ import {
   SOIL_TYPE_B,
   INCLUSIONS,
   SOIL_STATES,
-  TEST_ITEMS,
+  recordTestColumns,
   soilTypeOptions,
 } from './constants';
 import { Capacitor } from '@capacitor/core';
@@ -64,8 +64,9 @@ export interface PdfPage {
   cells: Record<number, string>;
 }
 
-/** 把一条土样按 39 列数据映射写入某页某行的单元格；seq 为该土样在全记录中的序号（1 起） */
-function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number): void {
+/** 把一条土样按 39 列数据映射写入某页某行的单元格；seq 为该土样在全记录中的序号（1 起）；
+ *  testKeys 为该记录 8 个试验列的数据键（固结/剪切列显示名可按记录覆盖，见 recordTestColumns） */
+function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number, testKeys: string[]): void {
   const set = (col: number, v: string): void => {
     cells[cellKey(row, col)] = v;
   };
@@ -89,8 +90,8 @@ function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode
     set(26 + i, s.soilState.includes(SOIL_STATES[i]) ? '√' : '');
   }
   set(31, s.soilStateNote ?? '');
-  for (let i = 0; i < TEST_ITEMS.length; i++) {
-    set(32 + i, s.testItems.includes(TEST_ITEMS[i]) ? '√' : '');
+  for (let i = 0; i < testKeys.length; i++) {
+    set(32 + i, s.testItems.includes(testKeys[i]) ? '√' : '');
   }
   // IL / Ip / 粉砂判定 / 额外试验项目 一律不出现在 PDF
 }
@@ -101,13 +102,14 @@ function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode
  */
 export function buildPdfPages(record: SoilRecord): PdfPage[] {
   const samples = record.samples ?? [];
+  const testKeys = recordTestColumns(record).map((c) => c.key);
   const totalPages = Math.max(1, Math.ceil(samples.length / ROWS_PER_PAGE));
   const pages: PdfPage[] = [];
   for (let p = 0; p < totalPages; p++) {
     const cells: Record<number, string> = {};
     for (let r = 0; r < ROWS_PER_PAGE; r++) {
       const s = samples[p * ROWS_PER_PAGE + r];
-      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1);
+      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1, testKeys);
     }
     pages.push({ cells });
   }
@@ -291,7 +293,9 @@ function renderTable(page: PdfPage, record: SoilRecord): string {
       ${INCLUSIONS.map((t) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(t)}</th>`).join('')}
       ${SOIL_STATES.map((t) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(t)}</th>`).join('')}
       <th class="pdf-th pdf-vlabel pdf-vsmall">${vchars('备注')}</th>
-      ${TEST_ITEMS.map((t) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(t)}</th>`).join('')}
+      ${recordTestColumns(record)
+        .map((c) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(c.label)}</th>`)
+        .join('')}
     </tr>`;
 
   const dataRows: string[] = [];

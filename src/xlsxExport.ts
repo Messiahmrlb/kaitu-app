@@ -11,6 +11,7 @@ import {
   INCLUSIONS,
   SOIL_STATES,
   TEST_ITEMS,
+  recordTestColumns,
   siltySandSymbol,
 } from './constants';
 
@@ -96,6 +97,8 @@ export async function buildWorkbook(
 ): Promise<ExcelJS.Workbook> {
   const soilType = record.mode === 'A' ? SOIL_TYPE_A : SOIL_TYPE_B;
   const eng = record.engineering;
+  // 试验列（固结/剪切两列显示名可按记录覆盖，见 testHeader / constants.recordTestColumns）
+  const testCols = recordTestColumns(record);
 
   const wb = new XL.Workbook();
   wb.creator = '开土记录录入';
@@ -195,7 +198,7 @@ export async function buildWorkbook(
   });
   ws.getCell(SUB_ROW, STATE_NOTE_COL).value = '备注';
   TEST_SUB_COLS.forEach((c, i) => {
-    ws.getCell(SUB_ROW, c).value = TEST_ITEMS[i];
+    ws.getCell(SUB_ROW, c).value = testCols[i]?.label ?? TEST_ITEMS[i];
   });
 
   // ---- 行5+：每条土样一行 ----
@@ -226,7 +229,7 @@ export async function buildWorkbook(
     });
     set(STATE_NOTE_COL, s.soilStateNote);
     TEST_SUB_COLS.forEach((c, i) => {
-      set(c, s.testItems.includes(TEST_ITEMS[i]) ? '√' : '');
+      set(c, s.testItems.includes(testCols[i]?.key ?? TEST_ITEMS[i]) ? '√' : '');
     });
     // 留空占位列（第12列=目力鉴别土类、第14列=夹杂物合并起始）补边框
     styleCell(ws.getCell(r, 12), { align: 'center' });

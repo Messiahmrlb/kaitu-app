@@ -1,0 +1,1356 @@
+{
+  "generatedAt": "2026-10-30T02:01:10.456Z",
+  "previewBase": "http://127.0.0.1:4399/",
+  "mainBundle": "index-CAPv7seG.js",
+  "nodeOnly": false,
+  "total": 64,
+  "passed": 64,
+  "failed": 0,
+  "isPass": true,
+  "groups": {
+    "B": {
+      "total": 18,
+      "passed": 18
+    },
+    "C": {
+      "total": 14,
+      "passed": 14
+    },
+    "D": {
+      "total": 25,
+      "passed": 25
+    },
+    "E": {
+      "total": 7,
+      "passed": 7
+    }
+  },
+  "parsedFixtures": {
+    "qa_m1_same_hole.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK1-1",
+          "sampleCount": 4,
+          "mergedFrom": 2,
+          "sheetName": "Sheet1、Sheet2",
+          "soilNumbers": [
+            "ZK1-1-01",
+            "ZK1-1-02",
+            "ZK1-1-03",
+            "ZK1-1-04"
+          ],
+          "mode": "A",
+          "warnings": [],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": [
+        "孔号 ZK1-1 的 2 份送样单已合并为 1 条记录"
+      ]
+    },
+    "qa_m2_continue.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK2-1",
+          "sampleCount": 3,
+          "mergedFrom": 2,
+          "sheetName": "Sheet1、Sheet2",
+          "soilNumbers": [
+            "ZK2-1-01",
+            "ZK2-1-02",
+            "ZK2-1-03"
+          ],
+          "mode": "A",
+          "warnings": [
+            "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK2-1"
+          ],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": [
+        "孔号 ZK2-1 的 2 份送样单已合并为 1 条记录"
+      ]
+    },
+    "qa_m3_restart.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK3-1",
+          "sampleCount": 4,
+          "mergedFrom": 2,
+          "sheetName": "Sheet1、Sheet2",
+          "soilNumbers": [
+            "ZK3-1-01",
+            "ZK3-1-02",
+            "ZK3-1-03",
+            "ZK3-1-04"
+          ],
+          "mode": "A",
+          "warnings": [
+            "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK3-1"
+          ],
+          "errors": [
+            "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。"
+          ]
+        }
+      ],
+      "errors": [
+        "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。"
+      ],
+      "warnings": [],
+      "mergedNotes": [
+        "孔号 ZK3-1 的 2 份送样单已合并为 1 条记录"
+      ]
+    },
+    "qa_m4_multi_hole.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK4",
+          "sampleCount": 1,
+          "mergedFrom": 1,
+          "sheetName": "Sheet1",
+          "soilNumbers": [
+            "ZK4-01"
+          ],
+          "mode": "A",
+          "warnings": [],
+          "errors": []
+        },
+        {
+          "holeCode": "ZK5",
+          "sampleCount": 2,
+          "mergedFrom": 2,
+          "sheetName": "Sheet2、Sheet3",
+          "soilNumbers": [
+            "ZK5-01",
+            "ZK5-02"
+          ],
+          "mode": "A",
+          "warnings": [],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": [
+        "孔号 ZK5 的 2 份送样单已合并为 1 条记录"
+      ]
+    },
+    "qa_e1_first_no_hole.xlsx": {
+      "records": [
+        {
+          "holeCode": "",
+          "sampleCount": 2,
+          "mergedFrom": 1,
+          "sheetName": "Sheet1",
+          "soilNumbers": [
+            "01",
+            "02"
+          ],
+          "mode": "A",
+          "warnings": [
+            "未在工作表中找到“孔号”，记录将以空孔号创建。"
+          ],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": []
+    },
+    "qa_e2_same_sheet_two_blocks.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK6-1",
+          "sampleCount": 2,
+          "mergedFrom": 2,
+          "sheetName": "Sheet1",
+          "soilNumbers": [
+            "ZK6-1-01",
+            "ZK6-1-02"
+          ],
+          "mode": "A",
+          "warnings": [
+            "工作表「Sheet1」第 12 行未写孔号，已沿用上一张的 ZK6-1"
+          ],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": [
+        "孔号 ZK6-1 的 2 份送样单已合并为 1 条记录"
+      ]
+    },
+    "qa_e3_case_space.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK1-1",
+          "sampleCount": 1,
+          "mergedFrom": 1,
+          "sheetName": "Sheet1",
+          "soilNumbers": [
+            "ZK1-1-01"
+          ],
+          "mode": "A",
+          "warnings": [],
+          "errors": []
+        },
+        {
+          "holeCode": "zk1-1",
+          "sampleCount": 1,
+          "mergedFrom": 1,
+          "sheetName": "Sheet2",
+          "soilNumbers": [
+            "zk1-1-02"
+          ],
+          "mode": "A",
+          "warnings": [],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": []
+    },
+    "qa_e4_mode_conflict.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK7-1",
+          "sampleCount": 2,
+          "mergedFrom": 2,
+          "sheetName": "Sheet1、Sheet2",
+          "soilNumbers": [
+            "ZK7-1-01",
+            "ZK7-1-02"
+          ],
+          "mode": "A",
+          "warnings": [],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": [
+        "孔号 ZK7-1 的 2 份送样单已合并为 1 条记录"
+      ]
+    },
+    "qa_e5_label_a_empty.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK8-1",
+          "sampleCount": 1,
+          "mergedFrom": 1,
+          "sheetName": "Sheet1",
+          "soilNumbers": [
+            "ZK8-1-01"
+          ],
+          "mode": "A",
+          "warnings": [],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [
+        "工作表「Sheet2」第 4 行的送样单块解析失败：0 is out of bounds. Excel supports columns from 1 to 16384"
+      ],
+      "mergedNotes": []
+    },
+    "qa_e6_label_b_empty.xlsx": {
+      "records": [
+        {
+          "holeCode": "ZK9-1",
+          "sampleCount": 2,
+          "mergedFrom": 2,
+          "sheetName": "Sheet1、Sheet2",
+          "soilNumbers": [
+            "ZK9-1-01",
+            "ZK9-1-02"
+          ],
+          "mode": "A",
+          "warnings": [
+            "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK9-1"
+          ],
+          "errors": []
+        }
+      ],
+      "errors": [],
+      "warnings": [],
+      "mergedNotes": [
+        "孔号 ZK9-1 的 2 份送样单已合并为 1 条记录"
+      ]
+    }
+  },
+  "uiSnapshots": {
+    "__ui_m1": {
+      "text": "选择送样单文件同孔送样单已合并（1 条）孔号 ZK1-1 的 2 份送样单已合并为 1 条记录识别到 1 个孔（来自 2 份送样单），共 4 条土样：鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。孔号 ZK1-1 ｜ 4 条土样 ｜ 马厂减河治理工程 ZK1-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单鉴别格式普通目力鉴别三角坐标定名",
+      "stat": "识别到 1 个孔（来自 2 份送样单），共 4 条土样",
+      "alerts": [
+        {
+          "severity": "Info",
+          "title": "同孔送样单已合并（1 条）",
+          "items": [
+            "孔号 ZK1-1 的 2 份送样单已合并为 1 条记录"
+          ]
+        }
+      ],
+      "items": [
+        "孔号 ZK1-1 ｜ 4 条土样 ｜ 马厂减河治理工程 ZK1-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单"
+      ]
+    },
+    "__ui_m2": {
+      "text": "选择送样单文件同孔送样单已合并（1 条）孔号 ZK2-1 的 2 份送样单已合并为 1 条记录解析提示（1 条）工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK2-1识别到 1 个孔（来自 2 份送样单），共 3 条土样：鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。孔号 ZK2-1 ｜ 3 条土样 ｜ 马厂减河治理工程 ZK2-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单鉴别格式普通目力鉴别三角坐标定名",
+      "stat": "识别到 1 个孔（来自 2 份送样单），共 3 条土样",
+      "alerts": [
+        {
+          "severity": "Info",
+          "title": "同孔送样单已合并（1 条）",
+          "items": [
+            "孔号 ZK2-1 的 2 份送样单已合并为 1 条记录"
+          ]
+        },
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK2-1"
+          ]
+        }
+      ],
+      "items": [
+        "孔号 ZK2-1 ｜ 3 条土样 ｜ 马厂减河治理工程 ZK2-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单"
+      ]
+    },
+    "__ui_m3": {
+      "text": "选择送样单文件疑似送样单来源有误（1 条），请核对后再导入工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。同孔送样单已合并（1 条）孔号 ZK3-1 的 2 份送样单已合并为 1 条记录解析提示（1 条）工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK3-1识别到 1 个孔（来自 2 份送样单），共 4 条土样：鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。孔号 ZK3-1 ｜ 4 条土样 ｜ 马厂减河治理工程 ZK3-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单鉴别格式普通目力鉴别三角坐标定名",
+      "stat": "识别到 1 个孔（来自 2 份送样单），共 4 条土样",
+      "alerts": [
+        {
+          "severity": "Error",
+          "title": "疑似送样单来源有误（1 条），请核对后再导入",
+          "items": [
+            "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。"
+          ]
+        },
+        {
+          "severity": "Info",
+          "title": "同孔送样单已合并（1 条）",
+          "items": [
+            "孔号 ZK3-1 的 2 份送样单已合并为 1 条记录"
+          ]
+        },
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK3-1"
+          ]
+        }
+      ],
+      "items": [
+        "孔号 ZK3-1 ｜ 4 条土样 ｜ 马厂减河治理工程 ZK3-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单"
+      ]
+    },
+    "__ui_m4": {
+      "text": "选择送样单文件同孔送样单已合并（1 条）孔号 ZK5 的 2 份送样单已合并为 1 条记录识别到 2 个孔（来自 3 份送样单），共 3 条土样：鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。孔号 ZK4 ｜ 1 条土样 ｜ 马厂减河治理工程 ZK4来源工作表：Sheet1鉴别格式普通目力鉴别三角坐标定名孔号 ZK5 ｜ 2 条土样 ｜ 马厂减河治理工程 ZK5来源工作表：Sheet2、Sheet3 ｜ 已合并 2 张送样单鉴别格式普通目力鉴别三角坐标定名",
+      "stat": "识别到 2 个孔（来自 3 份送样单），共 3 条土样",
+      "alerts": [
+        {
+          "severity": "Info",
+          "title": "同孔送样单已合并（1 条）",
+          "items": [
+            "孔号 ZK5 的 2 份送样单已合并为 1 条记录"
+          ]
+        }
+      ],
+      "items": [
+        "孔号 ZK4 ｜ 1 条土样 ｜ 马厂减河治理工程 ZK4来源工作表：Sheet1",
+        "孔号 ZK5 ｜ 2 条土样 ｜ 马厂减河治理工程 ZK5来源工作表：Sheet2、Sheet3 ｜ 已合并 2 张送样单"
+      ]
+    },
+    "__ui_e1": {
+      "text": "选择送样单文件解析提示（1 条）未在工作表中找到“孔号”，记录将以空孔号创建。识别到 1 个孔（来自 1 份送样单），共 2 条土样：鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。孔号 （空） ｜ 2 条土样 ｜ 马厂减河治理工程 来源工作表：Sheet1鉴别格式普通目力鉴别三角坐标定名",
+      "stat": "识别到 1 个孔（来自 1 份送样单），共 2 条土样",
+      "alerts": [
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "未在工作表中找到“孔号”，记录将以空孔号创建。"
+          ]
+        }
+      ],
+      "items": [
+        "孔号 （空） ｜ 2 条土样 ｜ 马厂减河治理工程 来源工作表：Sheet1"
+      ]
+    },
+    "__ui_e5": {
+      "text": "选择送样单文件解析提示（1 条）工作表「Sheet2」第 4 行的送样单块解析失败：0 is out of bounds. Excel supports columns from 1 to 16384识别到 1 个孔（来自 1 份送样单），共 1 条土样：鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。孔号 ZK8-1 ｜ 1 条土样 ｜ 马厂减河治理工程 ZK8-1来源工作表：Sheet1鉴别格式普通目力鉴别三角坐标定名",
+      "stat": "识别到 1 个孔（来自 1 份送样单），共 1 条土样",
+      "alerts": [
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "工作表「Sheet2」第 4 行的送样单块解析失败：0 is out of bounds. Excel supports columns from 1 to 16384"
+          ]
+        }
+      ],
+      "items": [
+        "孔号 ZK8-1 ｜ 1 条土样 ｜ 马厂减河治理工程 ZK8-1来源工作表：Sheet1"
+      ]
+    },
+    "__ui_e6": {
+      "text": "选择送样单文件同孔送样单已合并（1 条）孔号 ZK9-1 的 2 份送样单已合并为 1 条记录解析提示（1 条）工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK9-1识别到 1 个孔（来自 2 份送样单），共 2 条土样：鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。孔号 ZK9-1 ｜ 2 条土样 ｜ 马厂减河治理工程 ZK9-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单鉴别格式普通目力鉴别三角坐标定名",
+      "stat": "识别到 1 个孔（来自 2 份送样单），共 2 条土样",
+      "alerts": [
+        {
+          "severity": "Info",
+          "title": "同孔送样单已合并（1 条）",
+          "items": [
+            "孔号 ZK9-1 的 2 份送样单已合并为 1 条记录"
+          ]
+        },
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK9-1"
+          ]
+        }
+      ],
+      "items": [
+        "孔号 ZK9-1 ｜ 2 条土样 ｜ 马厂减河治理工程 ZK9-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单"
+      ]
+    }
+  },
+  "downloads": [
+    {
+      "batch": "pdf-2孔",
+      "files": [
+        {
+          "name": "开土记录_2孔_2026-10-30.pdf",
+          "size": 1112837,
+          "pages": {
+            "pages": 2,
+            "countFromTree": 2,
+            "images": 2
+          }
+        }
+      ]
+    },
+    {
+      "batch": "pdf-1孔",
+      "files": [
+        {
+          "name": "2026-10-30_ZK4.pdf",
+          "size": 556499,
+          "pages": {
+            "pages": 1,
+            "countFromTree": 1,
+            "images": 1
+          }
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "B1.1",
+      "group": "B",
+      "name": "soilSeqOf 10 例（含规格 5 例 + 100/空格/纯数字/无数字/null）",
+      "pass": true,
+      "expected": [
+        1,
+        1,
+        21,
+        null,
+        null,
+        100,
+        7,
+        1,
+        null,
+        null
+      ],
+      "actual": [
+        1,
+        1,
+        21,
+        null,
+        null,
+        100,
+        7,
+        1,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "B2.1",
+      "group": "B",
+      "name": "同孔 3 块 → 1 条记录",
+      "pass": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "id": "B2.2",
+      "group": "B",
+      "name": "mergedFrom = 3",
+      "pass": true,
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "id": "B2.3",
+      "group": "B",
+      "name": "土样按块顺序拼接且序号连续 1..N",
+      "pass": true,
+      "expected": [
+        "ZK1-1-01",
+        "ZK1-1-02",
+        "ZK1-1-03",
+        "ZK1-1-04"
+      ],
+      "actual": [
+        "ZK1-1-01",
+        "ZK1-1-02",
+        "ZK1-1-03",
+        "ZK1-1-04"
+      ]
+    },
+    {
+      "id": "B2.4",
+      "group": "B",
+      "name": "sampleCount = 4",
+      "pass": true,
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "id": "B2.5",
+      "group": "B",
+      "name": "mergedNotes 文案「孔号 X 的 3 份送样单已合并为 1 条记录」",
+      "pass": true,
+      "expected": "孔号 ZK1-1 的 3 份送样单已合并为 1 条记录",
+      "actual": [
+        "孔号 ZK1-1 的 3 份送样单已合并为 1 条记录"
+      ]
+    },
+    {
+      "id": "B2.6",
+      "group": "B",
+      "name": "同一工作表名去重后「、」连接",
+      "pass": true,
+      "expected": "Sheet1、Sheet2",
+      "actual": "Sheet1、Sheet2"
+    },
+    {
+      "id": "B2.7",
+      "group": "B",
+      "name": "warnings 去重（同名告警只留 1 条）",
+      "pass": true,
+      "expected": [
+        "同名告警"
+      ],
+      "actual": [
+        "同名告警"
+      ]
+    },
+    {
+      "id": "B3.1",
+      "group": "B",
+      "name": "ZK1 与 ZK1-1 精确匹配 → 2 条记录",
+      "pass": true,
+      "expected": 2,
+      "actual": [
+        "ZK1",
+        "ZK1-1"
+      ]
+    },
+    {
+      "id": "B3.2",
+      "group": "B",
+      "name": "两者 mergedFrom 均为 1",
+      "pass": true,
+      "expected": [
+        1,
+        1
+      ],
+      "actual": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "B3.3",
+      "group": "B",
+      "name": "未合并时不产生 mergedNotes",
+      "pass": true,
+      "expected": 0,
+      "actual": []
+    },
+    {
+      "id": "B4.1",
+      "group": "B",
+      "name": "两个空孔号块 → 2 条记录（不合并）",
+      "pass": true,
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "id": "B4.2",
+      "group": "B",
+      "name": "空孔号块 mergedFrom 均为 1",
+      "pass": true,
+      "expected": [
+        1,
+        1
+      ],
+      "actual": [
+        1,
+        1
+      ]
+    },
+    {
+      "id": "B5.1",
+      "group": "B",
+      "name": "补零宽度保持（01/02 而非 1/2）",
+      "pass": true,
+      "expected": [
+        "ZK1-1-01",
+        "ZK1-1-02"
+      ],
+      "actual": [
+        "ZK1-1-01",
+        "ZK1-1-02"
+      ]
+    },
+    {
+      "id": "B5.2",
+      "group": "B",
+      "name": "非数字土号（ZK1-R1）原样保留，数字号仍连续",
+      "pass": true,
+      "expected": [
+        "ZK1-1-01",
+        "ZK1-R1",
+        "ZK1-1-02"
+      ],
+      "actual": [
+        "ZK1-1-01",
+        "ZK1-R1",
+        "ZK1-1-02"
+      ]
+    },
+    {
+      "id": "B6.1",
+      "group": "B",
+      "name": "errors 去重汇总到结果级",
+      "pass": true,
+      "expected": [
+        "E1"
+      ],
+      "actual": [
+        "E1"
+      ]
+    },
+    {
+      "id": "B6.2",
+      "group": "B",
+      "name": "errors 同时挂在合并后的记录上",
+      "pass": true,
+      "expected": [
+        "E1"
+      ],
+      "actual": [
+        "E1"
+      ]
+    },
+    {
+      "id": "B7.1",
+      "group": "B",
+      "name": "空数组不抛错",
+      "pass": true,
+      "expected": {
+        "records": 0
+      },
+      "actual": {
+        "records": [],
+        "mergedNotes": [],
+        "errors": []
+      }
+    },
+    {
+      "id": "C1.1",
+      "group": "C",
+      "name": "m1 同孔两表 → 1 条记录",
+      "pass": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "id": "C1.2",
+      "group": "C",
+      "name": "m1 4 条土样、mergedFrom=2",
+      "pass": true,
+      "expected": {
+        "sampleCount": 4,
+        "mergedFrom": 2
+      },
+      "actual": {
+        "holeCode": "ZK1-1",
+        "sampleCount": 4,
+        "mergedFrom": 2,
+        "sheetName": "Sheet1、Sheet2",
+        "soilNumbers": [
+          "ZK1-1-01",
+          "ZK1-1-02",
+          "ZK1-1-03",
+          "ZK1-1-04"
+        ],
+        "mode": "A",
+        "warnings": [],
+        "errors": []
+      }
+    },
+    {
+      "id": "C1.3",
+      "group": "C",
+      "name": "m1 土号顺序 01,02,03,04",
+      "pass": true,
+      "expected": [
+        "ZK1-1-01",
+        "ZK1-1-02",
+        "ZK1-1-03",
+        "ZK1-1-04"
+      ],
+      "actual": [
+        "ZK1-1-01",
+        "ZK1-1-02",
+        "ZK1-1-03",
+        "ZK1-1-04"
+      ]
+    },
+    {
+      "id": "C1.4",
+      "group": "C",
+      "name": "m1 无错误",
+      "pass": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "id": "C2.1",
+      "group": "C",
+      "name": "m2 续页接续 → 1 条记录 3 条土样",
+      "pass": true,
+      "expected": {
+        "records": 1,
+        "samples": 3
+      },
+      "actual": {
+        "holeCode": "ZK2-1",
+        "sampleCount": 3,
+        "mergedFrom": 2,
+        "sheetName": "Sheet1、Sheet2",
+        "soilNumbers": [
+          "ZK2-1-01",
+          "ZK2-1-02",
+          "ZK2-1-03"
+        ],
+        "mode": "A",
+        "warnings": [
+          "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK2-1"
+        ],
+        "errors": []
+      }
+    },
+    {
+      "id": "C2.2",
+      "group": "C",
+      "name": "m2 errors 为空",
+      "pass": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "id": "C2.3",
+      "group": "C",
+      "name": "m2 有 info「已沿用上一张的 ZK2-1」",
+      "pass": true,
+      "expected": "包含「已沿用上一张的 ZK2-1」",
+      "actual": [
+        "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK2-1"
+      ]
+    },
+    {
+      "id": "C3.1",
+      "group": "C",
+      "name": "m3 从 1 重开仍合并为 1 条 4 条土样",
+      "pass": true,
+      "expected": {
+        "records": 1,
+        "samples": 4
+      },
+      "actual": {
+        "holeCode": "ZK3-1",
+        "sampleCount": 4,
+        "mergedFrom": 2,
+        "sheetName": "Sheet1、Sheet2",
+        "soilNumbers": [
+          "ZK3-1-01",
+          "ZK3-1-02",
+          "ZK3-1-03",
+          "ZK3-1-04"
+        ],
+        "mode": "A",
+        "warnings": [
+          "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK3-1"
+        ],
+        "errors": [
+          "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。"
+        ]
+      }
+    },
+    {
+      "id": "C3.2",
+      "group": "C",
+      "name": "m3 恰好 1 条错误级提示",
+      "pass": true,
+      "expected": 1,
+      "actual": [
+        "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。"
+      ]
+    },
+    {
+      "id": "C3.3",
+      "group": "C",
+      "name": "m3 错误文案含「疑似送样单来源有误」「已按沿用「ZK3-1」合并」",
+      "pass": true,
+      "expected": "包含两段关键文案",
+      "actual": "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。"
+    },
+    {
+      "id": "C4.1",
+      "group": "C",
+      "name": "m4 多孔 → 2 条记录",
+      "pass": true,
+      "expected": 2,
+      "actual": [
+        "ZK4",
+        "ZK5"
+      ]
+    },
+    {
+      "id": "C4.2",
+      "group": "C",
+      "name": "m4 ZK4=1 条 / ZK5=2 条土样",
+      "pass": true,
+      "expected": {
+        "ZK4": 1,
+        "ZK5": 2
+      },
+      "actual": [
+        {
+          "hole": "ZK4",
+          "n": 1
+        },
+        {
+          "hole": "ZK5",
+          "n": 2
+        }
+      ]
+    },
+    {
+      "id": "C4.3",
+      "group": "C",
+      "name": "m4 无错误",
+      "pass": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "id": "C4.4",
+      "group": "C",
+      "name": "m4 ZK5 mergedFrom=2",
+      "pass": true,
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "id": "D1.1",
+      "group": "D",
+      "name": "m1 UI 统计文案「识别到 1 个孔（来自 2 份送样单），共 4 条土样」",
+      "pass": true,
+      "expected": "识别到 1 个孔（来自 2 份送样单），共 4 条土样",
+      "actual": "识别到 1 个孔（来自 2 份送样单），共 4 条土样"
+    },
+    {
+      "id": "D1.2",
+      "group": "D",
+      "name": "m1 UI 无红色 error 区块",
+      "pass": true,
+      "expected": "无 Error",
+      "actual": [
+        "Info"
+      ]
+    },
+    {
+      "id": "D1.3",
+      "group": "D",
+      "name": "m1 UI 有 info 合并提示",
+      "pass": true,
+      "expected": "Info「同孔送样单已合并（1 条）」",
+      "actual": [
+        {
+          "severity": "Info",
+          "title": "同孔送样单已合并（1 条）",
+          "items": [
+            "孔号 ZK1-1 的 2 份送样单已合并为 1 条记录"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D1.4",
+      "group": "D",
+      "name": "m1 UI 列表显示「已合并 2 张送样单」与来源工作表",
+      "pass": true,
+      "expected": "含「来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单」",
+      "actual": [
+        "孔号 ZK1-1 ｜ 4 条土样 ｜ 马厂减河治理工程 ZK1-1来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单"
+      ]
+    },
+    {
+      "id": "D1.5",
+      "group": "D",
+      "name": "m1 导入后 1 条记录 4 条土样",
+      "pass": true,
+      "expected": {
+        "records": 1,
+        "samples": 4
+      },
+      "actual": {
+        "n": 1,
+        "records": [
+          {
+            "hole": "ZK1-1",
+            "n": 4,
+            "soil": [
+              "ZK1-1-01",
+              "ZK1-1-02",
+              "ZK1-1-03",
+              "ZK1-1-04"
+            ],
+            "mode": "A"
+          }
+        ]
+      }
+    },
+    {
+      "id": "D1.6",
+      "group": "D",
+      "name": "m1 导入后土号顺序 01,02,03,04",
+      "pass": true,
+      "expected": [
+        "ZK1-1-01",
+        "ZK1-1-02",
+        "ZK1-1-03",
+        "ZK1-1-04"
+      ],
+      "actual": [
+        "ZK1-1-01",
+        "ZK1-1-02",
+        "ZK1-1-03",
+        "ZK1-1-04"
+      ]
+    },
+    {
+      "id": "D2.1",
+      "group": "D",
+      "name": "m2 UI 统计文案 1 孔/2 份/3 条",
+      "pass": true,
+      "expected": "识别到 1 个孔（来自 2 份送样单），共 3 条土样",
+      "actual": "识别到 1 个孔（来自 2 份送样单），共 3 条土样"
+    },
+    {
+      "id": "D2.2",
+      "group": "D",
+      "name": "m2 UI 无红色 error",
+      "pass": true,
+      "expected": "无 Error",
+      "actual": [
+        "Info",
+        "Warning"
+      ]
+    },
+    {
+      "id": "D2.3",
+      "group": "D",
+      "name": "m2 UI 出现 info「已沿用上一张的 ZK2-1」",
+      "pass": true,
+      "expected": "包含「已沿用上一张的 ZK2-1」",
+      "actual": [
+        {
+          "severity": "Info",
+          "title": "同孔送样单已合并（1 条）",
+          "items": [
+            "孔号 ZK2-1 的 2 份送样单已合并为 1 条记录"
+          ]
+        },
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK2-1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "D2.4",
+      "group": "D",
+      "name": "m2 导入后 1 条记录 3 条土样",
+      "pass": true,
+      "expected": {
+        "records": 1,
+        "samples": 3
+      },
+      "actual": {
+        "n": 1,
+        "records": [
+          {
+            "hole": "ZK2-1",
+            "n": 3,
+            "soil": [
+              "ZK2-1-01",
+              "ZK2-1-02",
+              "ZK2-1-03"
+            ],
+            "mode": "A"
+          }
+        ]
+      }
+    },
+    {
+      "id": "D3.1",
+      "group": "D",
+      "name": "m3 UI 统计文案 1 孔/2 份/4 条",
+      "pass": true,
+      "expected": "识别到 1 个孔（来自 2 份送样单），共 4 条土样",
+      "actual": "识别到 1 个孔（来自 2 份送样单），共 4 条土样"
+    },
+    {
+      "id": "D3.2",
+      "group": "D",
+      "name": "m3 UI 恰好 1 个红色 error 区块",
+      "pass": true,
+      "expected": 1,
+      "actual": [
+        "Error",
+        "Info",
+        "Warning"
+      ]
+    },
+    {
+      "id": "D3.3",
+      "group": "D",
+      "name": "m3 红色区块文案含「疑似送样单来源有误」「已按沿用「ZK3-1」合并」",
+      "pass": true,
+      "expected": "含两段关键文案",
+      "actual": [
+        "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK3-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK3-1」合并，请核对该表是否属于本孔。"
+      ]
+    },
+    {
+      "id": "D3.4",
+      "group": "D",
+      "name": "m3 DOM 顺序 error 在 warning 之上（且 info 在两者之间）",
+      "pass": true,
+      "expected": {
+        "error": 0,
+        "info": 1,
+        "warning": ">0 或不存在"
+      },
+      "actual": {
+        "error": 0,
+        "info": 1,
+        "warning": 2
+      }
+    },
+    {
+      "id": "D3.5",
+      "group": "D",
+      "name": "m3 导入后 1 条记录 4 条土样",
+      "pass": true,
+      "expected": {
+        "records": 1,
+        "samples": 4
+      },
+      "actual": {
+        "n": 1,
+        "records": [
+          {
+            "hole": "ZK3-1",
+            "n": 4,
+            "soil": [
+              "ZK3-1-01",
+              "ZK3-1-02",
+              "ZK3-1-03",
+              "ZK3-1-04"
+            ],
+            "mode": "A"
+          }
+        ]
+      }
+    },
+    {
+      "id": "D4.1",
+      "group": "D",
+      "name": "m4 UI 统计文案「2 个孔（来自 3 份送样单），共 3 条土样」",
+      "pass": true,
+      "expected": "识别到 2 个孔（来自 3 份送样单），共 3 条土样",
+      "actual": "识别到 2 个孔（来自 3 份送样单），共 3 条土样"
+    },
+    {
+      "id": "D4.2",
+      "group": "D",
+      "name": "m4 UI 无 error",
+      "pass": true,
+      "expected": "无 Error",
+      "actual": [
+        "Info"
+      ]
+    },
+    {
+      "id": "D4.3",
+      "group": "D",
+      "name": "m4 UI ZK5 行显示「已合并 2 张送样单」，ZK4 行不显示",
+      "pass": true,
+      "expected": "仅 ZK5 显示已合并 2 张",
+      "actual": [
+        "孔号 ZK4 ｜ 1 条土样 ｜ 马厂减河治理工程 ZK4来源工作表：Sheet1",
+        "孔号 ZK5 ｜ 2 条土样 ｜ 马厂减河治理工程 ZK5来源工作表：Sheet2、Sheet3 ｜ 已合并 2 张送样单"
+      ]
+    },
+    {
+      "id": "D4.4",
+      "group": "D",
+      "name": "m4 导入后 2 条记录（ZK4 1 条 / ZK5 2 条）",
+      "pass": true,
+      "expected": {
+        "ZK4": 1,
+        "ZK5": 2
+      },
+      "actual": {
+        "n": 2,
+        "records": [
+          {
+            "hole": "ZK4",
+            "n": 1,
+            "soil": [
+              "ZK4-01"
+            ],
+            "mode": "A"
+          },
+          {
+            "hole": "ZK5",
+            "n": 2,
+            "soil": [
+              "ZK5-01",
+              "ZK5-02"
+            ],
+            "mode": "A"
+          }
+        ]
+      }
+    },
+    {
+      "id": "D5.1",
+      "group": "D",
+      "name": "列表卡片仍无导出图标按钮",
+      "pass": true,
+      "expected": {
+        "cards": 2,
+        "legacy": 0
+      },
+      "actual": {
+        "cards": 2,
+        "legacy": 0
+      }
+    },
+    {
+      "id": "D5.2",
+      "group": "D",
+      "name": "编辑页仍无导出按钮（只剩返回）",
+      "pass": true,
+      "expected": {
+        "buttons": 1,
+        "text": "仅返回"
+      },
+      "actual": {
+        "btns": [
+          {
+            "text": "",
+            "aria": "返回（自动保存）"
+          }
+        ],
+        "hasText": false
+      }
+    },
+    {
+      "id": "D5.3",
+      "group": "D",
+      "name": "2 条记录导出 PDF 文件名 开土记录_2孔_<当天>.pdf",
+      "pass": true,
+      "expected": "开土记录_2孔_2026-10-30.pdf",
+      "actual": [
+        "开土记录_2孔_2026-10-30.pdf"
+      ]
+    },
+    {
+      "id": "D5.4",
+      "group": "D",
+      "name": "2 孔合并 PDF 页数 = 2",
+      "pass": true,
+      "expected": 2,
+      "actual": {
+        "pages": 2,
+        "countFromTree": 2,
+        "images": 2
+      }
+    },
+    {
+      "id": "D5.5",
+      "group": "D",
+      "name": "单孔 PDF 文件名 = <开土日期>_<孔号>.pdf",
+      "pass": true,
+      "expected": "2026-10-30_ZK4.pdf",
+      "actual": [
+        "2026-10-30_ZK4.pdf"
+      ]
+    },
+    {
+      "id": "D5.6",
+      "group": "D",
+      "name": "单孔 PDF 页数 = 1",
+      "pass": true,
+      "expected": 1,
+      "actual": {
+        "pages": 1,
+        "countFromTree": 1,
+        "images": 1
+      }
+    },
+    {
+      "id": "E1.1",
+      "group": "E",
+      "name": "首块无孔号：UI 可正常预览（不抛错）",
+      "pass": true,
+      "expected": "识别到 1 个孔",
+      "actual": "识别到 1 个孔（来自 1 份送样单），共 2 条土样"
+    },
+    {
+      "id": "E1.2",
+      "group": "E",
+      "name": "首块无孔号：UI 显示「孔号（空）」",
+      "pass": true,
+      "expected": "列表显示「孔号 （空）」",
+      "actual": [
+        "孔号 （空） ｜ 2 条土样 ｜ 马厂减河治理工程 来源工作表：Sheet1"
+      ]
+    },
+    {
+      "id": "E1.3",
+      "group": "E",
+      "name": "首块无孔号：有提示（warning「未在工作表中找到“孔号”」）",
+      "pass": true,
+      "expected": "Warning 含「未在工作表中找到“孔号”」",
+      "actual": [
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "未在工作表中找到“孔号”，记录将以空孔号创建。"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E1.4",
+      "group": "E",
+      "name": "首块无孔号：导入后 1 条空孔号记录 2 条土样",
+      "pass": true,
+      "expected": {
+        "n": 1,
+        "hole": "",
+        "samples": 2
+      },
+      "actual": {
+        "n": 1,
+        "records": [
+          {
+            "hole": "",
+            "n": 2,
+            "soil": [
+              "01",
+              "02"
+            ],
+            "mode": "A"
+          }
+        ]
+      }
+    },
+    {
+      "id": "E5.1",
+      "group": "E",
+      "name": "「孔号」标签在 A 列且值留空：UI 报出该块解析失败（warning）",
+      "pass": true,
+      "expected": "Warning 含「解析失败」",
+      "actual": [
+        {
+          "severity": "Warning",
+          "title": "解析提示（1 条）",
+          "items": [
+            "工作表「Sheet2」第 4 行的送样单块解析失败：0 is out of bounds. Excel supports columns from 1 to 16384"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E6.1",
+      "group": "E",
+      "name": "「孔号」标签在 B 列且值留空：正常沿用并合并（对照 e5）",
+      "pass": true,
+      "expected": "识别到 1 个孔（来自 2 份送样单），共 2 条土样",
+      "actual": "识别到 1 个孔（来自 2 份送样单），共 2 条土样"
+    },
+    {
+      "id": "E6.2",
+      "group": "E",
+      "name": "e6 导入后 1 条记录 2 条土样",
+      "pass": true,
+      "expected": {
+        "records": 1,
+        "samples": 2
+      },
+      "actual": {
+        "n": 1,
+        "records": [
+          {
+            "hole": "ZK9-1",
+            "n": 2,
+            "soil": [
+              "ZK9-1-01",
+              "ZK9-1-02"
+            ],
+            "mode": "A"
+          }
+        ]
+      }
+    }
+  ]
+}

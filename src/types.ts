@@ -77,6 +77,14 @@ export interface SoilRecord {
   samples: SoilSample[];
   /** 自定义/额外试验项目名称列表（按记录独立，各记录互不串） */
   customTestItems: string[];
+  /**
+   * 剪切试验两列的显示名（默认 饱固快剪/自然快剪）。
+   * 导入送样单按子表头识别：如「固结快剪」「慢剪」等别名写法时记录原文；
+   * 勾选数据键 = 显示名（四种归一名之一），导出与 UI 全部跟随显示名。
+   */
+  shearLabels?: [string, string];
+  /** 固结列显示名（默认「固结」；送样单写「回弹压缩」等别名时记录原文，数据键恒为「固结」） */
+  consolidationLabel?: string;
   /** 创建时间（毫秒时间戳） */
   createdAt: number;
   /** 最后更新时间（毫秒时间戳） */
