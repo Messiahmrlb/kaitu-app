@@ -117,6 +117,8 @@ export default function BatchCheckDialog({
   const [newItemName, setNewItemName] = useState('');
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  /** 正在内联编辑土号的行 id；null 表示全部为展示态（不拦截手机横向滑动手势） */
+  const [editingSoilId, setEditingSoilId] = useState<string | null>(null);
 
   // 打开时从 props 重新初始化工作副本，并把缩放复位为 1（每次进入都从原始大小开始）
   useEffect(() => {
@@ -125,6 +127,7 @@ export default function BatchCheckDialog({
         samples.map((s) => ({ ...s, testItems: [...(s.testItems ?? [])] })),
       );
       setZoom(1);
+      setEditingSoilId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -270,7 +273,7 @@ export default function BatchCheckDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>批量勾选（土号 / 试验项目 / 扰动土）</DialogTitle>
+      <DialogTitle>批量勾选（土号/试验/扰动）</DialogTitle>
       <DialogContent dividers>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.7 }}>
           土号列可直接点击修改；逐列「全选」可快速应用到全部土样；勾选「扰动土」会自动联动「颗分」。
@@ -524,31 +527,68 @@ export default function BatchCheckDialog({
                       }}
                     >
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <TextField
-                          size="small"
-                          variant="standard"
-                          value={s.soilNumber}
-                          placeholder="(未填)"
-                          onChange={(e) => renameSoilNumber(s.id, e.target.value)}
-                          error={duplicateIds.has(s.id)}
-                          title="点击可直接修改土号"
-                          sx={{
-                            width: '100%',
-                            minWidth: 72,
-                            '& .MuiInput-root': {
+                        {editingSoilId === s.id ? (
+                          /* 编辑态：仅在点按后出现。常驻 input 会吃掉这一列的横向滑动，而它正是手指最常落下的冻结首列 */
+                          <TextField
+                            size="small"
+                            variant="standard"
+                            autoFocus
+                            value={s.soilNumber}
+                            placeholder="(未填)"
+                            onChange={(e) => renameSoilNumber(s.id, e.target.value)}
+                            onBlur={() => setEditingSoilId(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === 'Escape') setEditingSoilId(null);
+                            }}
+                            error={duplicateIds.has(s.id)}
+                            inputProps={{ 'aria-label': '土号', enterKeyHint: 'done' }}
+                            sx={{
+                              width: '100%',
+                              minWidth: 72,
+                              '& .MuiInput-root': {
+                                fontWeight: 600,
+                                fontSize: 14,
+                                '&:before': { borderBottomColor: 'rgba(0,0,0,0.35)' },
+                              },
+                            }}
+                          />
+                        ) : (
+                          /* 展示态：虚线底暗示可点，但不带 input，滑动可以正常传给表格 */
+                          <Box
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`修改土号 ${s.soilNumber || '未填'}`}
+                            title="点击可直接修改土号"
+                            onClick={() => setEditingSoilId(s.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setEditingSoilId(s.id);
+                              }
+                            }}
+                            sx={{
+                              minWidth: 72,
+                              minHeight: 32,
+                              display: 'flex',
+                              alignItems: 'center',
                               fontWeight: 600,
-                              fontSize: 13,
-                              '&:before': { borderBottomColor: 'divider' },
-                              '&:hover:before': { borderBottomColor: 'primary.light' },
-                            },
-                          }}
-                        />
-                        {duplicateIds.has(s.id) && (
-                          <Typography
-                            variant="caption"
-                            color="error.main"
-                            sx={{ fontSize: 11, lineHeight: 1.4 }}
+                              fontSize: 14,
+                              cursor: 'text',
+                              color: duplicateIds.has(s.id)
+                                ? 'error.main'
+                                : (s.soilNumber ?? '').trim()
+                                  ? 'text.primary'
+                                  : 'text.disabled',
+                              borderBottom: '1px dotted',
+                              borderColor: duplicateIds.has(s.id) ? 'error.light' : 'divider',
+                              '&:hover': { borderColor: 'primary.light' },
+                            }}
                           >
+                            {s.soilNumber || '(未填)'}
+                          </Box>
+                        )}
+                        {duplicateIds.has(s.id) && (
+                          <Typography variant="caption" color="error.main" sx={{ lineHeight: 1.4 }}>
                             土号重复
                           </Typography>
                         )}

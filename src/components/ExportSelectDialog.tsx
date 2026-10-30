@@ -209,7 +209,7 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
               }}
             >
               <TextField
-                label="统一开土日期（可选）"
+                label="开土日期"
                 type="date"
                 size="small"
                 fullWidth
@@ -217,7 +217,11 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
                 onChange={(e) => setDateOverride(e.target.value)}
                 disabled={exporting}
                 InputLabelProps={{ shrink: true }}
-                helperText="留空按各记录自身日期；填写后本次导出的页内与文件名日期都用它"
+                helperText={
+                  dateOverride.trim()
+                    ? `本次导出统一使用 ${dateOverride}，导出前请核对`
+                    : '未填日期：按各记录自身的开土日期导出'
+                }
               />
             </Box>
           </Box>

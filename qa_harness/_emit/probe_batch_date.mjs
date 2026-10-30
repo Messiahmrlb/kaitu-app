@@ -362,8 +362,9 @@ async function main() {
     `);
     check('导出 PDF 对话框打开', dlg2.includes('导出') && dlg2.includes('ZK1'));
     check('PDF 模式含「导出选项」分组框', dlg2.includes('导出选项'));
-    check('PDF 模式含「统一开土日期（可选）」字段', dlg2.includes('统一开土日期（可选）'));
-    check('字段 helperText 说明留空按各记录日期', dlg2.includes('留空'));
+    // UI 会话 2026-10-30：label 改「开土日期」，helperText 动态化（默认填当天 → 显示统一使用提示）
+    check('PDF 模式含「开土日期」字段', dlg2.includes('开土日期'));
+    check('helperText 动态提示统一使用当天', dlg2.includes(`本次导出统一使用 ${today}`));
     const expDateVal = await evalJs(
       `[...document.querySelectorAll('.MuiDialog-root input[type="date"]')].pop()?.value ?? ''`,
     );
@@ -408,15 +409,31 @@ async function main() {
         return dlgs[dlgs.length - 1]?.innerText ?? '';
       })()
     `);
-    check('批量勾选对话框打开（标题含土号）', dlg3.includes('土号 / 试验项目 / 扰动土'), dlg3.slice(0, 30));
-    // 土号输入框（standard 变体），原值 -1
-    const oldSn = await evalJs(
-      `[...document.querySelectorAll('.MuiDialog-root .MuiInput-root input')][0]?.value ?? 'no-input'`,
+    check('批量勾选对话框打开（新标题）', dlg3.includes('土号/试验/扰动'), dlg3.slice(0, 30));
+    // 新交互（UI 会话 2026-10-30）：展示态无 input（不拦截冻结首列横向滑动），点按后进入编辑态
+    const inputCount0 = await evalJs(
+      `[...document.querySelectorAll('.MuiDialog-root [aria-label="土号"]')].length`,
     );
-    check('矩阵土号输入框显示原值 -1', oldSn === '-1', String(oldSn));
+    check('展示态无 input（滑动不被拦截）', inputCount0 === 0, String(inputCount0));
+    const disp0 = await evalJs(
+      `[...document.querySelectorAll('.MuiDialog-root [aria-label^="修改土号"]')][0]?.textContent ?? ''`,
+    );
+    check('展示态土号显示原值 -1', disp0 === '-1', disp0);
     await evalJs(`
       (() => {
-        const input = [...document.querySelectorAll('.MuiDialog-root .MuiInput-root input')][0];
+        const box = [...document.querySelectorAll('.MuiDialog-root [aria-label^="修改土号"]')][0];
+        box?.click();
+        return 'ok';
+      })()
+    `);
+    await sleep(400);
+    const oldSn = await evalJs(
+      `[...document.querySelectorAll('.MuiDialog-root [aria-label="土号"]')][0]?.value ?? 'no-input'`,
+    );
+    check('编辑态输入框显示原值 -1', oldSn === '-1', String(oldSn));
+    await evalJs(`
+      (() => {
+        const input = [...document.querySelectorAll('.MuiDialog-root [aria-label="土号"]')][0];
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
         setter.call(input, 'ZK1-9');
         input.dispatchEvent(new Event('input', { bubbles: true }));

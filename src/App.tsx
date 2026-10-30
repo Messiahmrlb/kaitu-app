@@ -585,6 +585,8 @@ export default function App() {
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
               MenuListProps={{ dense: true }}
+              // 手机触控：菜单项实际命中高度提到 44px（视觉仍保持 dense 紧凑）
+              sx={{ '& .MuiMenuItem-root': { minHeight: 44 } }}
             >
               <MenuItem
                 onClick={() => {
@@ -728,7 +730,7 @@ export default function App() {
                 onClick={() => setBatchConfirm('all')}
                 sx={{ flexShrink: 0, minWidth: 0, px: 1, color: 'text.secondary', ml: 'auto' }}
               >
-                清空
+                清空全部
               </Button>
             </Box>
           </Box>
