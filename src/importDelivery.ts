@@ -585,10 +585,25 @@ function parseOneBlock(
   let headerJunkRows = 0;
   /** 深度列非数字的行（疑似土号写串行/列错位）：[行号, 列名, 原文] */
   const depthJunk: { row: number; colName: string; value: string }[] = [];
-  /** 未填土号但深度列有内容的行：暂用「孔号-深度」编号，避免丢样 */
+  /** 暂用「孔号-深度」编号的行，避免丢样 */
   const provisionalRows: number[] = [];
   let provisionalExample = '';
   const usedProvisional = new Set<string>();
+  /** 串行块内最近一次出现的孔号（土号列写孔号时记录，供下方漏号行沿用） */
+  let lastGroupHole = '';
+  /** 孔号样式：1~4 个拉丁字母开头 + 数字（ZK38 / zk9）；现场土号（原1/扰1/-1）不会命中 */
+  const HOLE_LIKE = /^[A-Za-z]{1,4}\d+/;
+  /** 按「孔号-至深度（缺至用自）」生成暂用编号，重复时追加 -2/-3 后缀 */
+  const makeProvisional = (hole: string, r: number, depthTo: string, depthFrom: string): string => {
+    const base = `${hole || '待编'}-${depthTo || depthFrom}`;
+    let pid = base;
+    let n = 2;
+    while (usedProvisional.has(pid)) pid = `${base}-${n++}`;
+    usedProvisional.add(pid);
+    if (!provisionalExample) provisionalExample = pid;
+    provisionalRows.push(r);
+    return pid;
+  };
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
@@ -598,16 +613,15 @@ function parseOneBlock(
     if (soilNumberRaw === '') {
       // 未填土号：若深度列也全空则为空白行/块间间隔，跳过；
       // 若深度列有内容则视为漏填土号的土样，暂用「孔号-至深度（缺至用自）」
-      // 编号避免丢样（用户 2026-10-30 确认），重复时追加 -2/-3 后缀
+      // 编号避免丢样（用户 2026-10-30 确认）；孔号优先沿用串行块内最近分组孔号
       if (!from && !to) continue;
-      const base = `${holeCode || '待编'}-${to || from}`;
-      let pid = base;
-      let n = 2;
-      while (usedProvisional.has(pid)) pid = `${base}-${n++}`;
-      usedProvisional.add(pid);
-      if (!provisionalExample) provisionalExample = pid;
-      provisionalRows.push(r);
-      soilNumberRaw = pid;
+      soilNumberRaw = makeProvisional(lastGroupHole || holeCode || '', r, to, from);
+    } else if (from && !isNumericDepth(from) && HOLE_LIKE.test(soilNumberRaw)) {
+      // 串行块：土号列写的是孔号（如 ZK38），真实土号跑到了「自」深度列。
+      // 该行按「孔号-至深度」暂编，并记下孔号供下方漏号行沿用
+      //（用户举例：276-278 行是 ZK38 的土 → ZK38-1.65 / ZK38-4.65 / ZK38-10.65）
+      lastGroupHole = soilNumberRaw;
+      soilNumberRaw = makeProvisional(lastGroupHole, r, to, from);
     }
     // 多行表头残留（如「表二」结果表的错位表头）：土号列出现结构标签而非真实土号，跳过该行
     if (soilNumberRaw === '土样编号' || soilNumberRaw === '野外定名') {
@@ -666,10 +680,10 @@ function parseOneBlock(
     }
   }
 
-  // 暂用编号提示（黄色 warning）：漏填土号的行已按深度暂编，提醒改回真实土号
+  // 暂用编号提示（黄色 warning）：漏填土号/土号列写了孔号的行已按深度暂编，提醒改回真实土号
   if (provisionalRows.length > 0) {
     warnings.push(
-      `工作表「${ws.name}」第 ${provisionalRows.join('、')} 行未填土样编号，已暂用「${provisionalExample}」格式的编号（孔号-至深度，缺至用自深度），请核对后改为实际土号。`,
+      `工作表「${ws.name}」第 ${provisionalRows.join('、')} 行土样编号缺失或疑似把孔号写在了土号列，已暂用「${provisionalExample}」格式的编号（孔号-至深度，缺至用自深度），请核对后改为实际土号。`,
     );
   }
 

@@ -523,6 +523,18 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
   const provisionalRows = [];
   let provisionalExample = "";
   const usedProvisional = /* @__PURE__ */ new Set();
+  let lastGroupHole = "";
+  const HOLE_LIKE = /^[A-Za-z]{1,4}\d+/;
+  const makeProvisional = (hole, r, depthTo, depthFrom) => {
+    const base = `${hole || "\u5F85\u7F16"}-${depthTo || depthFrom}`;
+    let pid = base;
+    let n = 2;
+    while (usedProvisional.has(pid)) pid = `${base}-${n++}`;
+    usedProvisional.add(pid);
+    if (!provisionalExample) provisionalExample = pid;
+    provisionalRows.push(r);
+    return pid;
+  };
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
@@ -531,14 +543,10 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
     let soilNumberRaw = soilNoCol >= 0 ? cellText(row.getCell(soilNoCol).value).trim() : "";
     if (soilNumberRaw === "") {
       if (!from && !to) continue;
-      const base = `${holeCode || "\u5F85\u7F16"}-${to || from}`;
-      let pid = base;
-      let n = 2;
-      while (usedProvisional.has(pid)) pid = `${base}-${n++}`;
-      usedProvisional.add(pid);
-      if (!provisionalExample) provisionalExample = pid;
-      provisionalRows.push(r);
-      soilNumberRaw = pid;
+      soilNumberRaw = makeProvisional(lastGroupHole || holeCode || "", r, to, from);
+    } else if (from && !isNumericDepth(from) && HOLE_LIKE.test(soilNumberRaw)) {
+      lastGroupHole = soilNumberRaw;
+      soilNumberRaw = makeProvisional(lastGroupHole, r, to, from);
     }
     if (soilNumberRaw === "\u571F\u6837\u7F16\u53F7" || soilNumberRaw === "\u91CE\u5916\u5B9A\u540D") {
       headerJunkRows += 1;
@@ -581,7 +589,7 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
   }
   if (provisionalRows.length > 0) {
     warnings.push(
-      `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${provisionalRows.join("\u3001")} \u884C\u672A\u586B\u571F\u6837\u7F16\u53F7\uFF0C\u5DF2\u6682\u7528\u300C${provisionalExample}\u300D\u683C\u5F0F\u7684\u7F16\u53F7\uFF08\u5B54\u53F7-\u81F3\u6DF1\u5EA6\uFF0C\u7F3A\u81F3\u7528\u81EA\u6DF1\u5EA6\uFF09\uFF0C\u8BF7\u6838\u5BF9\u540E\u6539\u4E3A\u5B9E\u9645\u571F\u53F7\u3002`
+      `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${provisionalRows.join("\u3001")} \u884C\u571F\u6837\u7F16\u53F7\u7F3A\u5931\u6216\u7591\u4F3C\u628A\u5B54\u53F7\u5199\u5728\u4E86\u571F\u53F7\u5217\uFF0C\u5DF2\u6682\u7528\u300C${provisionalExample}\u300D\u683C\u5F0F\u7684\u7F16\u53F7\uFF08\u5B54\u53F7-\u81F3\u6DF1\u5EA6\uFF0C\u7F3A\u81F3\u7528\u81EA\u6DF1\u5EA6\uFF09\uFF0C\u8BF7\u6838\u5BF9\u540E\u6539\u4E3A\u5B9E\u9645\u571F\u53F7\u3002`
     );
   }
   if (depthJunk.length > 0) {

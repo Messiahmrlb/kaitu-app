@@ -430,6 +430,67 @@ async function parseSheets(sheetDefs) {
     );
   }
 
+  // 场景 10：串行块（土号列写孔号）→ 按「各行孔号-至深度」暂编，组内孔号继承
+  // 复刻用户举例：276-278 行是 ZK38 的土 → ZK38-1.65 / ZK38-4.65 / ZK38-10.65
+  {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('串行组表');
+    ws.getCell('A1').value = '土工试验送样单';
+    ws.getCell('A2').value = '工程名称：串行组测试工程';
+    ws.getCell('A3').value = '孔号';
+    ws.getCell('B3').value = 'ZK38-ZK42';
+    ws.getCell('A4').value = '土样编号';
+    ws.getCell('B4').value = '野外定名';
+    ['土样编号', '自', '至', '野外 定名', '原状', '扰动', '饱和固结快剪'].forEach((h, i) => {
+      ws.getCell(String.fromCharCode('A'.charCodeAt(0) + i) + 5).value = h;
+    });
+    // ZK38 组：A=孔号、B=土号(扰N 串到自列)、C=自深度、D=至深度
+    ws.getCell('A6').value = 'ZK38';
+    ws.getCell('B6').value = '扰1';
+    ws.getCell('C6').value = '1.65';
+    ws.getCell('D6').value = '1.95';
+    ws.getCell('F6').value = '√';
+    ws.getCell('B7').value = '扰2';
+    ws.getCell('C7').value = '4.65';
+    ws.getCell('D7').value = '4.95';
+    ws.getCell('F7').value = '√';
+    ws.getCell('B8').value = '扰3';
+    ws.getCell('C8').value = '10.65';
+    ws.getCell('D8').value = '10.95';
+    ws.getCell('F8').value = '√';
+    // ZK39 组
+    ws.getCell('A10').value = 'ZK39';
+    ws.getCell('B10').value = '扰1';
+    ws.getCell('C10').value = '1.65';
+    ws.getCell('D10').value = '1.95';
+    ws.getCell('F10').value = '√';
+    ws.getCell('B11').value = '扰2';
+    ws.getCell('C11').value = '4.65';
+    ws.getCell('D11').value = '4.95';
+    ws.getCell('F11').value = '√';
+    ws.getCell('A12').value = '送样人：';
+    const buf = await wb.xlsx.writeBuffer();
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const res = await parseDeliveryFile(ab);
+    check('识别 1 条记录', res.records.length === 1, JSON.stringify(res.warnings));
+    const samples = res.records[0].record.samples;
+    eq(
+      '按「各行孔号-至深度」暂编（组内继承）',
+      samples.map((s) => s.soilNumber),
+      ['ZK38-1.65', 'ZK38-4.65', 'ZK38-10.65', 'ZK39-1.65', 'ZK39-4.65'],
+    );
+    check(
+      '仍报深度列串行来源错误',
+      res.errors.some((e) => e.includes('「自」列出现「扰1」') && e.includes('写串行')),
+      res.errors.join(' | '),
+    );
+    check(
+      '黄色提示包含暂编行与两种成因',
+      res.records[0].warnings.some((w) => w.includes('第 6、7、8、10、11 行') && w.includes('孔号写在') && w.includes('改为实际土号')),
+      res.records[0].warnings.join(' | '),
+    );
+  }
+
   console.log(`\n通过 ${pass} 项，失败 ${fail} 项`);
   process.exit(fail > 0 ? 1 : 0);
 })();
