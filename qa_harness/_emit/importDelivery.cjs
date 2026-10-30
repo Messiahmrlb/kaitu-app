@@ -512,11 +512,16 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
   }
   if (!projectName) warnings.push("\u672A\u5728\u5DE5\u4F5C\u8868\u4E2D\u627E\u5230\u201C\u5DE5\u7A0B\u540D\u79F0\u201D\u3002");
   const samples = [];
+  let headerJunkRows = 0;
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
     const soilNumberRaw = soilNoCol >= 0 ? cellText(row.getCell(soilNoCol).value).trim() : "";
     if (soilNumberRaw === "") continue;
+    if (soilNumberRaw === "\u571F\u6837\u7F16\u53F7" || soilNumberRaw === "\u91CE\u5916\u5B9A\u540D") {
+      headerJunkRows += 1;
+      continue;
+    }
     if (FOOTER_KEYWORDS.some((k) => soilNumberRaw.includes(k))) break;
     idx += 1;
     const s = newSample(idx, soilNumberRaw);
@@ -598,7 +603,8 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
     sampleCount: samples.length,
     holeCode,
     warnings,
-    errors
+    errors,
+    headerJunkRows
   };
 }
 async function parseDeliveryFile(buffer) {
@@ -612,9 +618,25 @@ async function parseDeliveryFile(buffer) {
     mergedNotes: []
   };
   let lastHoleCode = "";
+  const hasSoilNumberMarker = (ws) => {
+    for (let r = 1; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      for (let c = 1; c <= row.cellCount; c++) {
+        if (normalizeHeader(row.getCell(c).value) === "\u571F\u6837\u7F16\u53F7") return true;
+      }
+    }
+    return false;
+  };
   for (const ws of wb.worksheets) {
     const hrs = findHeaderRows(ws);
-    if (hrs.length === 0) continue;
+    if (hrs.length === 0) {
+      if (hasSoilNumberMarker(ws)) {
+        result.warnings.push(
+          `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u4E0D\u662F\u6807\u51C6\u9001\u6837\u5355\uFF08\u8868\u4E00\uFF09\u683C\u5F0F\uFF0C\u5DF2\u8DF3\u8FC7\u5BFC\u5165\u3002`
+        );
+      }
+      continue;
+    }
     for (let i = 0; i < hrs.length; i++) {
       const hr = hrs[i];
       const sub = hr + 1;
@@ -632,7 +654,7 @@ async function parseDeliveryFile(buffer) {
         if (parsed.holeCode) lastHoleCode = parsed.holeCode;
         if (parsed.sampleCount === 0) {
           result.warnings.push(
-            `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u7684\u9001\u6837\u5355\u5757\u672A\u8BC6\u522B\u5230\u571F\u6837\u6570\u636E\uFF0C\u5DF2\u8DF3\u8FC7\u3002`
+            parsed.headerJunkRows ? `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u7684\u5757\u672A\u8BC6\u522B\u5230\u571F\u6837\u6570\u636E\uFF0C\u8868\u5934\u7591\u4F3C\u4E3A\u300C\u8868\u4E8C\u300D\u7ED3\u679C\u8868/\u591A\u884C\u8868\u5934\uFF0C\u5DF2\u8DF3\u8FC7\u5BFC\u5165\u3002` : `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u7684\u9001\u6837\u5355\u5757\u672A\u8BC6\u522B\u5230\u571F\u6837\u6570\u636E\uFF0C\u5DF2\u8DF3\u8FC7\u3002`
           );
           continue;
         }

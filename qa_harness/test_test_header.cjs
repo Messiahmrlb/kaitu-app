@@ -232,6 +232,68 @@ async function parseSheets(sheetDefs) {
     eq('shearLabels 正常', rec.record.shearLabels, ['固结快剪', '慢剪']);
   }
 
+  // 场景 5：「表二」结果表（多行错位表头、无数据）整体跳过，不产生垃圾记录
+  // 复刻真实文件：伪表头行(土样编号+…+原状+试验标签) 后跟重复表头行与空行、表尾
+  {
+    const wb = new ExcelJS.Workbook();
+    // 正常表一
+    const ws1 = wb.addWorksheet('表一');
+    addBlock(ws1, 1, { hole: 'ZK5', subHeaders: ALIAS_SUB_HEADERS, soilRows: [[7]] });
+    // 表二样式：r7 伪HR(土样编号…试验项目组标签)、r8-r9 重复子表头（含 土样编号/自/至/原状/扰动+试验标签）、空数据区、表尾
+    const ws2 = wb.addWorksheet('表2');
+    ws2.getCell('A5').value = '工程名称：';
+    ws2.getCell('A6').value = '孔号';
+    ws2.getCell('A7').value = '土样编号';
+    ws2.getCell('B7').value = '取土深度（m）';
+    ws2.getCell('D7').value = '野外 定名';
+    ws2.getCell('E7').value = '状态';
+    ws2.getCell('G7').value = '试验项目';
+    const junkSub = ['土样编号', '自', '至', '野外 定名', '原状', '扰动', '天然含水率', '湿密度', '液塑限', '颗分', '饱和固结快剪', '自然快剪'];
+    [8, 9].forEach((r) => {
+      junkSub.forEach((h, i) => {
+        ws2.getCell(String.fromCharCode('A'.charCodeAt(0) + i) + r).value = h;
+      });
+    });
+    ws2.getCell('A39').value = '送样人：';
+    const buf = await wb.xlsx.writeBuffer();
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const res = await parseDeliveryFile(ab);
+    check('只导入表一的 1 条记录', res.records.length === 1 && res.records[0].holeCode === 'ZK5', `n=${res.records.length}`);
+    check('表二被跳过并给出提示', res.warnings.some((w) => w.includes('表2') && w.includes('已跳过')), res.warnings.join(' | '));
+    check('无垃圾土号（无「土样编号」样本）', res.records.every((r) => r.record.samples.every((s) => s.soilNumber !== '土样编号')));
+  }
+
+  // 场景 6：表二里有真实数据行（非空结果表）→ 仍按现有块解析导入，
+  // 但「土样编号」表头残留行绝不成为样本（守卫不误伤）
+  {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('表2有数据');
+    ws.getCell('A5').value = '工程名称：';
+    ws.getCell('A6').value = '孔号';
+    ws.getCell('B6').value = 'ZK6';
+    ws.getCell('A7').value = '土样编号';
+    const junkSub = ['土样编号', '自', '至', '野外 定名', '原状', '扰动', '天然含水率', '液塑限', '颗分', '饱和固结快剪'];
+    [8, 9].forEach((r) => {
+      junkSub.forEach((h, i) => {
+        ws.getCell(String.fromCharCode('A'.charCodeAt(0) + i) + r).value = h;
+      });
+    });
+    // 数据行：土号 + 勾选（饱和固结快剪=索引10→J列）
+    ws.getCell('A10').value = '原1';
+    ws.getCell('B10').value = '1.3';
+    ws.getCell('C10').value = '1.5';
+    ws.getCell('D10').value = '粉质黏土';
+    ws.getCell('E10').value = '√';
+    ws.getCell('J10').value = '√';
+    ws.getCell('A11').value = '送样人：';
+    const buf = await wb.xlsx.writeBuffer();
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const res = await parseDeliveryFile(ab);
+    check('表二数据行正常导入为 1 条记录', res.records.length === 1 && res.records[0].record.samples.length === 1, JSON.stringify(res.warnings));
+    eq('土号保真', res.records[0].record.samples[0].soilNumber, '原1');
+    check('勾选归一到饱固快剪', res.records[0].record.samples[0].testItems.includes('饱固快剪'));
+  }
+
   console.log(`\n通过 ${pass} 项，失败 ${fail} 项`);
   process.exit(fail > 0 ? 1 : 0);
 })();

@@ -36,6 +36,8 @@ export interface ImportedRecord {
   errors?: string[];
   /** 同孔合并了几份送样单（未合并为 1） */
   mergedFrom?: number;
+  /** 该块内被当作表头残留跳过的行数（「土样编号」出现在土号列，如表二结果表的多行表头） */
+  headerJunkRows?: number;
 }
 
 /** 整份文件解析结果 */
@@ -429,7 +431,9 @@ function isHeaderRow(ws: ExcelJS.Worksheet, r: number): boolean {
   for (let c = 1; c <= sub.cellCount; c++) {
     const n = normalizeHeader(sub.getCell(c).value);
     if (n === '原状') hasYuan = true;
-    // 已知标签，或剪试验/固结别名（固结快剪、慢剪、回弹压缩、固结系数等）都算试验子表头
+    // 已知标签，或剪试验/固结别名（固结快剪、慢剪、回弹压缩、固结系数等）都算试验子表头。
+    // 注意不能用「子表头行含土样编号」排除「表二」类工作表：
+    // 标准表一的「土样编号」是纵向合并单元格，子表头行同样会显示它。
     if (
       TEST_LABEL_MAP.some((m) => m.label === n) ||
       classifyShearLabel(n) !== null ||
@@ -564,11 +568,17 @@ function parseOneBlock(
 
   // 逐行解析土样（土样编号非空即视为数据行；遇表尾标记则结束本块）
   const samples: SoilSample[] = [];
+  let headerJunkRows = 0;
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
     const soilNumberRaw = soilNoCol >= 0 ? cellText(row.getCell(soilNoCol).value).trim() : '';
     if (soilNumberRaw === '') continue; // 非数据行（空白行 / 块间间隔）
+    // 多行表头残留（如「表二」结果表的错位表头）：土号列出现结构标签而非真实土号，跳过该行
+    if (soilNumberRaw === '土样编号' || soilNumberRaw === '野外定名') {
+      headerJunkRows += 1;
+      continue;
+    }
     if (FOOTER_KEYWORDS.some((k) => soilNumberRaw.includes(k))) break; // 表尾，结束本块
 
     idx += 1;
@@ -675,6 +685,7 @@ function parseOneBlock(
     holeCode,
     warnings,
     errors,
+    headerJunkRows,
   };
 }
 
@@ -701,9 +712,29 @@ export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryPa
   // 用户原话是「他没写孔号就沿用」，因此沿用是默认行为，不区分工作表。
   let lastHoleCode = '';
 
+  /** 工作表中是否出现「土样编号」字样（疑似送样单但格式不标准的标记） */
+  const hasSoilNumberMarker = (ws: ExcelJS.Worksheet): boolean => {
+    for (let r = 1; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      for (let c = 1; c <= row.cellCount; c++) {
+        if (normalizeHeader(row.getCell(c).value) === '土样编号') return true;
+      }
+    }
+    return false;
+  };
+
   for (const ws of wb.worksheets) {
     const hrs = findHeaderRows(ws);
-    if (hrs.length === 0) continue; // 非送样单工作表（如计算表），跳过
+    if (hrs.length === 0) {
+      // 表内含「土样编号」却构不成标准送样单块：多为「表二」结果表或多行错位表头，
+      // 明确提示已跳过；完全无关的工作表（无土样编号）保持静默，避免噪音
+      if (hasSoilNumberMarker(ws)) {
+        result.warnings.push(
+          `工作表「${ws.name}」不是标准送样单（表一）格式，已跳过导入。`,
+        );
+      }
+      continue;
+    }
 
     for (let i = 0; i < hrs.length; i++) {
       const hr = hrs[i];
@@ -723,7 +754,9 @@ export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryPa
         if (parsed.holeCode) lastHoleCode = parsed.holeCode;
         if (parsed.sampleCount === 0) {
           result.warnings.push(
-            `工作表「${ws.name}」第 ${hr} 行的送样单块未识别到土样数据，已跳过。`,
+            parsed.headerJunkRows
+              ? `工作表「${ws.name}」第 ${hr} 行的块未识别到土样数据，表头疑似为「表二」结果表/多行表头，已跳过导入。`
+              : `工作表「${ws.name}」第 ${hr} 行的送样单块未识别到土样数据，已跳过。`,
           );
           continue;
         }
