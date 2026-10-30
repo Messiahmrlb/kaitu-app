@@ -61,6 +61,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import InboxIcon from '@mui/icons-material/Inbox';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import SettingsIcon from '@mui/icons-material/Settings';
+import CloseIcon from '@mui/icons-material/Close';
 import Checkbox from '@mui/material/Checkbox';
 import { SoilRecord, SoilSample, RecordMode, EngineeringInfo } from './types';
 import { MODE_LABELS, siltySandSymbol, recordTestColumns } from './constants';
@@ -103,6 +104,12 @@ export default function App() {
   const [records, setRecords] = useState<SoilRecord[]>([]);
   const [view, setView] = useState<View>('list');
   const [editing, setEditing] = useState<SoilRecord | null>(null);
+
+  /**
+   * 试验项目「存储值 → 显示名」映射：记录可自定义固结/剪切列的名称，
+   * 卡片等处展示时用显示名，避免与勾选界面里的列名对不上。
+   */
+  const testLabelMap = new Map(recordTestColumns(editing).map((c) => [c.key, c.label]));
 
   // 新建记录时的格式选择对话框
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
@@ -612,44 +619,68 @@ export default function App() {
               bgcolor: (t) => alpha(t.palette.primary.main, 0.08),
               borderBottom: (t) => `1px solid ${alpha(t.palette.primary.main, 0.22)}`,
               px: 2,
-              py: 1,
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 1,
+              py: 0.75,
             }}
           >
-            <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 64 }}>
-              已选 {selected.length} 项
-            </Typography>
-            <Button size="small" onClick={() => setSelected(records.map((r) => r.id))}>
-              全选
-            </Button>
-            <Button
-              size="small"
-              disabled={selected.length === 0}
-              onClick={() => {
-                setBatchDate('');
-                setBatchDateOpen(true);
-              }}
-            >
-              改日期
-            </Button>
-            <Button
-              size="small"
-              color="error"
-              variant="contained"
-              disabled={selected.length === 0}
-              onClick={() => setBatchConfirm('selected')}
-            >
-              删除选中
-            </Button>
-            <Button size="small" onClick={() => setBatchConfirm('all')}>
-              清空全部
-            </Button>
-            <Button size="small" onClick={() => { setSelectMode(false); setSelected([]); }}>
-              取消
-            </Button>
+            {/* 第一行：选中状态 + 全选 + 退出。手机窄屏下固定单行，不参与换行 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography
+                variant="body2"
+                sx={{ flexGrow: 1, minWidth: 0, fontWeight: 600, color: 'primary.dark' }}
+              >
+                已选 {selected.length} 项
+              </Typography>
+              <Button
+                size="small"
+                onClick={() => setSelected(records.map((r) => r.id))}
+                sx={{ minWidth: 0, px: 1 }}
+              >
+                全选
+              </Button>
+              <IconButton
+                size="small"
+                aria-label="退出批量操作"
+                onClick={() => {
+                  setSelectMode(false);
+                  setSelected([]);
+                }}
+                sx={{ color: 'text.secondary' }}
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+            {/* 第二行：批量操作。三个按钮在 375px 宽度下合计约 262px，单行容纳；清空全部靠右隔离 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={selected.length === 0}
+                onClick={() => {
+                  setBatchDate('');
+                  setBatchDateOpen(true);
+                }}
+                sx={{ flexShrink: 0 }}
+              >
+                改日期
+              </Button>
+              <Button
+                size="small"
+                color="error"
+                variant="contained"
+                disabled={selected.length === 0}
+                onClick={() => setBatchConfirm('selected')}
+                sx={{ flexShrink: 0 }}
+              >
+                删除选中
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setBatchConfirm('all')}
+                sx={{ flexShrink: 0, color: 'text.secondary', ml: 'auto' }}
+              >
+                清空全部
+              </Button>
+            </Box>
           </Box>
         )}
 
@@ -962,9 +993,9 @@ export default function App() {
             const isDisturb = s.disturbance === '扰动';
             // 扰动土 + 固结/渗透/剪切/三轴 等不兼容试验项：在卡片上显著提示
             const conflictedTests = disturbedTestConflicts(s);
-            // 剪切 / 渗透互斥冲突：①渗透与快剪同时勾选 ②饱固快剪与自然快剪同时勾选
+            // 剪切 / 渗透互斥冲突：①渗透与剪切同时勾选 ②饱固快剪与自然快剪同时勾选
             const shearPermConflicts: string[] = [];
-            if (isPermQuickConflict(s)) shearPermConflicts.push('渗透与快剪同时勾选');
+            if (isPermQuickConflict(s)) shearPermConflicts.push('渗透与剪切同时勾选');
             if (isQuickShearBothConflict(s)) shearPermConflicts.push('饱固快剪与自然快剪同时勾选');
             return (
               <Card
@@ -1062,13 +1093,14 @@ export default function App() {
                         试验项目冲突：{shearPermConflicts.join('；')}
                       </Typography>
                       <Typography variant="caption" display="block">
-                        渗透与快剪、两种快剪一般不同时做，点此修改
+                        渗透与剪切、两种剪切一般不同时做，点此修改
                       </Typography>
                     </Alert>
                   )}
 
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    土类：{s.soilType.join('、') || '—'} ｜ 实验：{s.testItems.join('、') || '—'}
+                    土类：{s.soilType.join('、') || '—'} ｜ 实验：
+                    {s.testItems.map((t) => testLabelMap.get(t) ?? t).join('、') || '—'}
                     {s.otherTestItems.length > 0 && (
                       <Box component="span" sx={{ color: 'secondary.main', fontWeight: 600 }}>
                         {' ｜ 其他：' + s.otherTestItems.join('、')}
@@ -1282,9 +1314,17 @@ export default function App() {
       >
         <DialogTitle>批量修改开土日期</DialogTitle>
         <DialogContent>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            sx={{ mb: 1.5, lineHeight: 1.7 }}
+          >
+            将把已选 {selected.length} 份记录的开土日期统一改为该日期，并立即写入本机记录；
+            之后导出 PDF 都使用它。
+          </Typography>
           <TextField
             autoFocus
-            margin="dense"
             label="开土日期"
             type="date"
             fullWidth
@@ -1292,7 +1332,7 @@ export default function App() {
             onChange={(e) => setBatchDate(e.target.value)}
             disabled={selected.length === 0}
             InputLabelProps={{ shrink: true }}
-            helperText={`将把选中的 ${selected.length} 份记录的开土日期统一改为该日期（写入记录，之后的导出都用它）`}
+            helperText="应用后写入选中的记录，之后仍可在单份记录里修改"
           />
         </DialogContent>
         <DialogActions>

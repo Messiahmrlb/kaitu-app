@@ -51,6 +51,21 @@ const STICKY_HEAD = {
   backgroundColor: 'background.default',
 };
 
+/**
+ * 表头列名：固定两行高度并居中。
+ * 记录级别名可能比默认列名长（如「固结」被改成更长的自定义名），窄屏会在列内换行；
+ * 若不定高，换行列的「全选」勾选框会比其它列低半行，整排表头看起来错位。
+ */
+const HEAD_LABEL_SX = {
+  lineHeight: 1.35,
+  minHeight: 34,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  textAlign: 'center',
+  wordBreak: 'break-word',
+} as const;
+
 /** 矩阵缩放范围：MIN_SCALE = 缩小下限（一屏内看更多列），1 = 原始大小，MAX_SCALE = 放大上限（字更大好点按）。
  *  按钮调节夹紧在此区间；手机屏小，主要用 <1 的缩放把整张矩阵塞进一屏。 */
 const MIN_SCALE = 0.5;
@@ -342,7 +357,11 @@ export default function BatchCheckDialog({
             <TableHead>
               <TableRow>
                 <TableCell sx={{ ...STICKY_HEAD, minWidth: 90 }}>
-                  <Typography variant="caption" fontWeight={700}>
+                  <Typography
+                    variant="caption"
+                    fontWeight={700}
+                    sx={{ ...HEAD_LABEL_SX, justifyContent: 'flex-start' }}
+                  >
                     土号
                   </Typography>
                 </TableCell>
@@ -355,7 +374,7 @@ export default function BatchCheckDialog({
                       gap: 0,
                     }}
                   >
-                    <Typography variant="caption" fontWeight={700}>
+                    <Typography variant="caption" fontWeight={700} sx={HEAD_LABEL_SX}>
                       扰动土
                     </Typography>
                     <Checkbox
@@ -375,7 +394,7 @@ export default function BatchCheckDialog({
                         gap: 0,
                       }}
                     >
-                      <Typography variant="caption" fontWeight={700}>
+                      <Typography variant="caption" fontWeight={700} sx={HEAD_LABEL_SX}>
                         {col.label}
                       </Typography>
                       <Checkbox
@@ -404,16 +423,18 @@ export default function BatchCheckDialog({
                         sx={{
                           display: 'flex',
                           alignItems: 'center',
+                          justifyContent: 'center',
                           gap: 0.25,
                           maxWidth: 160,
+                          minHeight: 34,
                         }}
                       >
                         <Typography
                           variant="caption"
                           fontWeight={700}
                           color="secondary.main"
-                          noWrap
                           title={item}
+                          sx={{ lineHeight: 1.35, wordBreak: 'break-word' }}
                         >
                           {item}
                         </Typography>

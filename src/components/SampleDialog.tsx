@@ -465,7 +465,7 @@ export default function SampleDialog({
 
           {shearBothConflict && (
             <Alert severity="warning" sx={{ mt: 2 }}>
-              已同时勾选「饱固快剪」与「自然快剪」：两种快剪一般不同时做，请取消其中一项。
+              已同时勾选「饱固快剪」与「自然快剪」：两种剪切一般不同时做，请取消其中一项。
             </Alert>
           )}
         </Stack>

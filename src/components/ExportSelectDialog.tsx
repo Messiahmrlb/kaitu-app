@@ -188,17 +188,35 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
 
         {mode === 'pdf' && totalCount > 0 && (
           <Box sx={{ mt: 1.5 }}>
-            <TextField
-              label="开土日期（可选）"
-              type="date"
-              size="small"
-              fullWidth
-              value={dateOverride}
-              onChange={(e) => setDateOverride(e.target.value)}
-              disabled={exporting}
-              InputLabelProps={{ shrink: true }}
-              helperText="留空按各记录自身日期；填写后本次导出的 PDF 页内日期与文件名日期统一使用该日期（不改动记录）"
-            />
+            <Typography
+              variant="caption"
+              display="block"
+              sx={{ fontWeight: 700, color: 'text.secondary', mb: 0.75 }}
+            >
+              导出选项
+            </Typography>
+            <Box
+              sx={{
+                px: 1.25,
+                pt: 1,
+                pb: 0.5,
+                borderRadius: RADIUS.tile,
+                bgcolor: 'background.default',
+                border: (t) => `1px solid ${t.palette.divider}`,
+              }}
+            >
+              <TextField
+                label="统一开土日期（可选）"
+                type="date"
+                size="small"
+                fullWidth
+                value={dateOverride}
+                onChange={(e) => setDateOverride(e.target.value)}
+                disabled={exporting}
+                InputLabelProps={{ shrink: true }}
+                helperText="留空按各记录自身日期；填写后本次导出的页内与文件名日期都用它"
+              />
+            </Box>
           </Box>
         )}
 

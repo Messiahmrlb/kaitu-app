@@ -17,8 +17,10 @@ export default defineConfig({
         description: '土工试验土样开土记录采集与导出',
         lang: 'zh-CN',
         orientation: 'portrait',
-        theme_color: '#5d4037',
-        background_color: '#ffffff',
+        // 手机端装到主屏后，这两项决定启动画面与状态栏配色：
+        // 对齐 theme.ts 的品牌青绿 + 页面底色，避免启动瞬间闪白、状态栏串色
+        theme_color: '#0F766E',
+        background_color: '#F1F5F4',
         display: 'standalone',
         // 相对路径：部署到 GitHub Pages 子路径(/<仓库名>/)或用户页(/)都能正确解析，
         // 真正的 base 由 CI 在 build 时通过 --base 注入（见 .github/workflows/deploy.yml）

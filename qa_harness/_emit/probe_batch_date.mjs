@@ -63,7 +63,7 @@ async function fetchJson(url, retries = 60) {
   throw new Error(`无法连接 ${url}`);
 }
 
-const mkRecord = (id, hole, openDate) => ({
+const mkRecord = (id, hole, openDate, withAlias) => ({
   id,
   name: `批量日期工程 ${hole}`,
   mode: 'A',
@@ -81,7 +81,8 @@ const mkRecord = (id, hole, openDate) => ({
       inclusions: [],
       soilState: [],
       soilStateNote: '',
-      testItems: ['固结'],
+      // 数据契约：testItems 存 recordTestColumns 的列 key（勾选矩阵 includes(col.key) 直读）
+      testItems: withAlias ? ['固结', '饱固快剪'] : ['固结'],
       il: '',
       ip: '',
       disturbance: '原状',
@@ -90,6 +91,9 @@ const mkRecord = (id, hole, openDate) => ({
     },
   ],
   customTestItems: [],
+  // 契约：shearLabels 存 kind 级名（与 testItems 中剪切值同源）；固结列 key 固定「固结」，
+  // consolidationLabel 为显示名 —— testLabelMap 真正生效的场景是固结列别名
+  ...(withAlias ? { shearLabels: ['饱固快剪', '慢剪'], consolidationLabel: '回弹压缩' } : {}),
   createdAt: 1,
   updatedAt: 1,
 });
@@ -137,8 +141,11 @@ async function main() {
     await cdp.send('Page.navigate', { url: APP_URL });
     await sleep(2500);
 
-    // 种子 2 条不同 openDate 的记录并刷新
-    const records = [mkRecord('bd-1', 'ZK1', '2026-10-01'), mkRecord('bd-2', 'ZK2', '2026-10-02')];
+    // 种子 2 条不同 openDate 的记录（bd-1 带固结列别名「回弹压缩」）并刷新
+    const records = [
+      mkRecord('bd-1', 'ZK1', '2026-10-01', true),
+      mkRecord('bd-2', 'ZK2', '2026-10-02', false),
+    ];
     const seed = `localStorage.setItem('CapacitorStorage.kaitu_records_v1', ${JSON.stringify(JSON.stringify(records))}); 'seeded'`;
     await cdp.send('Runtime.evaluate', { expression: seed });
     await cdp.send('Page.navigate', { url: APP_URL });
@@ -161,6 +168,10 @@ async function main() {
       })()
     `);
     await sleep(800);
+
+    // 新工具条：第一行「已选 + 全选 + X(退出批量操作)」，第二行「改日期/删除选中/清空全部」
+    const exitBtn = await evalJs(`!!document.querySelector('button[aria-label="退出批量操作"]')`);
+    check('工具条含「退出批量操作」X 按钮（aria-label）', exitBtn);
 
     // 320/360/390/430 宽度下工具条无横向溢出、按钮不出屏
     const WIDTHS = [320, 360, 390, 430];
@@ -224,6 +235,7 @@ async function main() {
     `);
     check('批量改日期对话框打开', dlg1.includes('批量修改开土日期'), dlg1.slice(0, 30));
     check('对话框提示选中 2 份', dlg1.includes('2'));
+    check('对话框新说明「并立即写入本机记录」', dlg1.includes('并立即写入本机记录'));
 
     // React 受控 input：原生 setter 赋值
     await evalJs(`
@@ -277,8 +289,33 @@ async function main() {
       })()
     `);
     check('导出 PDF 对话框打开', dlg2.includes('导出') && dlg2.includes('ZK1'));
-    check('PDF 模式含「开土日期（可选）」字段', dlg2.includes('开土日期（可选）'));
+    check('PDF 模式含「导出选项」分组框', dlg2.includes('导出选项'));
+    check('PDF 模式含「统一开土日期（可选）」字段', dlg2.includes('统一开土日期（可选）'));
     check('字段 helperText 说明留空按各记录日期', dlg2.includes('留空'));
+
+    // 编辑页土样卡片：别名显示（testLabelMap，key「饱固快剪」→ 显示「饱和固结快剪」）
+    await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        const btn = [...dlgs[dlgs.length-1].querySelectorAll('button')].find((b) => b.textContent.trim() === '取消');
+        btn?.click();
+        return 'closed';
+      })()
+    `);
+    await sleep(600);
+    await evalJs(`
+      (() => {
+        const card = [...document.querySelectorAll('.MuiPaper-outlined')].filter((e) => e.textContent.includes('ZK1')).pop();
+        (card ?? null)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        return 'clicked';
+      })()
+    `);
+    await sleep(1200);
+    const bodyEdit = await evalJs('document.body.innerText');
+    check('编辑页打开（土样列表）', bodyEdit.includes('土样列表'));
+    // 固结列 key「固结」→ 显示名「回弹压缩」（testLabelMap 的真实生效场景）
+    check('编辑页土样卡片实验名显示「回弹压缩」', bodyEdit.includes('回弹压缩'));
+    check('编辑页土样卡片不再裸显归一键「固结」', !bodyEdit.includes('实验：固结'));
 
     await cdp.send('Page.captureScreenshot', {}).then(async (r) => {
       await writeFile(path.join(OUT_DIR, 'batch_date_export_dialog.png'), Buffer.from(r.data, 'base64'));
