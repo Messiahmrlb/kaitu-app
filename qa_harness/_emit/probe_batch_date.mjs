@@ -337,6 +337,91 @@ async function main() {
     const bodyCode = await evalJs('document.body.innerText');
     check('snack 提示「已把 2 份记录的工程编号改为 26T999」', bodyCode.includes('已把 2 份记录的工程编号改为 26T999'));
 
+    // ②c 批量改日期允许留空 → 清空 openDate（2026-10-30 用户：允许存空白日期，可能手写后补）
+    await evalJs(`
+      (() => {
+        const b = [...document.querySelectorAll('button')].find((x) => x.textContent.replace(/\\s/g,'') === '批量操作');
+        b?.click();
+        return 'ok';
+      })()
+    `);
+    await sleep(800);
+    await evalJs(`[...document.querySelectorAll('button')].find((x) => x.textContent.trim() === '全选')?.click()`);
+    await sleep(400);
+    await evalJs(`[...document.querySelectorAll('button')].find((x) => x.textContent.trim() === '改日期')?.click()`);
+    await sleep(800);
+    // 应用按钮在日期有值时可点
+    const applyEnabled1 = await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        const b = [...dlgs[dlgs.length - 1].querySelectorAll('button')].find((x) => x.textContent.trim() === '应用');
+        return b ? String(!b.disabled) : 'no-btn';
+      })()
+    `);
+    check('留空测试：有值时应用按钮可点', applyEnabled1 === 'true', applyEnabled1);
+    // 清空日期输入
+    await evalJs(`
+      (() => {
+        const input = [...document.querySelectorAll('.MuiDialog-root input[type="date"]')].pop();
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return input?.value ?? 'no-input';
+      })()
+    `);
+    await sleep(300);
+    // 留空后应用按钮仍可点（本次改动核心断言）
+    const applyEnabled2 = await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        const b = [...dlgs[dlgs.length - 1].querySelectorAll('button')].find((x) => x.textContent.trim() === '应用');
+        return b ? String(!b.disabled) : 'no-btn';
+      })()
+    `);
+    check('留空时应用按钮仍可点（允许空白日期）', applyEnabled2 === 'true', applyEnabled2);
+    check('留空对话框提示「清空这些记录的开土日期」', (await evalJs(`[...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0).pop()?.innerText ?? ''`)).includes('清空这些记录的开土日期'));
+    await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        const b = [...dlgs[dlgs.length - 1].querySelectorAll('button')].find((x) => x.textContent.trim() === '应用');
+        b?.click();
+        return 'applied';
+      })()
+    `);
+    await sleep(1500);
+    const storedEmpty = await evalJs(`JSON.parse(localStorage.getItem('CapacitorStorage.kaitu_records_v1') || '[]').map((r) => r.engineering.openDate)`);
+    check('留空应用后存储 openDate 均为空串', Array.isArray(storedEmpty) && storedEmpty.length === 2 && storedEmpty.every((d) => d === ''), JSON.stringify(storedEmpty));
+    const bodyEmpty = await evalJs('document.body.innerText');
+    check('snack 提示「已清空 2 份记录的开土日期」', bodyEmpty.includes('已清空 2 份记录的开土日期'));
+    // 恢复日期为 2026-10-15（保持后续状态可预测）
+    await evalJs(`[...document.querySelectorAll('button')].find((x) => x.textContent.replace(/\\s/g,'') === '批量操作')?.click()`);
+    await sleep(800);
+    await evalJs(`[...document.querySelectorAll('button')].find((x) => x.textContent.trim() === '全选')?.click()`);
+    await sleep(400);
+    await evalJs(`[...document.querySelectorAll('button')].find((x) => x.textContent.trim() === '改日期')?.click()`);
+    await sleep(800);
+    await evalJs(`
+      (() => {
+        const input = [...document.querySelectorAll('.MuiDialog-root input[type="date"]')].pop();
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, '2026-10-15');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return 'ok';
+      })()
+    `);
+    await sleep(300);
+    await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        const b = [...dlgs[dlgs.length - 1].querySelectorAll('button')].find((x) => x.textContent.trim() === '应用');
+        b?.click();
+        return 'restored';
+      })()
+    `);
+    await sleep(1500);
+
     // ③ 导出对话框日期覆盖字段
     await evalJs(`
       (() => {

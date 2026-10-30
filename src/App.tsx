@@ -455,7 +455,7 @@ export default function App() {
         exportMode === 'pdf'
           ? await exportRecordsPdf(selected, cmaHeader, openDateOverride)
           : exportMode === 'docx'
-            ? await exportRecordsDocx(selected, openDateOverride)
+            ? await exportRecordsDocx(selected, openDateOverride, cmaHeader)
             : await exportRecordsXlsx(selected);
       setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
     } catch (e: any) {
@@ -476,10 +476,11 @@ export default function App() {
     setSelectMode(false);
   };
 
-  /** 批量把选中记录的开土日期统一改为 batchDate（写入存储，后续导出均生效） */
+  /** 批量把选中记录的开土日期统一改为 batchDate（写入存储，后续导出均生效）。
+   *  允许留空：清空日期（适应现场手写日期、后补的场景），导出按未填日期兜底。 */
   const applyBatchDate = async () => {
     const d = batchDate.trim();
-    if (!d || selected.length === 0) return;
+    if (selected.length === 0) return;
     await persist(
       records.map((r) =>
         selected.includes(r.id)
@@ -487,7 +488,10 @@ export default function App() {
           : r,
       ),
     );
-    setSnack({ msg: `已把 ${selected.length} 份记录的开土日期改为 ${d}`, sev: 'success' });
+    setSnack({
+      msg: d ? `已把 ${selected.length} 份记录的开土日期改为 ${d}` : `已清空 ${selected.length} 份记录的开土日期`,
+      sev: 'success',
+    });
     setBatchDateOpen(false);
     setSelected([]);
     setSelectMode(false);
@@ -1373,7 +1377,7 @@ export default function App() {
             sx={{ mb: 1.5, lineHeight: 1.7 }}
           >
             将把已选 {selected.length} 份记录的开土日期统一改为该日期，并立即写入本机记录；
-            之后导出 PDF / Word 都使用它。
+            之后导出 PDF / Word 都使用它。留空应用则清空这些记录的开土日期。
           </Typography>
           <TextField
             autoFocus
@@ -1384,14 +1388,14 @@ export default function App() {
             onChange={(e) => setBatchDate(e.target.value)}
             disabled={selected.length === 0}
             InputLabelProps={{ shrink: true }}
-            helperText="应用后写入选中的记录，之后仍可在单份记录里修改"
+            helperText="应用后写入选中的记录；留空即清空日期（适合手写日期后补的场景）"
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setBatchDateOpen(false)}>取消</Button>
           <Button
             variant="contained"
-            disabled={!batchDate.trim() || selected.length === 0}
+            disabled={selected.length === 0}
             onClick={() => void applyBatchDate()}
           >
             应用

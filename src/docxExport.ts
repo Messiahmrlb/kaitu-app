@@ -31,6 +31,7 @@ import { Share } from '@capacitor/share';
 import type { ExportResult } from './xlsxExport';
 import { withOpenDate } from './pdfExport';
 import { sanitizeFileNamePart, stripSoilNumber } from './exportNaming';
+import { CMA_DEFAULT, CmaHeaderSettings } from './cmaHeader';
 
 /** 每页数据行数：模板 row3..row24 共 22 行 */
 export const DOCX_ROWS_PER_PAGE = 22;
@@ -354,19 +355,95 @@ async function fetchTemplateBytes(mode: 'A' | 'B'): Promise<Uint8Array> {
 }
 
 // ---------------------------------------------------------------------------
+// CMA 页眉设置（版本行 / 文件编号）应用于 Word（2026-10-30 用户要求）
+// 模板 header1.xml（唯一非空页眉）单段落：公司名 run + 两个空格定位 run +
+// 版本行多个 run（'第','3','版第0次修改 202','4','年',…）。文件编号在模板里
+// 没有（PDF 是自绘），处理为与版本行同行追加——不在页眉加段落，避免页眉变高
+// 把浮动表锚点下移破坏一页版式。
+// ---------------------------------------------------------------------------
+const HEADER_RUN_RE = /<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/g;
+const HEADER_TEXT_RE = /<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g;
+
+/** run 内的可见文本（w:t 串联） */
+function runText(run: string): string {
+  HEADER_TEXT_RE.lastIndex = 0;
+  let t = '';
+  let m: RegExpExecArray | null;
+  while ((m = HEADER_TEXT_RE.exec(run)) !== null) t += m[1];
+  return t;
+}
+
+/** run 的 rPr（无则空串） */
+function runRPr(run: string): string {
+  return run.match(RPR_RE)?.[0] ?? '';
+}
+
+/**
+ * 把 CMA 设置写入页眉 XML：公司名 / 空白定位 run 保留；版本行区（首个非空白且
+ * 不含「公司」的 run 起，至最后一个非空白 run 止）合并替换为
+ * `versionLine　docCode`（沿用原版本行 run 的 rPr）。模板无版本行区时原样返回。
+ */
+export function applyCmaHeaderXml(headerXml: string, header: CmaHeaderSettings): string {
+  const runs = headerXml.match(HEADER_RUN_RE) ?? [];
+  const texts = runs.map(runText);
+  const isVersionRun = (t: string): boolean => t.trim() !== '' && !t.includes('公司');
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < runs.length; i++) {
+    if (isVersionRun(texts[i])) {
+      if (first < 0) first = i;
+      last = i;
+    }
+  }
+  if (first < 0) return headerXml;
+  const rPr = runRPr(runs[first]);
+  const parts: string[] = [];
+  if ((header.versionLine ?? '').trim()) {
+    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">${esc(header.versionLine)}</w:t></w:r>`);
+  }
+  if ((header.docCode ?? '').trim()) {
+    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">　${esc(header.docCode)}</w:t></w:r>`);
+  }
+  const replacement = parts.join('');
+  let out = '';
+  let cursor = 0;
+  for (let i = 0; i < runs.length; i++) {
+    const idx = headerXml.indexOf(runs[i], cursor);
+    if (idx < 0) return headerXml; // 结构异常兜底：原样返回
+    out += headerXml.slice(cursor, idx);
+    if (i === first) out += replacement;
+    else if (i < first || i > last) out += runs[i];
+    cursor = idx + runs[i].length;
+  }
+  return out + headerXml.slice(cursor);
+}
+
+// ---------------------------------------------------------------------------
 // 导出入口
 // ---------------------------------------------------------------------------
 /**
- * 生成 docx Blob（不触发下载）：fetch 模板 → fflate 解包 → document.xml 手术 → 重打包。
+ * 生成 docx Blob（不触发下载）：fetch 模板 → fflate 解包 → document.xml 手术 +
+ * 页眉 CMA 设置（header 存在时）→ 重打包。
  * records 内所有记录须同一 mode（调用方按 mode 分组）。
  */
-export async function buildDocxBlob(records: SoilRecord[], templateBytes: Uint8Array): Promise<Blob> {
+export async function buildDocxBlob(
+  records: SoilRecord[],
+  templateBytes: Uint8Array,
+  header: CmaHeaderSettings | null = null,
+): Promise<Blob> {
   const { unzipSync, zipSync, strFromU8, strToU8 } = await import('fflate');
   const files = unzipSync(templateBytes);
   const xmlEntry = 'word/document.xml';
   if (!files[xmlEntry]) throw new Error('docx 模板缺少 document.xml');
   const outXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
   files[xmlEntry] = strToU8(outXml);
+  // CMA 页眉：版本行 / 文件编号（模板 header1.xml，与 PDF 同一套全局设置）
+  if (header) {
+    const headerEntry = 'word/header1.xml';
+    if (files[headerEntry]) {
+      files[headerEntry] = strToU8(applyCmaHeaderXml(strFromU8(files[headerEntry]), header));
+    }
+  }
   const zipped = zipSync(files, { level: 6 });
   return new Blob([zipped as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -423,6 +500,7 @@ async function deliverDocxBlob(blob: Blob, fileName: string): Promise<ExportResu
 export async function exportRecordsDocx(
   records: SoilRecord[],
   openDateOverride = '',
+  cmaHeader: CmaHeaderSettings = CMA_DEFAULT,
 ): Promise<ExportResult> {
   if (!records || records.length === 0) {
     return { success: false, message: '没有选择要导出的孔' };
@@ -450,7 +528,7 @@ export async function exportRecordsDocx(
       const fileName =
         mixed && merged ? baseName.replace('开土记录_', `开土记录_${group.tag}_`) : baseName;
       const bytes = await fetchTemplateBytes(group.records[0].mode);
-      const blob = await buildDocxBlob(group.records, bytes);
+      const blob = await buildDocxBlob(group.records, bytes, cmaHeader);
       messages.push((await deliverDocxBlob(blob, fileName)).message);
     }
     return {

@@ -31,6 +31,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var docxExport_exports = {};
 __export(docxExport_exports, {
   DOCX_ROWS_PER_PAGE: () => DOCX_ROWS_PER_PAGE,
+  applyCmaHeaderXml: () => applyCmaHeaderXml,
   buildDocxBlob: () => buildDocxBlob,
   buildDocxBody: () => buildDocxBody,
   buildMergedDocxFileName: () => buildMergedDocxFileName,
@@ -109,6 +110,12 @@ var import_share2 = require("@capacitor/share");
 var import_core = require("@capacitor/core");
 var import_filesystem = require("@capacitor/filesystem");
 var import_share = require("@capacitor/share");
+
+// src/cmaHeader.ts
+var CMA_DEFAULT = {
+  versionLine: "\u7B2C 3 \u7248 \u7B2C 0 \u6B21\u4FEE\u6539 2024 \u5E74 12 \u6708 1 \u65E5\u8D77\u5B9E\u65BD",
+  docCode: "SHLY-TR068-2024"
+};
 
 // src/exportNaming.ts
 var ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|\u0000-\u001f]/g;
@@ -344,13 +351,65 @@ async function fetchTemplateBytes(mode) {
   if (!res.ok) throw new Error(`\u6A21\u677F\u52A0\u8F7D\u5931\u8D25\uFF08${res.status}\uFF09`);
   return new Uint8Array(await res.arrayBuffer());
 }
-async function buildDocxBlob(records, templateBytes) {
+var HEADER_RUN_RE = /<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/g;
+var HEADER_TEXT_RE = /<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g;
+function runText(run) {
+  HEADER_TEXT_RE.lastIndex = 0;
+  let t = "";
+  let m;
+  while ((m = HEADER_TEXT_RE.exec(run)) !== null) t += m[1];
+  return t;
+}
+function runRPr(run) {
+  return run.match(RPR_RE)?.[0] ?? "";
+}
+function applyCmaHeaderXml(headerXml, header) {
+  const runs = headerXml.match(HEADER_RUN_RE) ?? [];
+  const texts = runs.map(runText);
+  const isVersionRun = (t) => t.trim() !== "" && !t.includes("\u516C\u53F8");
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < runs.length; i++) {
+    if (isVersionRun(texts[i])) {
+      if (first < 0) first = i;
+      last = i;
+    }
+  }
+  if (first < 0) return headerXml;
+  const rPr = runRPr(runs[first]);
+  const parts = [];
+  if ((header.versionLine ?? "").trim()) {
+    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">${esc(header.versionLine)}</w:t></w:r>`);
+  }
+  if ((header.docCode ?? "").trim()) {
+    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">\u3000${esc(header.docCode)}</w:t></w:r>`);
+  }
+  const replacement = parts.join("");
+  let out = "";
+  let cursor = 0;
+  for (let i = 0; i < runs.length; i++) {
+    const idx = headerXml.indexOf(runs[i], cursor);
+    if (idx < 0) return headerXml;
+    out += headerXml.slice(cursor, idx);
+    if (i === first) out += replacement;
+    else if (i < first || i > last) out += runs[i];
+    cursor = idx + runs[i].length;
+  }
+  return out + headerXml.slice(cursor);
+}
+async function buildDocxBlob(records, templateBytes, header = null) {
   const { unzipSync, zipSync, strFromU8, strToU8 } = await import("fflate");
   const files = unzipSync(templateBytes);
   const xmlEntry = "word/document.xml";
   if (!files[xmlEntry]) throw new Error("docx \u6A21\u677F\u7F3A\u5C11 document.xml");
   const outXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
   files[xmlEntry] = strToU8(outXml);
+  if (header) {
+    const headerEntry = "word/header1.xml";
+    if (files[headerEntry]) {
+      files[headerEntry] = strToU8(applyCmaHeaderXml(strFromU8(files[headerEntry]), header));
+    }
+  }
   const zipped = zipSync(files, { level: 6 });
   return new Blob([zipped], {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -389,7 +448,7 @@ async function deliverDocxBlob(blob, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 1e3);
   return { success: true, message: `\u5DF2\u5BFC\u51FA ${fileName}\uFF08\u6D4F\u89C8\u5668\u4E0B\u8F7D\uFF09` };
 }
-async function exportRecordsDocx(records, openDateOverride = "") {
+async function exportRecordsDocx(records, openDateOverride = "", cmaHeader = CMA_DEFAULT) {
   if (!records || records.length === 0) {
     return { success: false, message: "\u6CA1\u6709\u9009\u62E9\u8981\u5BFC\u51FA\u7684\u5B54" };
   }
@@ -409,7 +468,7 @@ async function exportRecordsDocx(records, openDateOverride = "") {
       const baseName = merged ? buildMergedDocxFileName(group.records, today) : buildSingleDocxFileName(group.records[0]);
       const fileName = mixed && merged ? baseName.replace("\u5F00\u571F\u8BB0\u5F55_", `\u5F00\u571F\u8BB0\u5F55_${group.tag}_`) : baseName;
       const bytes = await fetchTemplateBytes(group.records[0].mode);
-      const blob = await buildDocxBlob(group.records, bytes);
+      const blob = await buildDocxBlob(group.records, bytes, cmaHeader);
       messages.push((await deliverDocxBlob(blob, fileName)).message);
     }
     return {
@@ -423,6 +482,7 @@ async function exportRecordsDocx(records, openDateOverride = "") {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   DOCX_ROWS_PER_PAGE,
+  applyCmaHeaderXml,
   buildDocxBlob,
   buildDocxBody,
   buildMergedDocxFileName,

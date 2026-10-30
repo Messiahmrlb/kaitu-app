@@ -250,6 +250,44 @@ function mkRecord(id, hole, samples, extra = {}) {
     const szs = (infoTc9.match(/<w:sz w:val="(\d+)"\/>/g) || []).map((x) => x.match(/\d+/)[0]);
     check('信息行孔口标高超宽缩字号（sz<22）', szs.some((v) => Number(v) < 22), szs.join(','));
 
+    // ---------- 10. CMA 设置应用于 Word 页眉（2026-10-30 用户：CMA设置也适用于导出WORD） ----------
+    {
+      const rec = mkRecord('r1', 'ZK1', [mkSample('1')]);
+      // 10a. 自定义 header：版本行 + 文件编号替换，公司名保留
+      const blobCma = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A), {
+        versionLine: '第 9 版 第 2 次修改 2027 年 1 月 1 日起实施',
+        docCode: 'ABC-TR999-2027',
+      });
+      const filesCma = unzipSync(new Uint8Array(Buffer.from(await blobCma.arrayBuffer())));
+      const hdr = strFromU8(filesCma['word/header1.xml']);
+      check('CMA：header1.xml 含新版本行', hdr.includes('第 9 版 第 2 次修改 2027 年 1 月 1 日起实施'));
+      check('CMA：header1.xml 含新文件编号（全角空格前缀）', hdr.includes('　ABC-TR999-2027'));
+      check('CMA：公司名保留', hdr.includes('公司'));
+      check('CMA：模板默认版行已清除', !hdr.includes('第 3 版') && !hdr.includes('版第0次修改') && !hdr.includes('2024'));
+      check('CMA：document.xml 不受页眉手术影响', strFromU8(filesCma['word/document.xml']).includes('孔号：ZK1'));
+      check('CMA：run 显式带 xml:space=preserve', hdr.includes('<w:t xml:space="preserve">第 9 版'));
+      // 10b. 不传 header（默认 null）：模板页眉原样保留
+      const blobDef = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A));
+      const filesDef = unzipSync(new Uint8Array(Buffer.from(await blobDef.arrayBuffer())));
+      const hdrDef = strFromU8(filesDef['word/header1.xml']);
+      check('CMA：不传 header 模板版行原样', hdrDef.includes('版第0次修改 202') && hdrDef.includes('日起实施'));
+      check('CMA：不传 header 无新编号', !hdrDef.includes('ABC-TR999-2027'));
+      // 10c. 特殊字符转义
+      const blobEsc = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A), {
+        versionLine: '第<A>&"版',
+        docCode: 'X&Y',
+      });
+      const hdrEsc = strFromU8(unzipSync(new Uint8Array(Buffer.from(await blobEsc.arrayBuffer())))['word/header1.xml']);
+      check('CMA：特殊字符 esc（&amp;）', hdrEsc.includes('第&lt;A&gt;&amp;&quot;版') && hdrEsc.includes('　X&amp;Y'));
+      // 10d. B 模板同样适用
+      const blobB = await dx.buildDocxBlob([mkRecord('r1', 'ZK1', [mkSample('1')], { mode: 'B' })], new Uint8Array(TPL_B), {
+        versionLine: '第 9 版',
+        docCode: 'B-CODE',
+      });
+      const hdrB = strFromU8(unzipSync(new Uint8Array(Buffer.from(await blobB.arrayBuffer())))['word/header1.xml']);
+      check('CMA：B 模板页眉同样替换', hdrB.includes('第 9 版') && hdrB.includes('　B-CODE'));
+    }
+
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);
   })().catch((e) => {
