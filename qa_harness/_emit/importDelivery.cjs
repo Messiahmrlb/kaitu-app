@@ -32,6 +32,7 @@ var importDelivery_exports = {};
 __export(importDelivery_exports, {
   detectRecordMode: () => detectRecordMode,
   isChecked: () => isChecked,
+  isNumericDepth: () => isNumericDepth,
   matchSoilTypeName: () => matchSoilTypeName,
   mergeImportedByHole: () => mergeImportedByHole,
   normalizeHeader: () => normalizeHeader,
@@ -425,6 +426,11 @@ function isHeaderRow(ws, r) {
   }
   return hasYuan && hasTest;
 }
+function isNumericDepth(v) {
+  const s = String(v ?? "").replace(/\s+/g, "").replace(/[～～~—–]/g, "-");
+  if (s === "") return true;
+  return /^\d+(\.\d+)?(\-\d+(\.\d+)?)?(m|米)?$/i.test(s);
+}
 function findHeaderRows(ws) {
   const hrs = [];
   for (let r = 1; r < ws.rowCount; r++) {
@@ -513,6 +519,7 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
   if (!projectName) warnings.push("\u672A\u5728\u5DE5\u4F5C\u8868\u4E2D\u627E\u5230\u201C\u5DE5\u7A0B\u540D\u79F0\u201D\u3002");
   const samples = [];
   let headerJunkRows = 0;
+  const depthJunk = [];
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
@@ -523,11 +530,13 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
       continue;
     }
     if (FOOTER_KEYWORDS.some((k) => soilNumberRaw.includes(k))) break;
+    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : "";
+    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : "";
+    if (from && !isNumericDepth(from)) depthJunk.push({ row: r, colName: "\u81EA", value: from });
+    if (to && !isNumericDepth(to)) depthJunk.push({ row: r, colName: "\u81F3", value: to });
     idx += 1;
     const s = newSample(idx, soilNumberRaw);
     if (fieldRecCol >= 0) s.fieldRecord = cellText(row.getCell(fieldRecCol).value).trim();
-    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : "";
-    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : "";
     s.sampleDepth = from && to ? `${from}~${to}` : from;
     if (distCol >= 0 && isChecked(row.getCell(distCol).value)) {
       s.disturbance = "\u6270\u52A8";
@@ -556,6 +565,13 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
         `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u672A\u5199\u5B54\u53F7\u3001\u571F\u53F7\u53C8\u4ECE ${firstSoilNumber} \u91CD\u65B0\u5F00\u59CB\uFF0C\u7591\u4F3C\u9001\u6837\u5355\u6765\u6E90\u6709\u8BEF\uFF08\u540C\u4E00\u5B54\u7684\u7EED\u9875\u5E94\u63A5\u7EED\u7F16\u53F7\uFF09\uFF0C\u5DF2\u6309\u6CBF\u7528\u300C${holeCode}\u300D\u5408\u5E76\uFF0C\u8BF7\u6838\u5BF9\u8BE5\u8868\u662F\u5426\u5C5E\u4E8E\u672C\u5B54\u3002`
       );
     }
+  }
+  if (depthJunk.length > 0) {
+    const shown = depthJunk.slice(0, 3).map((d) => `\u7B2C ${d.row} \u884C\u300C${d.colName}\u300D\u5217\u51FA\u73B0\u300C${d.value}\u300D`).join("\u3001");
+    const more = depthJunk.length > 3 ? `\u7B49\u5171 ${depthJunk.length} \u5904` : "";
+    errors.push(
+      `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D${shown}${more}\uFF0C\u6DF1\u5EA6\u5217\u5E94\u4E3A\u6570\u5B57\u3002\u7591\u4F3C\u571F\u6837\u7F16\u53F7\u5199\u4E32\u884C\u6216\u6570\u636E\u533A\u5217\u9519\u4F4D\uFF08\u5982\u6570\u636E\u533A\u591A\u4E86\u4E00\u5217\u5B54\u53F7\uFF09\uFF0C\u6BCF\u4E2A\u5B54\u53EF\u80FD\u53EA\u8BC6\u522B\u5230 1 \u6761\u571F\u6837\u3001\u6570\u636E\u4E0E\u5B9E\u9645\u4E0D\u7B26\uFF0C\u8BF7\u6838\u5BF9\u8BE5\u5757\uFF08\u5B54\u53F7 ${holeCode || "\u672A\u77E5"}\uFF09\u3002`
+    );
   }
   for (const lbl of unknownSeen) {
     warnings.push(`\u9001\u6837\u5355\u542B\u672A\u77E5\u8BD5\u9A8C\u9879\u76EE\uFF1A${lbl}\uFF08\u5DF2\u5F52\u5165"\u5176\u4ED6\u8BD5\u9A8C\u9879\u76EE"\uFF0C\u4E0D\u5F71\u54CD\u5BFC\u51FA\uFF09`);
@@ -677,6 +693,7 @@ async function parseDeliveryFile(buffer) {
 0 && (module.exports = {
   detectRecordMode,
   isChecked,
+  isNumericDepth,
   matchSoilTypeName,
   mergeImportedByHole,
   normalizeHeader,

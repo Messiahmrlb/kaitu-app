@@ -23,7 +23,7 @@ const {
   classifyConsolidationAlias,
 } = require(path.join(__dirname, '_emit', 'testHeader.cjs'));
 const { recordTestColumns } = require(path.join(__dirname, '_emit', 'constants_test.cjs'));
-const { parseDeliveryFile } = require(path.join(__dirname, '_emit', 'importDelivery.cjs'));
+const { parseDeliveryFile, isNumericDepth } = require(path.join(__dirname, '_emit', 'importDelivery.cjs'));
 
 let pass = 0;
 let fail = 0;
@@ -292,6 +292,91 @@ async function parseSheets(sheetDefs) {
     check('表二数据行正常导入为 1 条记录', res.records.length === 1 && res.records[0].record.samples.length === 1, JSON.stringify(res.warnings));
     eq('土号保真', res.records[0].record.samples[0].soilNumber, '原1');
     check('勾选归一到饱固快剪', res.records[0].record.samples[0].testItems.includes('饱固快剪'));
+  }
+
+  // ---------- isNumericDepth：深度列合法性 ----------
+  console.log('\nisNumericDepth');
+  check('1.65 合法', isNumericDepth('1.65') === true);
+  check('18.8~19 合法', isNumericDepth('18.8~19') === true);
+  check('1.3～1.5（全角波浪线）合法', isNumericDepth('1.3～1.5') === true);
+  check('5.8m（带单位）合法', isNumericDepth('5.8m') === true);
+  check('2 — 3（长破折）合法', isNumericDepth('2 — 3') === true);
+  check('空串不算非法', isNumericDepth('') === true);
+  check('扰1 非法（含数字但非深度）', isNumericDepth('扰1') === false);
+  check('原2 非法', isNumericDepth('原2') === false);
+  check('ZK38 非法', isNumericDepth('ZK38') === false);
+
+  // 场景 7：数据区列错位（土号写在深度列，如扰1 串行）→ 来源错误级提示
+  {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('串行表');
+    ws.getCell('A1').value = '土工试验送样单';
+    ws.getCell('A2').value = '工程名称：串行测试工程';
+    ws.getCell('A3').value = '孔号';
+    ws.getCell('B3').value = 'ZK9';
+    ws.getCell('A4').value = '土样编号';
+    ws.getCell('B4').value = '野外定名';
+    // 标准子表头：A土样编号 B自 C至 D野外定名 E原状 F扰动 G饱和固结快剪
+    ['土样编号', '自', '至', '野外 定名', '原状', '扰动', '饱和固结快剪'].forEach((h, i) => {
+      ws.getCell(String.fromCharCode('A'.charCodeAt(0) + i) + 5).value = h;
+    });
+    // 错位数据行：A=孔号 ZK38、B=土号 扰1、C=自深度、D=至深度 → 深度列出现「扰1」
+    ws.getCell('A6').value = 'ZK38';
+    ws.getCell('B6').value = '扰1';
+    ws.getCell('C6').value = '1.65';
+    ws.getCell('D6').value = '1.95';
+    ws.getCell('F6').value = '√';
+    ws.getCell('A7').value = 'ZK39';
+    ws.getCell('B7').value = '扰2';
+    ws.getCell('C7').value = '4.65';
+    ws.getCell('D7').value = '4.95';
+    ws.getCell('F7').value = '√';
+    ws.getCell('A8').value = '送样人：';
+    const buf = await wb.xlsx.writeBuffer();
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const res = await parseDeliveryFile(ab);
+    check('识别出 1 条记录（不阻止导入）', res.records.length === 1, JSON.stringify(res.warnings));
+    check(
+      '报来源错误：深度列出现扰1、疑似写串行',
+      res.errors.some(
+        (e) => e.includes('「自」列出现「扰1」') && e.includes('写串行') && e.includes('ZK9'),
+      ),
+      res.errors.join(' | '),
+    );
+  }
+
+  // 场景 8：正常深度不误报
+  {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('正常表');
+    ws.getCell('A1').value = '土工试验送样单';
+    ws.getCell('A2').value = '工程名称：正常测试工程';
+    ws.getCell('A3').value = '孔号';
+    ws.getCell('B3').value = 'ZK10';
+    ws.getCell('A4').value = '土样编号';
+    ws.getCell('B4').value = '野外定名';
+    ['土样编号', '自', '至', '野外 定名', '原状', '扰动', '饱和固结快剪'].forEach((h, i) => {
+      ws.getCell(String.fromCharCode('A'.charCodeAt(0) + i) + 5).value = h;
+    });
+    const rows = [
+      ['原1', '1.3', '1.5'],
+      ['原2', '2.8-3', '3.5'],
+      ['原3', '4.3～4.5', '5.8m'],
+    ];
+    rows.forEach(([no, from, to], i) => {
+      const r = 6 + i;
+      ws.getCell(`A${r}`).value = no;
+      ws.getCell(`B${r}`).value = from;
+      ws.getCell(`C${r}`).value = to;
+      ws.getCell(`D${r}`).value = '粉质黏土';
+      ws.getCell(`E${r}`).value = '√';
+    });
+    ws.getCell('A9').value = '送样人：';
+    const buf = await wb.xlsx.writeBuffer();
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const res = await parseDeliveryFile(ab);
+    check('正常深度无错误', res.errors.length === 0, res.errors.join(' | '));
+    check('3 条土样全部识别', res.records[0]?.record.samples.length === 3, String(res.records[0]?.record.samples.length));
   }
 
   console.log(`\n通过 ${pass} 项，失败 ${fail} 项`);

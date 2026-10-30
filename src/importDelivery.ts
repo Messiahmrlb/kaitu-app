@@ -444,6 +444,20 @@ function isHeaderRow(ws: ExcelJS.Worksheet, r: number): boolean {
   return hasYuan && hasTest;
 }
 
+/**
+ * 深度列取值是否为合法数字深度（纯函数）。
+ * 合法：1.65、18.8-19、5.8m、1.3~1.5（可带单位/区间/全角波浪线/长破折）；
+ * 非法（疑似土号写串行/列错位）：扰1、原2、ZK38 等非数字内容。
+ * 注意「扰1」含数字，所以不能用「含数字」判断，必须整体匹配深度模式。
+ */
+export function isNumericDepth(v: string): boolean {
+  const s = String(v ?? '')
+    .replace(/\s+/g, '')
+    .replace(/[～～~—–]/g, '-');
+  if (s === '') return true; // 空值不判错（由调用方决定是否跳过检查）
+  return /^\d+(\.\d+)?(\-\d+(\.\d+)?)?(m|米)?$/i.test(s);
+}
+
 /** 定位工作表中所有送样单表头行（一个工作表可能堆叠多份，即多个孔号） */
 function findHeaderRows(ws: ExcelJS.Worksheet): number[] {
   const hrs: number[] = [];
@@ -566,9 +580,11 @@ function parseOneBlock(
   }
   if (!projectName) warnings.push('未在工作表中找到“工程名称”。');
 
-  // 逐行解析土样（土样编号非空即视为数据行；遇表尾标记则结束本块）
+/** 逐行解析土样（土样编号非空即视为数据行；遇表尾标记则结束本块） */
   const samples: SoilSample[] = [];
   let headerJunkRows = 0;
+  /** 深度列非数字的行（疑似土号写串行/列错位）：[行号, 列名, 原文] */
+  const depthJunk: { row: number; colName: string; value: string }[] = [];
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
@@ -581,12 +597,17 @@ function parseOneBlock(
     }
     if (FOOTER_KEYWORDS.some((k) => soilNumberRaw.includes(k))) break; // 表尾，结束本块
 
+    // 深度列检查：「自/至」必须是数字深度。出现「扰1」这类内容说明数据行
+    // 整体写串行/列错位（如数据区多了一列孔号），会导致每孔只识别到 1 条土样
+    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : '';
+    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : '';
+    if (from && !isNumericDepth(from)) depthJunk.push({ row: r, colName: '自', value: from });
+    if (to && !isNumericDepth(to)) depthJunk.push({ row: r, colName: '至', value: to });
+
     idx += 1;
     const s = newSample(idx, soilNumberRaw);
     if (fieldRecCol >= 0) s.fieldRecord = cellText(row.getCell(fieldRecCol).value).trim();
 
-    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : '';
-    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : '';
     s.sampleDepth = from && to ? `${from}~${to}` : from;
 
     // 仅当「扰动」列被勾选时才标记为扰动；原状保持默认，不单独记录
@@ -626,6 +647,15 @@ function parseOneBlock(
         `工作表「${ws.name}」第 ${hr} 行未写孔号、土号又从 ${firstSoilNumber} 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「${holeCode}」合并，请核对该表是否属于本孔。`,
       );
     }
+  }
+
+  // 深度列写串行检查（来源错误级，红色提示，不阻止导入）
+  if (depthJunk.length > 0) {
+    const shown = depthJunk.slice(0, 3).map((d) => `第 ${d.row} 行「${d.colName}」列出现「${d.value}」`).join('、');
+    const more = depthJunk.length > 3 ? `等共 ${depthJunk.length} 处` : '';
+    errors.push(
+      `工作表「${ws.name}」${shown}${more}，深度列应为数字。疑似土样编号写串行或数据区列错位（如数据区多了一列孔号），每个孔可能只识别到 1 条土样、数据与实际不符，请核对该块（孔号 ${holeCode || '未知'}）。`,
+    );
   }
 
   // 本块内出现过的未知试验项目，逐条告警（提示已归入"其他试验项目"，不影响导出）
