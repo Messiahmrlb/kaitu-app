@@ -1,0 +1,833 @@
+{
+  "generatedAt": "2026-10-30T01:35:34.127Z",
+  "previewBase": "http://127.0.0.1:4299/",
+  "mainBundle": "index-B-8jMauL.js",
+  "total": 45,
+  "passed": 45,
+  "failed": 0,
+  "isPass": true,
+  "narrowScreen": [
+    {
+      "width": 320,
+      "scrollWidth": 320,
+      "bodyScrollWidth": 320,
+      "noOverflow": true,
+      "allInside": true,
+      "trigger": {
+        "w": 90,
+        "h": 30,
+        "right": 278,
+        "left": 188
+      },
+      "buttons": [
+        {
+          "label": "批量删除",
+          "left": 124,
+          "right": 184,
+          "w": 60,
+          "h": 31
+        },
+        {
+          "label": "导入或导出",
+          "left": 188,
+          "right": 278,
+          "w": 90,
+          "h": 30
+        },
+        {
+          "label": "CMA 设置",
+          "left": 282,
+          "right": 312,
+          "w": 30,
+          "h": 30
+        }
+      ]
+    },
+    {
+      "width": 360,
+      "scrollWidth": 360,
+      "bodyScrollWidth": 360,
+      "noOverflow": true,
+      "allInside": true,
+      "trigger": {
+        "w": 90,
+        "h": 30,
+        "right": 318,
+        "left": 228
+      },
+      "buttons": [
+        {
+          "label": "批量删除",
+          "left": 160,
+          "right": 224,
+          "w": 64,
+          "h": 31
+        },
+        {
+          "label": "导入或导出",
+          "left": 228,
+          "right": 318,
+          "w": 90,
+          "h": 30
+        },
+        {
+          "label": "CMA 设置",
+          "left": 322,
+          "right": 352,
+          "w": 30,
+          "h": 30
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "noOverflow": true,
+      "allInside": true,
+      "trigger": {
+        "w": 90,
+        "h": 30,
+        "right": 348,
+        "left": 258
+      },
+      "buttons": [
+        {
+          "label": "批量删除",
+          "left": 190,
+          "right": 254,
+          "w": 64,
+          "h": 31
+        },
+        {
+          "label": "导入或导出",
+          "left": 258,
+          "right": 348,
+          "w": 90,
+          "h": 30
+        },
+        {
+          "label": "CMA 设置",
+          "left": 352,
+          "right": 382,
+          "w": 30,
+          "h": 30
+        }
+      ]
+    },
+    {
+      "width": 430,
+      "scrollWidth": 430,
+      "bodyScrollWidth": 430,
+      "noOverflow": true,
+      "allInside": true,
+      "trigger": {
+        "w": 90,
+        "h": 30,
+        "right": 388,
+        "left": 298
+      },
+      "buttons": [
+        {
+          "label": "批量删除",
+          "left": 230,
+          "right": 294,
+          "w": 64,
+          "h": 31
+        },
+        {
+          "label": "导入或导出",
+          "left": 298,
+          "right": 388,
+          "w": 90,
+          "h": 30
+        },
+        {
+          "label": "CMA 设置",
+          "left": 392,
+          "right": 422,
+          "w": 30,
+          "h": 30
+        }
+      ]
+    }
+  ],
+  "downloads": [
+    {
+      "batch": "single-pdf",
+      "files": [
+        {
+          "name": "2026-10-26_ZK1.pdf",
+          "size": 567362,
+          "pages": {
+            "pages": 1,
+            "countFromTree": 1,
+            "images": 1
+          }
+        }
+      ]
+    },
+    {
+      "batch": "merged-3",
+      "files": [
+        {
+          "name": "开土记录_3孔_2026-10-30.pdf",
+          "size": 1691365,
+          "pages": {
+            "pages": 3,
+            "countFromTree": 3,
+            "images": 3
+          }
+        }
+      ]
+    },
+    {
+      "batch": "paged-2",
+      "files": [
+        {
+          "name": "开土记录_2孔_2026-10-30.pdf",
+          "size": 1811716,
+          "pages": {
+            "pages": 3,
+            "countFromTree": 3,
+            "images": 3
+          }
+        }
+      ],
+      "dialogCounter": "已选 2 / 共 2 个孔"
+    },
+    {
+      "batch": "xlsx-2",
+      "files": [
+        {
+          "name": "KC-01_ZK1_开土记录表.xlsx",
+          "size": 10741
+        },
+        {
+          "name": "KC-01_ZK2_开土记录表.xlsx",
+          "size": 10578
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "C1.1",
+      "name": "列表卡片无分散导出图标按钮",
+      "pass": true,
+      "expected": 0,
+      "actual": {
+        "xlsx": 0,
+        "pdf": 0,
+        "total": 0,
+        "cards": 3
+      },
+      "note": ""
+    },
+    {
+      "id": "C1.2",
+      "name": "「导入 / 导出」按钮存在且 aria-haspopup=menu",
+      "pass": true,
+      "expected": {
+        "haspopup": "menu",
+        "text": "导入 / 导出"
+      },
+      "actual": {
+        "haspopup": "menu",
+        "text": "导入 / 导出",
+        "w": 120,
+        "h": 33
+      },
+      "note": ""
+    },
+    {
+      "id": "C1.3",
+      "name": "菜单三项文案与顺序正确",
+      "pass": true,
+      "expected": [
+        "导入送样单",
+        "导出 PDF…",
+        "导出电子表格…"
+      ],
+      "actual": [
+        "导入送样单",
+        "导出 PDF…",
+        "导出电子表格…"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C1.4",
+      "name": "菜单展开时 aria-expanded=true",
+      "pass": true,
+      "expected": "true",
+      "actual": "true",
+      "note": ""
+    },
+    {
+      "id": "C1.5",
+      "name": "点击空白处菜单关闭",
+      "pass": true,
+      "expected": true,
+      "actual": true,
+      "note": ""
+    },
+    {
+      "id": "C2.1",
+      "name": "编辑页顶部无「导出xlsx」「导出PDF」按钮",
+      "pass": true,
+      "expected": {
+        "buttons": "仅返回箭头"
+      },
+      "actual": {
+        "btns": [
+          {
+            "text": "",
+            "aria": "返回（自动保存）"
+          }
+        ],
+        "hasExportXlsx": false,
+        "hasExportPdf": false
+      },
+      "note": ""
+    },
+    {
+      "id": "C3.1",
+      "name": "PDF 模式对话框标题",
+      "pass": true,
+      "expected": "导出 PDF",
+      "actual": "导出 PDF",
+      "note": ""
+    },
+    {
+      "id": "C3.2",
+      "name": "默认全选：已选 3 / 共 3 个孔",
+      "pass": true,
+      "expected": "已选 3 / 共 3 个孔",
+      "actual": "已选 3 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C3.3",
+      "name": "默认全选：按钮「导出 3 个孔」",
+      "pass": true,
+      "expected": "导出 3 个孔（可点）",
+      "actual": [
+        {
+          "text": "取消",
+          "disabled": false
+        },
+        {
+          "text": "导出 3 个孔",
+          "disabled": false
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "C3.4",
+      "name": "默认全选：3 个 checkbox 全部 checked",
+      "pass": true,
+      "expected": "全选行+3 行均 checked",
+      "actual": [
+        {
+          "checked": true,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        },
+        {
+          "checked": true,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        },
+        {
+          "checked": true,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        },
+        {
+          "checked": true,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "C3.5",
+      "name": "默认全选：全选框 non-indeterminate",
+      "pass": true,
+      "expected": {
+        "dataIndeterminate": "false",
+        "classIndeterminate": false
+      },
+      "actual": {
+        "checked": true,
+        "dataIndeterminate": "false",
+        "rootIndeterminate": false
+      },
+      "note": ""
+    },
+    {
+      "id": "C3.6",
+      "name": "取消 1 个孔后计数同步",
+      "pass": true,
+      "expected": "已选 2 / 共 3 个孔",
+      "actual": "已选 2 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C3.7",
+      "name": "取消 1 个孔后按钮同步",
+      "pass": true,
+      "expected": "导出 2 个孔",
+      "actual": [
+        {
+          "text": "取消",
+          "disabled": false
+        },
+        {
+          "text": "导出 2 个孔",
+          "disabled": false
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "C3.8",
+      "name": "半选状态：全选框 indeterminate 且 checked=false",
+      "pass": true,
+      "expected": {
+        "dataIndeterminate": "true",
+        "checked": false
+      },
+      "actual": {
+        "checked": false,
+        "dataIndeterminate": "true",
+        "rootIndeterminate": true
+      },
+      "note": ""
+    },
+    {
+      "id": "C3.9",
+      "name": "半选时点全选行 → 恢复全选",
+      "pass": true,
+      "expected": "已选 3 / 共 3 个孔",
+      "actual": "已选 3 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C3.10",
+      "name": "全选时点全选行 → 全不选（已选 0）",
+      "pass": true,
+      "expected": "已选 0 / 共 3 个孔",
+      "actual": "已选 0 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C3.11",
+      "name": "全不选后导出按钮禁用",
+      "pass": true,
+      "expected": "导出 0 个孔（disabled）",
+      "actual": [
+        {
+          "text": "取消",
+          "disabled": false
+        },
+        {
+          "text": "导出 0 个孔",
+          "disabled": true
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "C3.12",
+      "name": "全不选后 4 个 checkbox 均 unchecked",
+      "pass": true,
+      "expected": "全部 unchecked",
+      "actual": [
+        {
+          "checked": false,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        },
+        {
+          "checked": false,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        },
+        {
+          "checked": false,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        },
+        {
+          "checked": false,
+          "dataIndeterminate": "false",
+          "rootIndeterminate": false
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "C3.13",
+      "name": "全选行再次点击 → 恢复全选",
+      "pass": true,
+      "expected": "已选 3 / 共 3 个孔",
+      "actual": "已选 3 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C3.14",
+      "name": "xlsx 模式标题切换",
+      "pass": true,
+      "expected": "导出电子表格",
+      "actual": "导出电子表格",
+      "note": ""
+    },
+    {
+      "id": "C3.15",
+      "name": "xlsx 模式说明文案切换（每孔一个独立文件）",
+      "pass": true,
+      "expected": "包含「每个孔生成一个独立文件」",
+      "actual": "全选ZK12026-10-26土样 2 条ZK22026-10-27土样 1 条ZK32026-10-28土样 2 条每个孔生成一个独立文件，请允许多个文件下载",
+      "note": ""
+    },
+    {
+      "id": "C3.16",
+      "name": "xlsx 模式默认全选",
+      "pass": true,
+      "expected": "已选 3 / 共 3 个孔",
+      "actual": "已选 3 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C4.0",
+      "name": "仅选 ZK1（已选 1 / 共 3）",
+      "pass": true,
+      "expected": "已选 1 / 共 3 个孔",
+      "actual": "已选 1 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C4.1",
+      "name": "单孔 PDF 文件名 = <开土日期>_<孔号>.pdf",
+      "pass": true,
+      "expected": "2026-10-26_ZK1.pdf",
+      "actual": [
+        "2026-10-26_ZK1.pdf"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C4.2",
+      "name": "单孔 PDF 页数 = 1",
+      "pass": true,
+      "expected": 1,
+      "actual": {
+        "pages": 1,
+        "countFromTree": 1,
+        "images": 1
+      },
+      "note": ""
+    },
+    {
+      "id": "C5.1",
+      "name": "3 孔导出只产生 1 个文件",
+      "pass": true,
+      "expected": 1,
+      "actual": [
+        "开土记录_3孔_2026-10-30.pdf"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C5.2",
+      "name": "3 孔合并文件名 = 开土记录_3孔_<当天>.pdf",
+      "pass": true,
+      "expected": "开土记录_3孔_2026-10-30.pdf",
+      "actual": "开土记录_3孔_2026-10-30.pdf",
+      "note": ""
+    },
+    {
+      "id": "C5.3",
+      "name": "3 孔合并页数 = 3",
+      "pass": true,
+      "expected": 3,
+      "actual": {
+        "pages": 3,
+        "countFromTree": 3,
+        "images": 3
+      },
+      "note": ""
+    },
+    {
+      "id": "C5.4",
+      "name": "25 条 + 1 条合并文件名正确",
+      "pass": true,
+      "expected": "开土记录_2孔_2026-10-30.pdf",
+      "actual": "开土记录_2孔_2026-10-30.pdf",
+      "note": ""
+    },
+    {
+      "id": "C5.5",
+      "name": "25 条（2 页）+ 1 条（1 页）合并页数 = 3（不丢页/无空白页）",
+      "pass": true,
+      "expected": 3,
+      "actual": {
+        "pages": 3,
+        "countFromTree": 3,
+        "images": 3
+      },
+      "note": ""
+    },
+    {
+      "id": "C6.0",
+      "name": "xlsx 取消 ZK3 后已选 2 / 共 3",
+      "pass": true,
+      "expected": "已选 2 / 共 3 个孔",
+      "actual": "已选 2 / 共 3 个孔",
+      "note": ""
+    },
+    {
+      "id": "C6.1",
+      "name": "选 2 孔导出产生 2 个独立 xlsx",
+      "pass": true,
+      "expected": 2,
+      "actual": [
+        {
+          "name": "KC-01_ZK1_开土记录表.xlsx",
+          "size": 10741
+        },
+        {
+          "name": "KC-01_ZK2_开土记录表.xlsx",
+          "size": 10578
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "C6.2",
+      "name": "两个 xlsx 文件名分别含各自孔号",
+      "pass": true,
+      "expected": [
+        "…ZK1…xlsx",
+        "…ZK2…xlsx"
+      ],
+      "actual": [
+        "KC-01_ZK1_开土记录表.xlsx",
+        "KC-01_ZK2_开土记录表.xlsx"
+      ],
+      "note": ""
+    },
+    {
+      "id": "D1.1",
+      "name": "多工作表预览：识别到 3 份送样单",
+      "pass": true,
+      "expected": 3,
+      "actual": 3,
+      "note": ""
+    },
+    {
+      "id": "D1.2",
+      "name": "多工作表预览：3 个孔号 ZK1/ZK2/ZK3",
+      "pass": true,
+      "expected": [
+        "ZK1",
+        "ZK2",
+        "ZK3"
+      ],
+      "actual": [
+        "孔号 ZK1 ｜ 2 条土样 ｜ 马厂减河治理工程 ZK1",
+        "孔号 ZK2 ｜ 1 条土样 ｜ 马厂减河治理工程 ZK2",
+        "孔号 ZK3 ｜ 2 条土样 ｜ 马厂减河治理工程 ZK3"
+      ],
+      "note": ""
+    },
+    {
+      "id": "D1.3",
+      "name": "多工作表未出现重复孔号告警",
+      "pass": true,
+      "expected": "无告警",
+      "actual": false,
+      "note": ""
+    },
+    {
+      "id": "D1.4",
+      "name": "导入后本地记录数 = 3",
+      "pass": true,
+      "expected": 3,
+      "actual": {
+        "n": 3,
+        "holes": [
+          "ZK1",
+          "ZK2",
+          "ZK3"
+        ],
+        "samples": [
+          2,
+          1,
+          2
+        ]
+      },
+      "note": ""
+    },
+    {
+      "id": "D1.5",
+      "name": "导入后孔号分别为 ZK1/ZK2/ZK3 且土样数 2/1/2",
+      "pass": true,
+      "expected": {
+        "holes": [
+          "ZK1",
+          "ZK2",
+          "ZK3"
+        ],
+        "samples": [
+          2,
+          1,
+          2
+        ]
+      },
+      "actual": {
+        "n": 3,
+        "holes": [
+          "ZK1",
+          "ZK2",
+          "ZK3"
+        ],
+        "samples": [
+          2,
+          1,
+          2
+        ]
+      },
+      "note": ""
+    },
+    {
+      "id": "D2.1",
+      "name": "重复孔号预览出现 warning",
+      "pass": true,
+      "expected": "包含「发现重复孔号」的告警",
+      "actual": [
+        "发现重复孔号「ZK2」共 2 份送样单（工作表：Sheet1、Sheet3），导入后会生成 2 条独立记录。"
+      ],
+      "note": ""
+    },
+    {
+      "id": "D2.2",
+      "name": "warning 文案包含 ZK2 与「2 份送样单」",
+      "pass": true,
+      "expected": "发现重复孔号「ZK2」共 2 份送样单（工作表：Sheet1、Sheet3），导入后会生成 2 条独立记录。",
+      "actual": "发现重复孔号「ZK2」共 2 份送样单（工作表：Sheet1、Sheet3），导入后会生成 2 条独立记录。",
+      "note": ""
+    },
+    {
+      "id": "D2.3",
+      "name": "导入后生成 2 条 ZK2 记录（共 3 条）",
+      "pass": true,
+      "expected": {
+        "n": 3,
+        "ZK2": 2
+      },
+      "actual": {
+        "n": 3,
+        "holes": [
+          "ZK2",
+          "ZK1",
+          "ZK2"
+        ]
+      },
+      "note": ""
+    },
+    {
+      "id": "C7.1",
+      "name": "320px 无横向溢出且 AppBar 按钮均在视口内",
+      "pass": true,
+      "expected": {
+        "scrollWidth": 320,
+        "allInside": true,
+        "triggerRatio": "宽>1.5×高"
+      },
+      "actual": {
+        "scrollWidth": 320,
+        "bodyScrollWidth": 320,
+        "overflowBtns": [],
+        "trigger": {
+          "w": 90,
+          "h": 30,
+          "right": 278,
+          "left": 188
+        }
+      },
+      "note": ""
+    },
+    {
+      "id": "C7.2",
+      "name": "360px 无横向溢出且 AppBar 按钮均在视口内",
+      "pass": true,
+      "expected": {
+        "scrollWidth": 360,
+        "allInside": true,
+        "triggerRatio": "宽>1.5×高"
+      },
+      "actual": {
+        "scrollWidth": 360,
+        "bodyScrollWidth": 360,
+        "overflowBtns": [],
+        "trigger": {
+          "w": 90,
+          "h": 30,
+          "right": 318,
+          "left": 228
+        }
+      },
+      "note": ""
+    },
+    {
+      "id": "C7.3",
+      "name": "390px 无横向溢出且 AppBar 按钮均在视口内",
+      "pass": true,
+      "expected": {
+        "scrollWidth": 390,
+        "allInside": true,
+        "triggerRatio": "宽>1.5×高"
+      },
+      "actual": {
+        "scrollWidth": 390,
+        "bodyScrollWidth": 390,
+        "overflowBtns": [],
+        "trigger": {
+          "w": 90,
+          "h": 30,
+          "right": 348,
+          "left": 258
+        }
+      },
+      "note": ""
+    },
+    {
+      "id": "C7.4",
+      "name": "430px 无横向溢出且 AppBar 按钮均在视口内",
+      "pass": true,
+      "expected": {
+        "scrollWidth": 430,
+        "allInside": true,
+        "triggerRatio": "宽>1.5×高"
+      },
+      "actual": {
+        "scrollWidth": 430,
+        "bodyScrollWidth": 430,
+        "overflowBtns": [],
+        "trigger": {
+          "w": 90,
+          "h": 30,
+          "right": 388,
+          "left": 298
+        }
+      },
+      "note": ""
+    }
+  ],
+  "downloadDir": "C:\\Users\\Dell\\AppData\\Local\\Temp\\qa-dl-1Rj08U"
+}

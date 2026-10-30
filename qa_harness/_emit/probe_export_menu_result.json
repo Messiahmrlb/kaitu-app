@@ -1,0 +1,254 @@
+{
+  "results": [
+    {
+      "name": "首页存在「导入 / 导出」下拉按钮",
+      "pass": true
+    },
+    {
+      "name": "下拉菜单三项文案正确",
+      "pass": true,
+      "detail": "导入送样单 | 导出 PDF… | 导出电子表格…"
+    },
+    {
+      "name": "PDF 对话框标题与默认全选",
+      "pass": true,
+      "detail": "导出 PDF | 已选 3 / 共 3 个孔 | 取消全选 | ZK1 | 2026-10-26 | 土样 2 条 | ZK2 | 2026-10-27 | 土样 1 条 | ZK3 | 未填写开土日期 | 土样 1 条 | 多个孔会合并为一个 PDF；单个孔命名为「日期_孔号.pdf」 | 取消 | 导出 3 个孔"
+    },
+    {
+      "name": "对话框提示「多个孔会合并为一个 PDF」",
+      "pass": true
+    },
+    {
+      "name": "取消单个孔后计数与按钮联动（3 → 2）",
+      "pass": true,
+      "detail": "已选 2 / 共 3 个孔 "
+    },
+    {
+      "name": "半选 → 点全选行 → 全选 3 个",
+      "pass": true,
+      "detail": {
+        "label": "全选所有孔",
+        "checked": true,
+        "indeterminate": false
+      }
+    },
+    {
+      "name": "全选 → 再点 → 全不选且导出按钮禁用",
+      "pass": true,
+      "detail": "已选 0 / 共 3 个孔 "
+    },
+    {
+      "name": "筛选到只选中 1 个孔",
+      "pass": true,
+      "detail": "已选 1 / 共 3 个孔 "
+    },
+    {
+      "name": "单孔 PDF 文件名 = 日期_孔号.pdf",
+      "pass": true,
+      "detail": "[{\"name\":\"2026-10-26_ZK1.pdf\",\"size\":564148}]"
+    },
+    {
+      "name": "单孔导出后对话框关闭",
+      "pass": true
+    },
+    {
+      "name": "再次打开对话框恢复默认全选",
+      "pass": true
+    },
+    {
+      "name": "多孔 PDF 只下载 1 个文件",
+      "pass": true,
+      "detail": "[{\"name\":\"开土记录_3孔_2026-10-30.pdf\",\"size\":1675253}]"
+    },
+    {
+      "name": "多孔 PDF 文件名 = 开土记录_3孔_当天日期.pdf",
+      "pass": true,
+      "detail": "开土记录_3孔_2026-10-30.pdf"
+    },
+    {
+      "name": "合并 PDF 页数 = 3（记录顺序接续，无多余空白页）",
+      "pass": true,
+      "detail": "pages=3"
+    },
+    {
+      "name": "xlsx 对话框提示每孔一个文件",
+      "pass": true,
+      "detail": "导出电子表格 | 已选 3 / 共 3 个孔 | 取消全选 | ZK1 | 2026-10-26 | 土样 2 条 | ZK2 | 2026-10-27 | 土样 1 条 | ZK3 | 未填写开土日期 | 土样 1 条 | 每个孔生成一个独立文件，请允许多个文件下载 | 取消 | 导出 3 个孔"
+    },
+    {
+      "name": "批量 xlsx 下载 3 个文件（每孔一个）",
+      "pass": true,
+      "detail": "[\"P1_ZK1_开土记录表.xlsx\",\"P1_ZK2_开土记录表.xlsx\",\"P1_ZK3_开土记录表.xlsx\"]"
+    },
+    {
+      "name": "xlsx 文件名按孔区分",
+      "pass": true,
+      "detail": "P1_ZK1_开土记录表.xlsx, P1_ZK2_开土记录表.xlsx, P1_ZK3_开土记录表.xlsx"
+    },
+    {
+      "name": "列表卡片无导出图标按钮",
+      "pass": true,
+      "detail": {
+        "listIcons": 0,
+        "exportButtons": 0
+      }
+    },
+    {
+      "name": "编辑页 AppBar 仅返回箭头 + 「编辑记录」，无导出按钮",
+      "pass": true,
+      "detail": {
+        "title": "编辑记录",
+        "exportButtons": 0,
+        "hasBack": true
+      }
+    },
+    {
+      "name": "320px 无横向滚动",
+      "pass": true,
+      "detail": "scrollWidth=320, innerWidth=320, overflow=[]"
+    },
+    {
+      "name": "360px 无横向滚动",
+      "pass": true,
+      "detail": "scrollWidth=360, innerWidth=360, overflow=[]"
+    },
+    {
+      "name": "390px 无横向滚动",
+      "pass": true,
+      "detail": "scrollWidth=390, innerWidth=390, overflow=[]"
+    },
+    {
+      "name": "430px 无横向滚动",
+      "pass": true,
+      "detail": "scrollWidth=430, innerWidth=430, overflow=[]"
+    },
+    {
+      "name": "3 个工作表 → 识别到 3 个孔（来自 3 份送样单）",
+      "pass": true,
+      "detail": "导入送样单\n选择送样单文件\n识别到 3 个孔（来自 3 份送样单），共 4 条土样：\n鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。\n孔号 ZK1 ｜ 2 条土样 ｜ 导出导入探针工程 ZK1\n\n来源工作表：ZK1单\n\n鉴别格式\n普通目力鉴别\n三角坐标定名\n孔号 ZK2 ｜ 1 条土样 ｜ 导出导入探针工程 ZK2\n\n来源工作表：ZK2单\n\n鉴别格式\n普通目力鉴别\n三角坐标定名\n孔号 ZK3 ｜ 1 条土样 ｜ 导出导入探针工程 ZK3\n\n来源工作表：ZK3单\n\n鉴别格式\n普通"
+    },
+    {
+      "name": "导入后本地存 3 条独立记录（每表一个孔）",
+      "pass": true,
+      "detail": "[{\"hole\":\"ZK1\",\"n\":2,\"sheet\":\"导出导入探针工程 ZK1\"},{\"hole\":\"ZK2\",\"n\":1,\"sheet\":\"导出导入探针工程 ZK2\"},{\"hole\":\"ZK3\",\"n\":1,\"sheet\":\"导出导入探针工程 ZK3\"}]"
+    },
+    {
+      "name": "同孔两表 → 1 个孔（来自 2 份送样单）、共 4 条土样",
+      "pass": true,
+      "detail": "识别到 1 个孔（来自 2 份送样单），共 4 条土样：\n鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。\n孔号 ZK1-1 ｜ 4 条土样 ｜ 同孔合并测试工程 ZK1-1\n\n来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单\n\n鉴别格式\n普通目力鉴别\n三角坐标定名\n取消\n确认导入"
+    },
+    {
+      "name": "同孔两表 → 显示「已合并 2 张送样单」与合并说明",
+      "pass": true,
+      "detail": "导入送样单\n选择送样单文件\n同孔送样单已合并（1 条）\n孔号 ZK1-1 的 2 份送样单已合并为 1 条记录\n识别到 1 个孔（来自 2 份送样单），共 4 条土样：\n鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。\n孔号 ZK1-1 ｜ 4 条土样 ｜ 同孔合并测试工程 ZK1-1\n\n来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单\n\n鉴别格式\n普通目力鉴别\n三角坐标定名\n取消\n确"
+    },
+    {
+      "name": "同孔两表导入后：1 条记录、4 条土样、土号顺序连续",
+      "pass": true,
+      "detail": "[{\"hole\":\"ZK1-1\",\"n\":4,\"soils\":[\"ZK1-1-01\",\"ZK1-1-02\",\"ZK1-1-03\",\"ZK1-1-04\"]}]"
+    },
+    {
+      "name": "续页无孔号 → 沿用上一孔并合并为 1 条 4 条土样",
+      "pass": true,
+      "detail": "识别到 1 个孔（来自 2 份送样单），共 4 条土样：\n鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。\n孔号 ZK2-1 ｜ 4 条土样 ｜ 同孔合并测试工程 ZK2-1\n\n来源工作表：Sheet1、Sheet2 ｜ 已合并 2 张送样单\n\n鉴别格式\n普通目力鉴别\n三角坐标定名\n取消\n确认导入"
+    },
+    {
+      "name": "续页土号重开 → 红色来源错误区块可见",
+      "pass": true,
+      "detail": "导入送样单\n选择送样单文件\n疑似送样单来源有误（1 条），请核对后再导入\n工作表「Sheet2」第 4 行未写孔号、土号又从 ZK2-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK2-1」合并，请核对该表是否属于本孔。\n同孔送样单已合并（1 条）\n孔号 ZK2-1 的 2 份送样单已合并为 1 条记录\n解析提示（1 条）\n工作表「Sheet2」第 4 行未写孔号，已沿用上一张的 ZK2-1\n识别到 1 "
+    },
+    {
+      "name": "错误文案含具体工作表、土号与「已按沿用「ZK2-1」合并」",
+      "pass": true,
+      "detail": "工作表「Sheet2」第 4 行未写孔号、土号又从 ZK2-1-01 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「ZK2-1」合并，请核对该表是否属于本孔。"
+    },
+    {
+      "name": "重复孔号文件 → 合并为 1 个孔，旧 warning 不再出现",
+      "pass": true,
+      "detail": "识别到 1 个孔（来自 2 份送样单），共 2 条土样：\n鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。\n孔号 ZK2 ｜ 2 条土样 ｜ 导出导入探针工程 ZK2\n\n来源工作表：Sheet1、Sheet3 ｜ 已合并 2 张送样单\n\n鉴别格式\n普通目力鉴别\n三角坐标定名\n取消\n确认导入"
+    },
+    {
+      "name": "跨页用例：2 条记录默认全选",
+      "pass": true,
+      "detail": "已选 2 / 共 2 个孔 "
+    },
+    {
+      "name": "合并文件名 = 开土记录_2孔_日期.pdf",
+      "pass": true,
+      "detail": "开土记录_2孔_2026-10-30.pdf"
+    },
+    {
+      "name": "合并页数 = 2（25 条土样）+ 1（1 条土样）= 3 页",
+      "pass": true,
+      "detail": "pages=3"
+    }
+  ],
+  "widthRows": [
+    {
+      "width": 320,
+      "innerWidth": 320,
+      "scrollWidth": 320,
+      "bodyScrollWidth": 320,
+      "overflowButtons": [],
+      "toolbar": "开土记录录入|批量删除|导入 / 导出"
+    },
+    {
+      "width": 360,
+      "innerWidth": 360,
+      "scrollWidth": 360,
+      "bodyScrollWidth": 360,
+      "overflowButtons": [],
+      "toolbar": "开土记录录入|批量删除|导入 / 导出"
+    },
+    {
+      "width": 390,
+      "innerWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowButtons": [],
+      "toolbar": "开土记录录入|批量删除|导入 / 导出"
+    },
+    {
+      "width": 430,
+      "innerWidth": 430,
+      "scrollWidth": 430,
+      "bodyScrollWidth": 430,
+      "overflowButtons": [],
+      "toolbar": "开土记录录入|批量删除|导入 / 导出"
+    }
+  ],
+  "singleFiles": [
+    {
+      "name": "2026-10-26_ZK1.pdf",
+      "size": 564148
+    }
+  ],
+  "mergedFiles": [
+    {
+      "name": "开土记录_3孔_2026-10-30.pdf",
+      "size": 1675253
+    }
+  ],
+  "xlsxFiles": [
+    {
+      "name": "P1_ZK1_开土记录表.xlsx",
+      "size": 10704
+    },
+    {
+      "name": "P1_ZK2_开土记录表.xlsx",
+      "size": 10551
+    },
+    {
+      "name": "P1_ZK3_开土记录表.xlsx",
+      "size": 10544
+    }
+  ],
+  "pageCount": 3,
+  "crossFiles": [
+    {
+      "name": "开土记录_2孔_2026-10-30.pdf",
+      "size": 1784304
+    }
+  ],
+  "crossPages": 3
+}

@@ -33,9 +33,11 @@ __export(importDelivery_exports, {
   detectRecordMode: () => detectRecordMode,
   isChecked: () => isChecked,
   matchSoilTypeName: () => matchSoilTypeName,
+  mergeImportedByHole: () => mergeImportedByHole,
   normalizeHeader: () => normalizeHeader,
   normalizeSoilName: () => normalizeSoilName,
-  parseDeliveryFile: () => parseDeliveryFile
+  parseDeliveryFile: () => parseDeliveryFile,
+  soilSeqOf: () => soilSeqOf
 });
 module.exports = __toCommonJS(importDelivery_exports);
 
@@ -171,6 +173,97 @@ var TEST_LABEL_MAP = [
   { label: "\u81EA\u7136\u5FEB\u526A", item: "\u81EA\u7136\u5FEB\u526A" }
 ];
 var NO_SET = /* @__PURE__ */ new Set(["", "\u2014", "\u2013", "\xD7", "/", "\uFF0F", "\u65E0", "\u5426"]);
+function uniqueStrings(values) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const v of values) {
+    if (!seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+function soilSeqOf(soilNumber) {
+  const s = String(soilNumber ?? "").trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  const m = /(\d+)$/.exec(s);
+  if (!m) return null;
+  const before = s.slice(0, m.index);
+  if (!/[-A-Za-z]$/.test(before)) return null;
+  if (before.endsWith("-")) {
+    const head = before.slice(0, -1);
+    if (head && !head.includes("-")) return null;
+  }
+  return parseInt(m[1], 10);
+}
+function mergeImportedByHole(items) {
+  const groups = [];
+  const byHole = /* @__PURE__ */ new Map();
+  for (const item of items ?? []) {
+    const hole = (item.holeCode ?? "").trim();
+    if (!hole) {
+      groups.push({ hole: "", items: [item] });
+      continue;
+    }
+    const existing = byHole.get(hole);
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      const group = { hole, items: [item] };
+      byHole.set(hole, group);
+      groups.push(group);
+    }
+  }
+  const records = [];
+  const mergedNotes = [];
+  const errors = [];
+  for (const group of groups) {
+    const first = group.items[0];
+    const isMerged = group.items.length > 1;
+    const mergedWarnings = uniqueStrings(group.items.flatMap((x) => x.warnings ?? []));
+    const mergedErrors = uniqueStrings(group.items.flatMap((x) => x.errors ?? []));
+    if (!isMerged) {
+      records.push({
+        ...first,
+        warnings: mergedWarnings,
+        errors: mergedErrors,
+        mergedFrom: 1
+      });
+      errors.push(...mergedErrors);
+      continue;
+    }
+    const samples = group.items.flatMap(
+      (x) => (x.record.samples ?? []).map((s) => ({
+        ...s,
+        soilNumber: (s.soilNumber ?? "").trim()
+      }))
+    );
+    const customTestItems = uniqueStrings(
+      group.items.flatMap((x) => x.record.customTestItems ?? [])
+    );
+    const sheetName = uniqueStrings(group.items.map((x) => x.sheetName)).join("\u3001");
+    records.push({
+      record: {
+        ...first.record,
+        samples,
+        customTestItems
+      },
+      sheetName,
+      sampleCount: samples.length,
+      holeCode: first.holeCode,
+      warnings: mergedWarnings,
+      errors: mergedErrors,
+      mergedFrom: group.items.length
+    });
+    errors.push(...mergedErrors);
+    mergedNotes.push(
+      `\u5B54\u53F7 ${group.hole} \u7684 ${group.items.length} \u4EFD\u9001\u6837\u5355\u5DF2\u5408\u5E76\u4E3A 1 \u6761\u8BB0\u5F55`
+    );
+  }
+  return { records, mergedNotes, errors: uniqueStrings(errors) };
+}
 var FOOTER_KEYWORDS = ["\u9001\u6837\u4EBA", "\u6536\u6837\u4EBA", "\u8BF4\u660E"];
 function normalizeHeader(s) {
   return cellText(s).replace(/\s+/g, "");
@@ -258,8 +351,8 @@ function findColByText(ws, rowNum, text) {
   }
   return -1;
 }
-function findInfoValue(ws, hrRow, label) {
-  const start = Math.max(1, hrRow - 15);
+function findInfoValue(ws, hrRow, label, minRow = Math.max(1, hrRow - 15)) {
+  const start = Math.max(1, minRow);
   for (let r = start; r < hrRow; r++) {
     const row = ws.getRow(r);
     for (let c = 1; c <= row.cellCount; c++) {
@@ -269,7 +362,7 @@ function findInfoValue(ws, hrRow, label) {
       if (rest) return rest;
       const right = cellText(row.getCell(c + 1).value).trim();
       if (right) return right;
-      const left = cellText(row.getCell(c - 1).value).trim();
+      const left = c > 1 ? cellText(row.getCell(c - 1).value).trim() : "";
       if (left) return left;
     }
   }
@@ -303,8 +396,9 @@ function findHeaderRows(ws) {
   }
   return hrs;
 }
-function parseOneBlock(ws, hr, sub, nextHr) {
+function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart = 1) {
   const warnings = [];
+  const errors = [];
   const endRow = Math.min(nextHr - 1, ws.rowCount);
   const soilNoCol = findColByText(ws, hr, "\u571F\u6837\u7F16\u53F7");
   const fieldRecCol = findColByText(ws, hr, "\u91CE\u5916\u5B9A\u540D");
@@ -339,9 +433,17 @@ function parseOneBlock(ws, hr, sub, nextHr) {
     unknownCols.push({ col: c, label });
   }
   const unknownSeen = /* @__PURE__ */ new Set();
-  const holeCode = findInfoValue(ws, hr, "\u5B54\u53F7");
+  const ownHoleCode = findInfoValue(ws, hr, "\u5B54\u53F7", holeSearchStart);
+  const inherited = !ownHoleCode && !!inheritedHole;
+  const holeCode = ownHoleCode || inheritedHole;
   const projectName = findInfoValue(ws, hr, "\u5DE5\u7A0B\u540D\u79F0");
-  if (!holeCode) warnings.push("\u672A\u5728\u5DE5\u4F5C\u8868\u4E2D\u627E\u5230\u201C\u5B54\u53F7\u201D\uFF0C\u8BB0\u5F55\u5C06\u4EE5\u7A7A\u5B54\u53F7\u521B\u5EFA\u3002");
+  if (inherited) {
+    warnings.push(
+      `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u672A\u5199\u5B54\u53F7\uFF0C\u5DF2\u6CBF\u7528\u4E0A\u4E00\u5F20\u7684 ${holeCode}`
+    );
+  } else if (!holeCode) {
+    warnings.push("\u672A\u5728\u5DE5\u4F5C\u8868\u4E2D\u627E\u5230\u201C\u5B54\u53F7\u201D\uFF0C\u8BB0\u5F55\u5C06\u4EE5\u7A7A\u5B54\u53F7\u521B\u5EFA\u3002");
+  }
   if (!projectName) warnings.push("\u672A\u5728\u5DE5\u4F5C\u8868\u4E2D\u627E\u5230\u201C\u5DE5\u7A0B\u540D\u79F0\u201D\u3002");
   const samples = [];
   let idx = 0;
@@ -375,6 +477,14 @@ function parseOneBlock(ws, hr, sub, nextHr) {
     }
     s.otherTestItems = other;
     samples.push(coupleDisturbance(s));
+  }
+  if (inherited && samples.length > 0) {
+    const firstSoilNumber = (samples[0].soilNumber ?? "").trim();
+    if (soilSeqOf(firstSoilNumber) === 1) {
+      errors.push(
+        `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u672A\u5199\u5B54\u53F7\u3001\u571F\u53F7\u53C8\u4ECE ${firstSoilNumber} \u91CD\u65B0\u5F00\u59CB\uFF0C\u7591\u4F3C\u9001\u6837\u5355\u6765\u6E90\u6709\u8BEF\uFF08\u540C\u4E00\u5B54\u7684\u7EED\u9875\u5E94\u63A5\u7EED\u7F16\u53F7\uFF09\uFF0C\u5DF2\u6309\u6CBF\u7528\u300C${holeCode}\u300D\u5408\u5E76\uFF0C\u8BF7\u6838\u5BF9\u8BE5\u8868\u662F\u5426\u5C5E\u4E8E\u672C\u5B54\u3002`
+      );
+    }
   }
   for (const lbl of unknownSeen) {
     warnings.push(`\u9001\u6837\u5355\u542B\u672A\u77E5\u8BD5\u9A8C\u9879\u76EE\uFF1A${lbl}\uFF08\u5DF2\u5F52\u5165"\u5176\u4ED6\u8BD5\u9A8C\u9879\u76EE"\uFF0C\u4E0D\u5F71\u54CD\u5BFC\u51FA\uFF09`);
@@ -410,14 +520,21 @@ function parseOneBlock(ws, hr, sub, nextHr) {
     sheetName: ws.name,
     sampleCount: samples.length,
     holeCode,
-    warnings
+    warnings,
+    errors
   };
 }
 async function parseDeliveryFile(buffer) {
   const XL = (await importWithRecovery(() => import("exceljs"))).default;
   const wb = new XL.Workbook();
   await wb.xlsx.load(buffer);
-  const result = { records: [], warnings: [] };
+  const result = {
+    records: [],
+    warnings: [],
+    errors: [],
+    mergedNotes: []
+  };
+  let lastHoleCode = "";
   for (const ws of wb.worksheets) {
     const hrs = findHeaderRows(ws);
     if (hrs.length === 0) continue;
@@ -425,8 +542,17 @@ async function parseDeliveryFile(buffer) {
       const hr = hrs[i];
       const sub = hr + 1;
       const nextHr = i + 1 < hrs.length ? hrs[i + 1] : ws.rowCount + 1;
+      const holeSearchStart = i > 0 ? hrs[i - 1] + 1 : 1;
       try {
-        const parsed = parseOneBlock(ws, hr, sub, nextHr);
+        const parsed = parseOneBlock(
+          ws,
+          hr,
+          sub,
+          nextHr,
+          lastHoleCode,
+          holeSearchStart
+        );
+        if (parsed.holeCode) lastHoleCode = parsed.holeCode;
         if (parsed.sampleCount === 0) {
           result.warnings.push(
             `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u7684\u9001\u6837\u5355\u5757\u672A\u8BC6\u522B\u5230\u571F\u6837\u6570\u636E\uFF0C\u5DF2\u8DF3\u8FC7\u3002`
@@ -435,10 +561,17 @@ async function parseDeliveryFile(buffer) {
         }
         result.records.push(parsed);
       } catch (e) {
-        result.warnings.push(`\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u7684\u9001\u6837\u5355\u5757\u89E3\u6790\u5931\u8D25\uFF1A${e?.message ?? String(e)}`);
+        const reason = e?.message ?? String(e);
+        result.warnings.push(
+          `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u7684\u9001\u6837\u5355\u5757\u89E3\u6790\u5931\u8D25\uFF0C\u5DF2\u8DF3\u8FC7\uFF08\u539F\u56E0\uFF1A${reason}\uFF09\uFF0C\u8BF7\u68C0\u67E5\u8BE5\u8868\u683C\u5F0F\u662F\u5426\u4E0E\u6A21\u677F\u4E00\u81F4\u3002`
+        );
       }
     }
   }
+  const merged = mergeImportedByHole(result.records);
+  result.records = merged.records;
+  result.mergedNotes = merged.mergedNotes;
+  result.errors = merged.errors;
   return result;
 }
 // Annotate the CommonJS export names for ESM import in node:
@@ -446,7 +579,9 @@ async function parseDeliveryFile(buffer) {
   detectRecordMode,
   isChecked,
   matchSoilTypeName,
+  mergeImportedByHole,
   normalizeHeader,
   normalizeSoilName,
-  parseDeliveryFile
+  parseDeliveryFile,
+  soilSeqOf
 });

@@ -30,10 +30,15 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/pdfExport.ts
 var pdfExport_exports = {};
 __export(pdfExport_exports, {
+  buildMergedPdfFileName: () => buildMergedPdfFileName,
   buildPdfPages: () => buildPdfPages,
   buildRecordPdfBlob: () => buildRecordPdfBlob,
+  buildRecordsPdfBlob: () => buildRecordsPdfBlob,
+  buildSinglePdfFileName: () => buildSinglePdfFileName,
   exportRecordPdf: () => exportRecordPdf,
-  renderHeaderTexts: () => renderHeaderTexts
+  exportRecordsPdf: () => exportRecordsPdf,
+  renderHeaderTexts: () => renderHeaderTexts,
+  sanitizeFileNamePart: () => sanitizeFileNamePart
 });
 module.exports = __toCommonJS(pdfExport_exports);
 
@@ -164,6 +169,13 @@ function fitHeaderFontSize(text, basePt, maxWidthPt, minPt = 6) {
   return Math.max(minPt, Math.round(fitted * 100) / 100);
 }
 
+// src/exportNaming.ts
+var ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|\u0000-\u001f]/g;
+function sanitizeFileNamePart(input, fallback = "\u672A\u547D\u540D") {
+  const cleaned = String(input ?? "").replace(ILLEGAL_FILENAME_CHARS, "-").trim();
+  return cleaned || fallback;
+}
+
 // src/pdfExport.ts
 var PT = 4 / 3;
 var px = (pt) => pt * PT;
@@ -284,11 +296,24 @@ function uint8ToBase64(bytes) {
   }
   return btoa(binary);
 }
+function localDateStr(date = /* @__PURE__ */ new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+function buildSinglePdfFileName(record) {
+  const date = sanitizeFileNamePart(record?.engineering?.openDate ?? "", "");
+  const hole = sanitizeFileNamePart(record?.engineering?.holeCode ?? "", "");
+  const base = date ? `${date}_${hole || "\u672A\u547D\u540D\u5B54"}` : hole || "\u672A\u547D\u540D\u5B54";
+  return `${base}.pdf`;
+}
+function buildMergedPdfFileName(records, today) {
+  const count = records?.length ?? 0;
+  if (count === 1) return buildSinglePdfFileName(records[0]);
+  const day = sanitizeFileNamePart(today || localDateStr(), "") || localDateStr();
+  return `\u5F00\u571F\u8BB0\u5F55_${count}\u5B54_${day}.pdf`;
+}
 function buildPdfFileName(record) {
-  const d = (record.engineering.openDate ?? "").trim();
-  const h = (record.engineering.holeCode ?? "").trim();
-  const prefix = [d, h].filter(Boolean).join("_");
-  return `${prefix || "\u5F00\u571F\u8BB0\u5F55"}.pdf`;
+  return buildSinglePdfFileName(record);
 }
 function renderInfoLine(eng) {
   const parts = (eng.openDate ?? "").trim().split("-");
@@ -418,66 +443,97 @@ function shrinkOverflow(root) {
     }
   });
 }
-async function buildRecordPdfBlob(record, header = CMA_DEFAULT) {
-  const pages = buildPdfPages(record);
-  const totalPages = pages.length;
+async function buildRecordsPdfBlob(records, header = CMA_DEFAULT) {
   const html2canvas = (await getHtml2Canvas()).default;
   const { jsPDF } = await getJsPdf();
   const pdf = new jsPDF({ unit: "mm", format: "a3", orientation: "landscape" });
-  for (let i = 0; i < totalPages; i++) {
-    const el = buildPageElement(pages[i], record, i + 1, totalPages, header);
-    document.body.appendChild(el);
-    shrinkOverflow(el);
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: "#fff",
-      width: PAGE_W_PX,
-      height: PAGE_H_PX,
-      windowWidth: PAGE_W_PX,
-      windowHeight: PAGE_H_PX
-    });
-    document.body.removeChild(el);
-    const img = canvas.toDataURL("image/jpeg", 0.95);
-    if (i > 0) pdf.addPage();
-    pdf.addImage(img, "JPEG", 0, 0, 420, 297);
+  let hasPage = false;
+  for (const record of records) {
+    const pages = buildPdfPages(record);
+    const totalPages = pages.length;
+    for (let i = 0; i < totalPages; i++) {
+      const el = buildPageElement(pages[i], record, i + 1, totalPages, header);
+      document.body.appendChild(el);
+      shrinkOverflow(el);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: "#fff",
+        width: PAGE_W_PX,
+        height: PAGE_H_PX,
+        windowWidth: PAGE_W_PX,
+        windowHeight: PAGE_H_PX
+      });
+      document.body.removeChild(el);
+      const img = canvas.toDataURL("image/jpeg", 0.95);
+      if (hasPage) pdf.addPage();
+      pdf.addImage(img, "JPEG", 0, 0, 420, 297);
+      hasPage = true;
+    }
   }
   return pdf.output("blob");
+}
+async function buildRecordPdfBlob(record, header = CMA_DEFAULT) {
+  return buildRecordsPdfBlob([record], header);
+}
+async function deliverPdfBlob(blob, fileName) {
+  if (import_core.Capacitor.isNativePlatform()) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64 = uint8ToBase64(new Uint8Array(arrayBuffer));
+    const fsResult = await import_filesystem.Filesystem.writeFile({
+      path: fileName,
+      data: base64,
+      directory: import_filesystem.Directory.Documents
+    });
+    try {
+      await import_share.Share.share({ title: "\u5F00\u571F\u8BB0\u5F55\u8868", text: "\u5F00\u571F\u8BB0\u5F55\u8868 PDF \u5BFC\u51FA", files: [fsResult.uri] });
+    } catch {
+    }
+    return { success: true, message: `\u5DF2\u751F\u6210\u5E76\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\uFF1A${fileName}`, path: fsResult.uri };
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  return { success: true, message: `\u5DF2\u5BFC\u51FA ${fileName}\uFF08\u6D4F\u89C8\u5668\u4E0B\u8F7D\uFF09` };
+}
+async function exportRecordsPdf(records, header = CMA_DEFAULT) {
+  if (!records || records.length === 0) {
+    return { success: false, message: "\u6CA1\u6709\u9009\u62E9\u8981\u5BFC\u51FA\u7684\u5B54" };
+  }
+  try {
+    const merged = records.length > 1;
+    const fileName = merged ? buildMergedPdfFileName(records) : buildSinglePdfFileName(records[0]);
+    const blob = await buildRecordsPdfBlob(records, header);
+    const result = await deliverPdfBlob(blob, fileName);
+    if (result.success && merged) {
+      return { ...result, message: `${result.message}\uFF08${records.length} \u4E2A\u5B54\u5DF2\u5408\u5E76\u4E3A\u4E00\u4E2A PDF\uFF09` };
+    }
+    return result;
+  } catch (e) {
+    return { success: false, message: "PDF \u5BFC\u51FA\u5931\u8D25\uFF1A" + (e?.message ?? String(e)) };
+  }
 }
 async function exportRecordPdf(record, header = CMA_DEFAULT) {
   try {
     const blob = await buildRecordPdfBlob(record, header);
-    const fileName = buildPdfFileName(record);
-    if (import_core.Capacitor.isNativePlatform()) {
-      const arrayBuffer = await blob.arrayBuffer();
-      const base64 = uint8ToBase64(new Uint8Array(arrayBuffer));
-      const fsResult = await import_filesystem.Filesystem.writeFile({
-        path: fileName,
-        data: base64,
-        directory: import_filesystem.Directory.Documents
-      });
-      try {
-        await import_share.Share.share({ title: "\u5F00\u571F\u8BB0\u5F55\u8868", text: "\u5F00\u571F\u8BB0\u5F55\u8868 PDF \u5BFC\u51FA", files: [fsResult.uri] });
-      } catch {
-      }
-      return { success: true, message: `\u5DF2\u751F\u6210\u5E76\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\uFF1A${fileName}`, path: fsResult.uri };
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return { success: true, message: `\u5DF2\u5BFC\u51FA ${fileName}\uFF08\u6D4F\u89C8\u5668\u4E0B\u8F7D\uFF09` };
+    return await deliverPdfBlob(blob, buildPdfFileName(record));
   } catch (e) {
     return { success: false, message: "PDF \u5BFC\u51FA\u5931\u8D25\uFF1A" + (e?.message ?? String(e)) };
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  buildMergedPdfFileName,
   buildPdfPages,
   buildRecordPdfBlob,
+  buildRecordsPdfBlob,
+  buildSinglePdfFileName,
   exportRecordPdf,
-  renderHeaderTexts
+  exportRecordsPdf,
+  renderHeaderTexts,
+  sanitizeFileNamePart
 });

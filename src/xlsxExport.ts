@@ -4,6 +4,7 @@ import { importWithRecovery } from './pwaRecovery';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { SoilRecord } from './types';
+import { buildXlsxFileName } from './exportNaming';
 import {
   SOIL_TYPE_A,
   SOIL_TYPE_B,
@@ -79,12 +80,13 @@ function styleCell(
   };
 }
 
-/** 生成文件名：<工程编号>_<孔号>_开土记录表.xlsx */
+/**
+ * 生成文件名：<工程编号>_<孔号>_开土记录表.xlsx
+ * 片段清洗规则与 PDF 共用 exportNaming（非法字符 → `-`），
+ * 避免 Excel 文件名含 `/`、`:` 等被系统/浏览器截断。
+ */
 function buildFileName(record: SoilRecord): string {
-  const prefix = [record.engineering.projectCode, record.engineering.holeCode]
-    .filter(Boolean)
-    .join('_');
-  return `${prefix || '开土记录'}_开土记录表.xlsx`;
+  return buildXlsxFileName(record);
 }
 
 /** 组装工作簿（纯逻辑，不依赖平台，便于测试） */
@@ -521,4 +523,68 @@ export async function exportRecord(record: SoilRecord): Promise<ExportResult> {
   } catch (e: any) {
     return { success: false, message: '导出失败：' + (e?.message ?? String(e)) };
   }
+}
+
+/** 等待指定毫秒（批量下载间隔，避免浏览器把连续下载判定为弹窗/多文件拦截） */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * 批量导出 xlsx：每个孔生成一个独立文件（不会把多个孔塞进同一个工作簿）。
+ *
+ * - Web 端：逐个触发浏览器下载，孔之间间隔 300ms，降低被浏览器拦截的概率；
+ *   首次多文件下载时浏览器可能弹出「是否允许多个下载」的询问。
+ * - 原生端：逐个写入文档目录并调用系统分享（沿用 {@link exportRecord} 的既有行为），
+ *   文件较多时会依次弹出分享面板，取消分享不影响文件已保存。
+ *
+ * 返回汇总结果：全部成功 / 部分失败 / 全部失败。
+ */
+export async function exportRecordsXlsx(records: SoilRecord[]): Promise<ExportResult> {
+  if (!records || records.length === 0) {
+    return { success: false, message: '没有选择要导出的孔' };
+  }
+
+  let successCount = 0;
+  const failures: string[] = [];
+
+  for (let i = 0; i < records.length; i++) {
+    if (i > 0) await delay(300);
+    const record = records[i];
+    const label = (record.engineering?.holeCode ?? '').trim() || '未命名孔';
+    try {
+      const res = await exportRecord(record);
+      if (res.success) {
+        successCount += 1;
+      } else {
+        failures.push(`${label}：${res.message}`);
+      }
+    } catch (e: any) {
+      failures.push(`${label}：${e?.message ?? String(e)}`);
+    }
+  }
+
+  if (successCount === 0) {
+    return {
+      success: false,
+      message: `导出失败（${records.length} 个文件均未成功）：${failures.join('；')}`,
+    };
+  }
+
+  const native = Capacitor.isNativePlatform();
+  const tail = failures.length
+    ? `，${failures.length} 个失败（${failures.join('；')}）`
+    : '';
+
+  if (native) {
+    return {
+      success: true,
+      message: `已导出 ${successCount} 个文件到文档目录（已逐个打开系统分享）${tail}`,
+    };
+  }
+
+  return {
+    success: true,
+    message: `已导出 ${successCount} 个文件（每个孔一个文件，浏览器可能询问是否允许多个下载）${tail}`,
+  };
 }

@@ -40,11 +40,15 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<ImportedRecord[]>([]);
   const [resultWarnings, setResultWarnings] = useState<string[]>([]);
+  const [resultErrors, setResultErrors] = useState<string[]>([]);
+  const [mergedNotes, setMergedNotes] = useState<string[]>([]);
 
   const reset = () => {
     setError('');
     setPreview([]);
     setResultWarnings([]);
+    setResultErrors([]);
+    setMergedNotes([]);
     setLoading(false);
   };
 
@@ -57,11 +61,15 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
     setError('');
     setPreview([]);
     setResultWarnings([]);
+    setResultErrors([]);
+    setMergedNotes([]);
     setLoading(true);
     try {
       const buffer = await file.arrayBuffer();
       const result = await parseDeliveryFile(buffer);
       setResultWarnings(result.warnings);
+      setResultErrors(result.errors ?? []);
+      setMergedNotes(result.mergedNotes ?? []);
       if (result.records.length === 0) {
         const msg = result.warnings.length
           ? result.warnings.join('；')
@@ -81,8 +89,11 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
     }
   };
 
-  // 解析告警聚合（文件级 resultWarnings + 各送样单块 warnings），醒目展示
+  // 解析提示聚合（文件级 + 各记录块），错误级与普通 warning 分开展示
   const allWarnings = [...resultWarnings, ...preview.flatMap((r) => r.warnings)];
+  const allErrors = Array.from(
+    new Set([...resultErrors, ...preview.flatMap((r) => r.errors ?? [])]),
+  );
 
   /** 修改某份送样单的鉴别格式（解析时按野外定名自动识别，用户可在此纠正） */
   const setModeAt = (idx: number, mode: RecordMode) => {
@@ -98,6 +109,8 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
   };
 
   const totalSamples = preview.reduce((a, r) => a + r.sampleCount, 0);
+  // M = 合并前的送样单块数（mergedFrom 之和）；N = 合并后的孔数（preview.length）
+  const totalDeliveryBlocks = preview.reduce((a, r) => a + (r.mergedFrom ?? 1), 0);
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
@@ -133,6 +146,32 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
           </Alert>
         )}
 
+        {allErrors.length > 0 && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              疑似送样单来源有误（{allErrors.length} 条），请核对后再导入
+            </Typography>
+            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              {allErrors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </Box>
+          </Alert>
+        )}
+
+        {mergedNotes.length > 0 && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              同孔送样单已合并（{mergedNotes.length} 条）
+            </Typography>
+            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              {mergedNotes.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+            </Box>
+          </Alert>
+        )}
+
         {allWarnings.length > 0 && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
@@ -149,7 +188,7 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
         {preview.length > 0 && (
           <Box sx={{ mb: 1 }}>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-              识别到 {preview.length} 份送样单，共 {totalSamples} 条土样：
+              识别到 {preview.length} 个孔（来自 {totalDeliveryBlocks} 份送样单），共 {totalSamples} 条土样：
             </Typography>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
               鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。
@@ -165,7 +204,9 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
                     <ListItemText
                       sx={{ my: 0 }}
                       primary={`孔号 ${r.holeCode || '（空）'} ｜ ${r.sampleCount} 条土样 ｜ ${r.record.name}`}
-                      secondary={`来源工作表：${r.sheetName}`}
+                      secondary={`来源工作表：${r.sheetName}${
+                        (r.mergedFrom ?? 1) > 1 ? ` ｜ 已合并 ${r.mergedFrom} 张送样单` : ''
+                      }`}
                     />
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Typography variant="caption" color="text.secondary">

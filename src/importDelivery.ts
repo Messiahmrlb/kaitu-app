@@ -23,7 +23,7 @@ import { importWithRecovery } from './pwaRecovery';
 export interface ImportedRecord {
   /** 组装好的完整记录 */
   record: SoilRecord;
-  /** 来源工作表名 */
+  /** 来源工作表名（同孔合并后为「、」连接的多个工作表） */
   sheetName: string;
   /** 土样条数 */
   sampleCount: number;
@@ -31,14 +31,22 @@ export interface ImportedRecord {
   holeCode: string;
   /** 该块级别告警（如未找到孔号） */
   warnings: string[];
+  /** 该块级别的错误级提示（来源疑似有误，如续页土号重新从 1 开始） */
+  errors?: string[];
+  /** 同孔合并了几份送样单（未合并为 1） */
+  mergedFrom?: number;
 }
 
 /** 整份文件解析结果 */
 export interface DeliveryParseResult {
-  /** 所有被识别为送样单的块解析结果（一个孔号一条） */
+  /** 所有被识别为送样单的块解析结果（同孔已合并，一个孔一条） */
   records: ImportedRecord[];
   /** 文件级告警（如某块跳过原因） */
   warnings: string[];
+  /** 文件级错误级提示（来源疑似有误，不阻止导入） */
+  errors?: string[];
+  /** 同孔合并说明（如「孔号 ZK1-1 的 3 份送样单已合并为 1 条记录」） */
+  mergedNotes?: string[];
 }
 
 /** 送样单子表头中的试验项目标签 → App 内 testItems 取值（顺序即输出顺序） */
@@ -55,6 +63,143 @@ const TEST_LABEL_MAP: { label: string; item: string }[] = [
 
 /** 未勾选标记集合 */
 const NO_SET = new Set<string>(['', '—', '–', '×', '/', '／', '无', '否']);
+
+/** 去重并保持首次出现顺序 */
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    if (!seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+/**
+ * 取土样编号末尾的土样序号（纯函数）。
+ *
+ * 规则：
+ * - `ZK1-1-01` → 1（最后一段为土样序号）
+ * - `ZK1-R1` → 1（扰动土序号）
+ * - `ZK1-1-21` → 21
+ * - `ZK1-1` → null（这是孔号形态，最后一段是孔的子编号，不是土样序号）
+ * - `01` → 1（纯数字土号）
+ * - 无数字 → null
+ */
+export function soilSeqOf(soilNumber: string): number | null {
+  const s = String(soilNumber ?? '').trim();
+  if (!s) return null;
+  // 纯数字土号（如 01）
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+
+  const m = /(\d+)$/.exec(s);
+  if (!m) return null;
+  const before = s.slice(0, m.index);
+  // 数字前必须是 `-` 或字母（R1 / A1 等）
+  if (!/[-A-Za-z]$/.test(before)) return null;
+
+  if (before.endsWith('-')) {
+    const head = before.slice(0, -1);
+    // `ZK1-1`：数字前只有孔号主体，没有第二段分隔符 → 视为孔号，不是土号
+    if (head && !head.includes('-')) return null;
+  }
+  return parseInt(m[1], 10);
+}
+
+/**
+ * 同一文件内「同孔多表」合并（纯函数）：
+ * - 合并键为 `holeCode.trim()`，精确相等（`ZK1` 与 `ZK1-1` 不同孔）；
+ * - 空孔号不参与合并，各自独立；
+ * - 以第一块为基础（name / mode / engineering / 时间戳沿用第一块），
+ *   samples 按块顺序**原样拼接**：土号只做首尾空白裁剪，绝不重排/改写数字
+ *   （土号是现场实物编号，导入必须保真；重复编号由来源错误提示，不在合并层修复）；
+ * - sheetName 去重后用「、」连接；
+ * - warnings / errors / customTestItems 合并去重。
+ */
+export function mergeImportedByHole(items: ImportedRecord[]): {
+  records: ImportedRecord[];
+  mergedNotes: string[];
+  errors: string[];
+} {
+  interface Group {
+    hole: string;
+    items: ImportedRecord[];
+  }
+  const groups: Group[] = [];
+  const byHole = new Map<string, Group>();
+
+  for (const item of items ?? []) {
+    const hole = (item.holeCode ?? '').trim();
+    if (!hole) {
+      // 空孔号：每个块独立成组，不参与同孔合并
+      groups.push({ hole: '', items: [item] });
+      continue;
+    }
+    const existing = byHole.get(hole);
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      const group: Group = { hole, items: [item] };
+      byHole.set(hole, group);
+      groups.push(group);
+    }
+  }
+
+  const records: ImportedRecord[] = [];
+  const mergedNotes: string[] = [];
+  const errors: string[] = [];
+
+  for (const group of groups) {
+    const first = group.items[0];
+    const isMerged = group.items.length > 1;
+    const mergedWarnings = uniqueStrings(group.items.flatMap((x) => x.warnings ?? []));
+    const mergedErrors = uniqueStrings(group.items.flatMap((x) => x.errors ?? []));
+
+    if (!isMerged) {
+      records.push({
+        ...first,
+        warnings: mergedWarnings,
+        errors: mergedErrors,
+        mergedFrom: 1,
+      });
+      errors.push(...mergedErrors);
+      continue;
+    }
+
+    const samples = group.items.flatMap((x) =>
+      (x.record.samples ?? []).map((s) => ({
+        ...s,
+        soilNumber: (s.soilNumber ?? '').trim(),
+      })),
+    );
+    const customTestItems = uniqueStrings(
+      group.items.flatMap((x) => x.record.customTestItems ?? []),
+    );
+    const sheetName = uniqueStrings(group.items.map((x) => x.sheetName)).join('、');
+
+    records.push({
+      record: {
+        ...first.record,
+        samples,
+        customTestItems,
+      },
+      sheetName,
+      sampleCount: samples.length,
+      holeCode: first.holeCode,
+      warnings: mergedWarnings,
+      errors: mergedErrors,
+      mergedFrom: group.items.length,
+    });
+    errors.push(...mergedErrors);
+    mergedNotes.push(
+      `孔号 ${group.hole} 的 ${group.items.length} 份送样单已合并为 1 条记录`,
+    );
+  }
+
+  return { records, mergedNotes, errors: uniqueStrings(errors) };
+}
 
 /** 表尾标记：命中即视为当前送样单块结束 */
 const FOOTER_KEYWORDS = ['送样人', '收样人', '说明'];
@@ -206,14 +351,22 @@ function findColByText(ws: ExcelJS.Worksheet, rowNum: number, text: string): num
 }
 
 /**
- * 在 HR 之前若干行内查找形如「标签：值」或「标签」+相邻单元格的信息值。
+ * 在 HR 之前查找形如「标签：值」或「标签」+相邻单元格的信息值。
  * 兼容多种写法：
  *  - 合并单元格：工程名称：马厂减河治理工程（同一单元格，取冒号后内容）
  *  - 相邻单元格：孔号 | D25（取相邻非空单元格）
  * 优先取同单元格冒号后内容；若为空则回退到相邻（右→左）非空单元格。
+ *
+ * @param minRow 搜索下界（含）。同一工作表多块时，孔号搜索需从上一块表头之后开始，
+ *               避免把上一块的孔号误当成本块自己写的孔号（否则续页继承/校验失效）。
  */
-function findInfoValue(ws: ExcelJS.Worksheet, hrRow: number, label: string): string {
-  const start = Math.max(1, hrRow - 15);
+function findInfoValue(
+  ws: ExcelJS.Worksheet,
+  hrRow: number,
+  label: string,
+  minRow = Math.max(1, hrRow - 15),
+): string {
+  const start = Math.max(1, minRow);
   for (let r = start; r < hrRow; r++) {
     const row = ws.getRow(r);
     for (let c = 1; c <= row.cellCount; c++) {
@@ -225,10 +378,10 @@ function findInfoValue(ws: ExcelJS.Worksheet, hrRow: number, label: string): str
         .replace(/^[：:\s]+/, '')
         .trim();
       if (rest) return rest;
-      // 回退：相邻非空单元格（先右后左）
+      // 回退：相邻非空单元格（先右后左）；A 列没有左邻居，getCell(0) 会抛越界异常
       const right = cellText(row.getCell(c + 1).value).trim();
       if (right) return right;
-      const left = cellText(row.getCell(c - 1).value).trim();
+      const left = c > 1 ? cellText(row.getCell(c - 1).value).trim() : '';
       if (left) return left;
     }
   }
@@ -272,14 +425,22 @@ function findHeaderRows(ws: ExcelJS.Worksheet): number[] {
   return hrs;
 }
 
-/** 解析单个送样单块（HR=hr，子表头=hr+1，数据止于 nextHr 或表尾或表末） */
+/**
+ * 解析单个送样单块（HR=hr，子表头=hr+1，数据止于 nextHr 或表尾或表末）。
+ *
+ * @param inheritedHole 本文件中上一个非空孔号（跨工作表累计）；本块未写孔号时沿用。
+ * @param holeSearchStart 孔号搜索下界（同一工作表多块时从上一块表头之后开始）。
+ */
 function parseOneBlock(
   ws: ExcelJS.Worksheet,
   hr: number,
   sub: number,
   nextHr: number,
+  inheritedHole = '',
+  holeSearchStart = 1,
 ): ImportedRecord {
   const warnings: string[] = [];
+  const errors: string[] = [];
   const endRow = Math.min(nextHr - 1, ws.rowCount);
 
   // 定位各列（在 HR / 子表头中按文本查找）
@@ -320,9 +481,17 @@ function parseOneBlock(
   const unknownSeen = new Set<string>();
 
   // 孔号 / 工程名称（HR 之前的若干行）
-  const holeCode = findInfoValue(ws, hr, '孔号');
+  const ownHoleCode = findInfoValue(ws, hr, '孔号', holeSearchStart);
+  const inherited = !ownHoleCode && !!inheritedHole;
+  const holeCode = ownHoleCode || inheritedHole;
   const projectName = findInfoValue(ws, hr, '工程名称');
-  if (!holeCode) warnings.push('未在工作表中找到“孔号”，记录将以空孔号创建。');
+  if (inherited) {
+    warnings.push(
+      `工作表「${ws.name}」第 ${hr} 行未写孔号，已沿用上一张的 ${holeCode}`,
+    );
+  } else if (!holeCode) {
+    warnings.push('未在工作表中找到“孔号”，记录将以空孔号创建。');
+  }
   if (!projectName) warnings.push('未在工作表中找到“工程名称”。');
 
   // 逐行解析土样（土样编号非空即视为数据行；遇表尾标记则结束本块）
@@ -369,6 +538,18 @@ function parseOneBlock(
     samples.push(coupleDisturbance(s));
   }
 
+  // 续页校验：本块未写孔号、沿用了文件中的上一个孔号后，
+  // 若第一条土样编号又从 1 开始，说明该表可能不是上一孔的续页，提示核对来源。
+  // 注意：仍按沿用孔号参与同孔合并，因此文案要说明处理结果，避免用户疑惑。
+  if (inherited && samples.length > 0) {
+    const firstSoilNumber = (samples[0].soilNumber ?? '').trim();
+    if (soilSeqOf(firstSoilNumber) === 1) {
+      errors.push(
+        `工作表「${ws.name}」第 ${hr} 行未写孔号、土号又从 ${firstSoilNumber} 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「${holeCode}」合并，请核对该表是否属于本孔。`,
+      );
+    }
+  }
+
   // 本块内出现过的未知试验项目，逐条告警（提示已归入"其他试验项目"，不影响导出）
   for (const lbl of unknownSeen) {
     warnings.push(`送样单含未知试验项目：${lbl}（已归入"其他试验项目"，不影响导出）`);
@@ -411,13 +592,15 @@ function parseOneBlock(
     sampleCount: samples.length,
     holeCode,
     warnings,
+    errors,
   };
 }
 
 /**
  * 解析整份送样单文件。
- * 对每一个被识别为送样单的工作表，找出其中所有送样单块（每个孔号一份），
- * 各自解析为一条 SoilRecord。无数据行的块会被跳过并记入 warnings。
+ * 对每一个被识别为送样单的工作表，找出其中所有送样单块并解析；
+ * 同一工作表内未写孔号的续页会继承上一块孔号；最后按孔号合并同孔多表。
+ * 无数据行的块会被跳过并记入 warnings。
  */
 export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryParseResult> {
   // 分块可能因「页面停留在旧版本」而 404，此处带自愈：清缓存并自动刷新
@@ -425,7 +608,16 @@ export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryPa
   const wb = new XL.Workbook();
   await wb.xlsx.load(buffer);
 
-  const result: DeliveryParseResult = { records: [], warnings: [] };
+  const result: DeliveryParseResult = {
+    records: [],
+    warnings: [],
+    errors: [],
+    mergedNotes: [],
+  };
+
+  // 文件级孔号继承：跨工作表、跨块都沿用「最近一次出现的非空孔号」。
+  // 用户原话是「他没写孔号就沿用」，因此沿用是默认行为，不区分工作表。
+  let lastHoleCode = '';
 
   for (const ws of wb.worksheets) {
     const hrs = findHeaderRows(ws);
@@ -435,8 +627,18 @@ export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryPa
       const hr = hrs[i];
       const sub = hr + 1;
       const nextHr = i + 1 < hrs.length ? hrs[i + 1] : ws.rowCount + 1;
+      // 同一工作表多块：孔号只能从上一块表头之后找，避免读到上一块的孔号
+      const holeSearchStart = i > 0 ? hrs[i - 1] + 1 : 1;
       try {
-        const parsed = parseOneBlock(ws, hr, sub, nextHr);
+        const parsed = parseOneBlock(
+          ws,
+          hr,
+          sub,
+          nextHr,
+          lastHoleCode,
+          holeSearchStart,
+        );
+        if (parsed.holeCode) lastHoleCode = parsed.holeCode;
         if (parsed.sampleCount === 0) {
           result.warnings.push(
             `工作表「${ws.name}」第 ${hr} 行的送样单块未识别到土样数据，已跳过。`,
@@ -445,10 +647,19 @@ export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryPa
         }
         result.records.push(parsed);
       } catch (e: any) {
-        result.warnings.push(`工作表「${ws.name}」第 ${hr} 行的送样单块解析失败：${e?.message ?? String(e)}`);
+        const reason = e?.message ?? String(e);
+        result.warnings.push(
+          `工作表「${ws.name}」第 ${hr} 行的送样单块解析失败，已跳过（原因：${reason}），请检查该表格式是否与模板一致。`,
+        );
       }
     }
   }
+
+  // 同孔多表合并（同一文件内、孔号精确相等），并汇总合并说明与错误级提示
+  const merged = mergeImportedByHole(result.records);
+  result.records = merged.records;
+  result.mergedNotes = merged.mergedNotes;
+  result.errors = merged.errors;
 
   return result;
 }

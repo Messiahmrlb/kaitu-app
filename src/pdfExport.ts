@@ -22,6 +22,10 @@ import { Share } from '@capacitor/share';
 import type { ExportResult } from './xlsxExport';
 import { importWithRecovery } from './pwaRecovery';
 import { CMA_DEFAULT, CmaHeaderSettings, fitHeaderFontSize } from './cmaHeader';
+import { sanitizeFileNamePart } from './exportNaming';
+
+// 保留对外导出（历史测试/调用可能直接引用），实现统一收敛到 exportNaming
+export { sanitizeFileNamePart } from './exportNaming';
 
 // ---------------------------------------------------------------------------
 // 几何常量（单位 pt；px = pt × 4/3，96dpi）
@@ -152,12 +156,43 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-/** 文件名：<开土日期>_<孔号>.pdf，都为空时用「开土记录」兜底 */
+/** 本地日期 YYYY-MM-DD（不用 toISOString，避免时区导致跨日） */
+function localDateStr(date: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * 单孔 PDF 文件名：`<开土日期>_<孔号>.pdf`。
+ * - 孔号为空 → 用「未命名孔」兜底；
+ * - 日期为空 → 只写孔号（如 `ZK1.pdf`）；
+ * - 两者都为空 → `未命名孔.pdf`；
+ * - 孔号/日期中的非法字符替换为 `-`。
+ */
+export function buildSinglePdfFileName(record: SoilRecord): string {
+  // 显式传 fallback=''：空日期/空孔号由本函数按 PDF 规则统一兜底
+  const date = sanitizeFileNamePart(record?.engineering?.openDate ?? '', '');
+  const hole = sanitizeFileNamePart(record?.engineering?.holeCode ?? '', '');
+  const base = date ? `${date}_${hole || '未命名孔'}` : hole || '未命名孔';
+  return `${base}.pdf`;
+}
+
+/**
+ * 多孔合并 PDF 文件名：`开土记录_<N>孔_<当天日期>.pdf`。
+ * 单孔时与 {@link buildSinglePdfFileName} 保持一致（便于调用方统一处理）。
+ *
+ * @param today 可注入的当天日期（YYYY-MM-DD），便于单测
+ */
+export function buildMergedPdfFileName(records: SoilRecord[], today?: string): string {
+  const count = records?.length ?? 0;
+  if (count === 1) return buildSinglePdfFileName(records[0]);
+  const day = sanitizeFileNamePart(today || localDateStr(), '') || localDateStr();
+  return `开土记录_${count}孔_${day}.pdf`;
+}
+
+/** 兼容旧调用：单孔文件名规则 */
 function buildPdfFileName(record: SoilRecord): string {
-  const d = (record.engineering.openDate ?? '').trim();
-  const h = (record.engineering.holeCode ?? '').trim();
-  const prefix = [d, h].filter(Boolean).join('_');
-  return `${prefix || '开土记录'}.pdf`;
+  return buildSinglePdfFileName(record);
 }
 
 // ---------------------------------------------------------------------------
@@ -333,40 +368,121 @@ function shrinkOverflow(root: HTMLElement): void {
 // ---------------------------------------------------------------------------
 // 导出入口
 // ---------------------------------------------------------------------------
-/** 生成 PDF Blob（不触发下载），便于测试与复用；header 为 CMA 页眉设置 */
-export async function buildRecordPdfBlob(
-  record: SoilRecord,
+/**
+ * 生成多记录 PDF Blob（不触发下载）。
+ *
+ * 分页策略：
+ * - 每条记录按自身 23 行/页分页（页脚「第 X 页 / 共 Y 页」仍为孔内页码）；
+ * - 记录之间直接接续，不插入空白页，仅在新一页前调用一次 `pdf.addPage()`。
+ * 因此总页数 = 各记录页数之和，页序与传入顺序一致。
+ */
+export async function buildRecordsPdfBlob(
+  records: SoilRecord[],
   header: CmaHeaderSettings = CMA_DEFAULT,
 ): Promise<Blob> {
-  const pages = buildPdfPages(record);
-  const totalPages = pages.length;
   const html2canvas = (await getHtml2Canvas()).default;
   const { jsPDF } = await getJsPdf();
 
   const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape' });
-  for (let i = 0; i < totalPages; i++) {
-    const el = buildPageElement(pages[i], record, i + 1, totalPages, header);
-    document.body.appendChild(el);
-    shrinkOverflow(el);
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      backgroundColor: '#fff',
-      width: PAGE_W_PX,
-      height: PAGE_H_PX,
-      windowWidth: PAGE_W_PX,
-      windowHeight: PAGE_H_PX,
-    });
-    document.body.removeChild(el);
-    const img = canvas.toDataURL('image/jpeg', 0.95);
-    if (i > 0) pdf.addPage();
-    pdf.addImage(img, 'JPEG', 0, 0, 420, 297);
+  let hasPage = false;
+
+  for (const record of records) {
+    const pages = buildPdfPages(record);
+    const totalPages = pages.length;
+    for (let i = 0; i < totalPages; i++) {
+      const el = buildPageElement(pages[i], record, i + 1, totalPages, header);
+      document.body.appendChild(el);
+      shrinkOverflow(el);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#fff',
+        width: PAGE_W_PX,
+        height: PAGE_H_PX,
+        windowWidth: PAGE_W_PX,
+        windowHeight: PAGE_H_PX,
+      });
+      document.body.removeChild(el);
+      const img = canvas.toDataURL('image/jpeg', 0.95);
+      if (hasPage) pdf.addPage();
+      pdf.addImage(img, 'JPEG', 0, 0, 420, 297);
+      hasPage = true;
+    }
   }
 
   return pdf.output('blob');
 }
 
+/** 生成单记录 PDF Blob（不触发下载），便于测试与复用；header 为 CMA 页眉设置 */
+export async function buildRecordPdfBlob(
+  record: SoilRecord,
+  header: CmaHeaderSettings = CMA_DEFAULT,
+): Promise<Blob> {
+  return buildRecordsPdfBlob([record], header);
+}
+
 /**
- * 生成并导出 PDF（A3 横向，单孔成页，超 23 行另起页）。
+ * 把 PDF Blob 交付给用户：
+ * - 原生端：写入文档目录后用系统分享菜单导出；
+ * - Web：浏览器下载。
+ * 单孔导出与多孔合并导出共用，避免两套复制粘贴的逻辑漂移。
+ */
+async function deliverPdfBlob(blob: Blob, fileName: string): Promise<ExportResult> {
+  if (Capacitor.isNativePlatform()) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64 = uint8ToBase64(new Uint8Array(arrayBuffer));
+    const fsResult = await Filesystem.writeFile({
+      path: fileName,
+      data: base64,
+      directory: Directory.Documents,
+    });
+    try {
+      await Share.share({ title: '开土记录表', text: '开土记录表 PDF 导出', files: [fsResult.uri] });
+    } catch {
+      // 用户取消分享或无可分享目标，文件已保存
+    }
+    return { success: true, message: `已生成并保存到文档目录：${fileName}`, path: fsResult.uri };
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // 立即 revoke 在部分浏览器会中断大文件下载，延后释放更稳妥
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { success: true, message: `已导出 ${fileName}（浏览器下载）` };
+}
+
+/**
+ * 批量导出 PDF：
+ * - 1 个记录 → 单文件，命名为 `<开土日期>_<孔号>.pdf`；
+ * - >1 个记录 → 合并为一个 PDF，命名为 `开土记录_<N>孔_<当天日期>.pdf`。
+ */
+export async function exportRecordsPdf(
+  records: SoilRecord[],
+  header: CmaHeaderSettings = CMA_DEFAULT,
+): Promise<ExportResult> {
+  if (!records || records.length === 0) {
+    return { success: false, message: '没有选择要导出的孔' };
+  }
+  try {
+    const merged = records.length > 1;
+    const fileName = merged ? buildMergedPdfFileName(records) : buildSinglePdfFileName(records[0]);
+    const blob = await buildRecordsPdfBlob(records, header);
+    const result = await deliverPdfBlob(blob, fileName);
+    if (result.success && merged) {
+      return { ...result, message: `${result.message}（${records.length} 个孔已合并为一个 PDF）` };
+    }
+    return result;
+  } catch (e: any) {
+    return { success: false, message: 'PDF 导出失败：' + (e?.message ?? String(e)) };
+  }
+}
+
+/**
+ * 生成并导出单孔 PDF（A3 横向，单孔成页，超 23 行另起页）。
  * - header 为 CMA 页眉设置（版本行 / 文件编号），由调用方从持久化设置传入。
  * - 原生端：写入文档目录后用系统分享菜单导出。
  * - Web：浏览器下载。
@@ -377,33 +493,7 @@ export async function exportRecordPdf(
 ): Promise<ExportResult> {
   try {
     const blob = await buildRecordPdfBlob(record, header);
-    const fileName = buildPdfFileName(record);
-
-    if (Capacitor.isNativePlatform()) {
-      const arrayBuffer = await blob.arrayBuffer();
-      const base64 = uint8ToBase64(new Uint8Array(arrayBuffer));
-      const fsResult = await Filesystem.writeFile({
-        path: fileName,
-        data: base64,
-        directory: Directory.Documents,
-      });
-      try {
-        await Share.share({ title: '开土记录表', text: '开土记录表 PDF 导出', files: [fsResult.uri] });
-      } catch {
-        // 用户取消分享或无可分享目标，文件已保存
-      }
-      return { success: true, message: `已生成并保存到文档目录：${fileName}`, path: fsResult.uri };
-    }
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return { success: true, message: `已导出 ${fileName}（浏览器下载）` };
+    return await deliverPdfBlob(blob, buildPdfFileName(record));
   } catch (e: any) {
     return { success: false, message: 'PDF 导出失败：' + (e?.message ?? String(e)) };
   }

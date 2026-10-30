@@ -19,6 +19,9 @@ import {
   Alert,
   Chip,
   Divider,
+  Menu,
+  MenuItem,
+  ListItemIcon,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { SxProps, Theme } from '@mui/material/styles';
@@ -52,6 +55,7 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import InboxIcon from '@mui/icons-material/Inbox';
@@ -80,16 +84,16 @@ import {
   upsertRecord,
   isRecordDirty,
 } from './utils';
-import { exportRecord } from './xlsxExport';
+import { exportRecordsXlsx } from './xlsxExport';
 import { RADIUS } from './theme';
-import { exportRecordPdf } from './pdfExport';
-import { parseDeliveryFile } from './importDelivery';
+import { exportRecordsPdf } from './pdfExport';
 import EngineeringInfoForm from './components/EngineeringInfoForm';
 import SampleDialog from './components/SampleDialog';
 import type { SampleFocusField } from './components/SampleDialog';
 import ModeSelectDialog from './components/ModeSelectDialog';
 import BatchCheckDialog from './components/BatchCheckDialog';
 import ImportDeliveryDialog from './components/ImportDeliveryDialog';
+import ExportSelectDialog from './components/ExportSelectDialog';
 import NewRecordSetupDialog from './components/NewRecordSetupDialog';
 import CmaSettingsDialog from './components/CmaSettingsDialog';
 
@@ -108,6 +112,12 @@ export default function App() {
 
   // 导入送样单对话框
   const [importOpen, setImportOpen] = useState(false);
+
+  // 导入 / 导出下拉菜单（锚点即顶部按钮）
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
+  // 勾选式导出对话框（pdf = 多孔合并一个文件；xlsx = 每孔一个文件）
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'pdf' | 'xlsx'>('pdf');
 
   // CMA 页眉设置（PDF 版本行 / 文件编号）：全局持久化，不跟随单条记录
   const [cmaHeader, setCmaHeader] = useState<CmaHeaderSettings>(CMA_DEFAULT);
@@ -412,23 +422,24 @@ export default function App() {
     setSnack({ msg: '记录已删除', sev: 'info' });
   };
 
-  // ---------- 导出 ----------
-  const handleExport = async (rec: SoilRecord) => {
+  // ---------- 导出（勾选式） ----------
+  /**
+   * 导出勾选的记录：
+   * - pdf  → 多孔合并为一个 PDF；
+   * - xlsx → 每个孔一个文件（连续下载）。
+   * 导出结束后由对话框关闭自身，结果统一用 Snackbar 提示。
+   */
+  const handleExportSelected = async (selected: SoilRecord[]): Promise<void> => {
     try {
-      const res = await exportRecord(rec);
+      const res =
+        exportMode === 'pdf'
+          ? await exportRecordsPdf(selected, cmaHeader)
+          : await exportRecordsXlsx(selected);
       setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
     } catch (e: any) {
       setSnack({ msg: '导出失败：' + (e?.message ?? String(e)), sev: 'error' });
-    }
-  };
-
-  /** 导出 PDF（A3 横向逐格模板），页眉版本行/编号取当前 CMA 设置 */
-  const handleExportPdf = async (rec: SoilRecord) => {
-    try {
-      const res = await exportRecordPdf(rec, cmaHeader);
-      setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
-    } catch (e: any) {
-      setSnack({ msg: 'PDF 导出失败：' + (e?.message ?? String(e)), sev: 'error' });
+    } finally {
+      setExportOpen(false);
     }
   };
 
@@ -493,18 +504,68 @@ export default function App() {
             <Button
               color="inherit"
               size="small"
-              startIcon={<UploadFileIcon />}
-              onClick={() => setImportOpen(true)}
+              endIcon={<ArrowDropDownIcon />}
+              aria-haspopup="menu"
+              aria-label="导入或导出"
+              aria-controls={exportMenuAnchor ? 'import-export-menu' : undefined}
+              aria-expanded={exportMenuAnchor ? 'true' : undefined}
+              onClick={(e) => setExportMenuAnchor(e.currentTarget)}
               sx={{
                 minWidth: 0,
-                px: { xs: 0.75, sm: 1.5 },
+                px: { xs: 0.5, sm: 1.5 },
                 whiteSpace: 'nowrap',
-                fontSize: { xs: 13, sm: 14 },
-                '& .MuiButton-startIcon': { mr: { xs: 0.5, sm: 1 }, ml: 0 },
+                flexShrink: 0,
+                fontSize: { xs: 12.5, sm: 14 },
+                '& .MuiButton-endIcon': { mr: 0, ml: { xs: 0.25, sm: 1 } },
               }}
             >
-              导入送样单
+              导入 / 导出
             </Button>
+            <Menu
+              id="import-export-menu"
+              anchorEl={exportMenuAnchor}
+              open={!!exportMenuAnchor}
+              onClose={() => setExportMenuAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              MenuListProps={{ dense: true }}
+            >
+              <MenuItem
+                onClick={() => {
+                  setExportMenuAnchor(null);
+                  setImportOpen(true);
+                }}
+              >
+                <ListItemIcon>
+                  <UploadFileIcon fontSize="small" />
+                </ListItemIcon>
+                导入送样单
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setExportMenuAnchor(null);
+                  setExportMode('pdf');
+                  setExportOpen(true);
+                }}
+              >
+                <ListItemIcon>
+                  <PictureAsPdfIcon fontSize="small" />
+                </ListItemIcon>
+                导出 PDF…
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setExportMenuAnchor(null);
+                  setExportMode('xlsx');
+                  setExportOpen(true);
+                }}
+              >
+                <ListItemIcon>
+                  <TableChartIcon fontSize="small" />
+                </ListItemIcon>
+                导出电子表格…
+              </MenuItem>
+            </Menu>
             <IconButton
               color="inherit"
               size="small"
@@ -733,26 +794,6 @@ export default function App() {
                               </IconButton>
                               <IconButton
                                 size="small"
-                                aria-label="导出xlsx"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleExport(rec);
-                                }}
-                              >
-                                <TableChartIcon fontSize="small" />
-                              </IconButton>
-                              <IconButton
-                                size="small"
-                                aria-label="导出pdf"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleExportPdf(rec);
-                                }}
-                              >
-                                <PictureAsPdfIcon fontSize="small" />
-                              </IconButton>
-                              <IconButton
-                                size="small"
                                 color="error"
                                 aria-label="删除"
                                 onClick={(e) => {
@@ -807,20 +848,6 @@ export default function App() {
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               编辑记录
             </Typography>
-            <Button
-              color="inherit"
-              startIcon={<TableChartIcon />}
-              onClick={() => handleExport(editing)}
-            >
-              导出xlsx
-            </Button>
-            <Button
-              color="inherit"
-              startIcon={<PictureAsPdfIcon />}
-              onClick={() => handleExportPdf(editing)}
-            >
-              导出PDF
-            </Button>
           </Toolbar>
         </AppBar>
 
@@ -1151,6 +1178,14 @@ export default function App() {
           setImportOpen(false);
           setSnack({ msg: `已导入 ${recs.length} 份记录`, sev: 'success' });
         }}
+      />
+
+      <ExportSelectDialog
+        open={exportOpen}
+        mode={exportMode}
+        records={records}
+        onClose={() => setExportOpen(false)}
+        onExport={handleExportSelected}
       />
 
       {/* CMA 设置：自定义 PDF 页眉的版本行与文件编号（本机持久化） */}

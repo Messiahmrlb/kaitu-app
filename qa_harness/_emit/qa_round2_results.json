@@ -1,0 +1,165 @@
+{
+  "generatedAt": "2026-10-30T01:41:59.699Z",
+  "mainBundle": "index-BDayOAxD.js",
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "isPass": true,
+  "downloads": [
+    {
+      "batch": "pdf-regress",
+      "selection": [
+        "已选 1 / 共 3 个孔全选",
+        "ZK12026-10-26土样 2 条",
+        "ZK/12026-10-27土样 2 条",
+        "ZK22026-10-28土样 1 条"
+      ],
+      "files": [
+        {
+          "name": "2026-10-26_ZK1.pdf",
+          "size": 566351
+        }
+      ]
+    },
+    {
+      "batch": "pdf-slash",
+      "files": [
+        {
+          "name": "2026-10-27_ZK-1.pdf",
+          "size": 566410
+        }
+      ]
+    },
+    {
+      "batch": "xlsx-3",
+      "dialogCounter": "已选 3 / 共 3 个孔",
+      "files": [
+        {
+          "name": "A-B_ZK2_开土记录表.xlsx",
+          "size": 10561
+        },
+        {
+          "name": "KC-01_ZK-1_开土记录表.xlsx",
+          "size": 10722
+        },
+        {
+          "name": "KC-01_ZK1_开土记录表.xlsx",
+          "size": 10721
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "D3.1",
+      "name": "AppBar「导入 / 导出」菜单可打开",
+      "pass": true,
+      "expected": {
+        "expanded": "true",
+        "items": 3
+      },
+      "actual": {
+        "items": [
+          "导入送样单",
+          "导出 PDF…",
+          "导出电子表格…"
+        ],
+        "expanded": "true"
+      }
+    },
+    {
+      "id": "D3.2",
+      "name": "菜单三项文案与顺序不变",
+      "pass": true,
+      "expected": [
+        "导入送样单",
+        "导出 PDF…",
+        "导出电子表格…"
+      ],
+      "actual": [
+        "导入送样单",
+        "导出 PDF…",
+        "导出电子表格…"
+      ]
+    },
+    {
+      "id": "D2.1",
+      "name": "单孔 PDF 文件名仍为 <日期>_<孔号>.pdf",
+      "pass": true,
+      "expected": "2026-10-26_ZK1.pdf",
+      "actual": [
+        "2026-10-26_ZK1.pdf"
+      ]
+    },
+    {
+      "id": "D2.2",
+      "name": "孔号含 \"/\" 的单孔 PDF 文件名为 2026-10-27_ZK-1.pdf",
+      "pass": true,
+      "expected": "2026-10-27_ZK-1.pdf",
+      "actual": [
+        "2026-10-27_ZK-1.pdf"
+      ]
+    },
+    {
+      "id": "D1.1",
+      "name": "选 3 孔导出 3 个独立 xlsx",
+      "pass": true,
+      "expected": 3,
+      "actual": [
+        "A-B_ZK2_开土记录表.xlsx",
+        "KC-01_ZK-1_开土记录表.xlsx",
+        "KC-01_ZK1_开土记录表.xlsx"
+      ]
+    },
+    {
+      "id": "D1.2",
+      "name": "xlsx 文件名含各自孔号",
+      "pass": true,
+      "expected": [
+        "…ZK1…",
+        "…ZK-1…",
+        "…ZK2…"
+      ],
+      "actual": [
+        "A-B_ZK2_开土记录表.xlsx",
+        "KC-01_ZK-1_开土记录表.xlsx",
+        "KC-01_ZK1_开土记录表.xlsx"
+      ]
+    },
+    {
+      "id": "D1.3",
+      "name": "xlsx 文件名不含任何非法字符 / \\ : * ? \" < > |",
+      "pass": true,
+      "expected": "全部不含非法字符",
+      "actual": [
+        {
+          "name": "A-B_ZK2_开土记录表.xlsx",
+          "illegal": null
+        },
+        {
+          "name": "KC-01_ZK-1_开土记录表.xlsx",
+          "illegal": null
+        },
+        {
+          "name": "KC-01_ZK1_开土记录表.xlsx",
+          "illegal": null
+        }
+      ]
+    },
+    {
+      "id": "D1.4",
+      "name": "清洗结果精确匹配（孔号 ZK/1 → ZK-1、工程编号 A:B → A-B）",
+      "pass": true,
+      "expected": [
+        "KC-01_ZK1_开土记录表.xlsx",
+        "KC-01_ZK-1_开土记录表.xlsx",
+        "A-B_ZK2_开土记录表.xlsx"
+      ],
+      "actual": [
+        "A-B_ZK2_开土记录表.xlsx",
+        "KC-01_ZK-1_开土记录表.xlsx",
+        "KC-01_ZK1_开土记录表.xlsx"
+      ]
+    }
+  ]
+}
