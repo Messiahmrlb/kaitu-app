@@ -37,7 +37,7 @@ function holeLabel(record: SoilRecord): string {
  *
  * - 每次打开默认全选，关闭后清空选择；
  * - 支持全选 / 半选 / 全不选，列表整行可点；
- * - PDF 多孔合并为一个文件，xlsx 每孔一个文件，说明文案随 mode 切换。
+ * - PDF 多孔合并为一个文件，xlsx 按字母孔号前缀分组合并，说明文案随 mode 切换。
  */
 export default function ExportSelectDialog({ open, mode, records, onClose, onExport }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -97,7 +97,7 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
   const hint =
     mode === 'pdf'
       ? '多个孔会合并为一个 PDF；单个孔命名为「日期_孔号.pdf」'
-      : '每个孔生成一个独立文件，请允许多个文件下载';
+      : '同字母孔号前缀的孔合并为一张表（土号自动补孔号），请允许多个文件下载';
 
   return (
     <Dialog

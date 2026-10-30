@@ -31,7 +31,6 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var xlsxExport_exports = {};
 __export(xlsxExport_exports, {
   buildWorkbook: () => buildWorkbook,
-  exportRecord: () => exportRecord,
   exportRecordsXlsx: () => exportRecordsXlsx
 });
 module.exports = __toCommonJS(xlsxExport_exports);
@@ -96,11 +95,48 @@ function sanitizeFileNamePart(input, fallback = "\u672A\u547D\u540D") {
   const cleaned = String(input ?? "").replace(ILLEGAL_FILENAME_CHARS, "-").trim();
   return cleaned || fallback;
 }
-function buildXlsxFileName(record) {
-  const project = sanitizeFileNamePart(record?.engineering?.projectCode, "");
-  const hole = sanitizeFileNamePart(record?.engineering?.holeCode, "");
-  const prefix = [project, hole].filter(Boolean).join("_");
-  return `${prefix || "\u5F00\u571F\u8BB0\u5F55"}_\u5F00\u571F\u8BB0\u5F55\u8868.xlsx`;
+function parseHolePrefix(holeCode) {
+  const s = String(holeCode ?? "").trim();
+  const m = s.match(/^([A-Za-z]+)(\d+)$/);
+  if (m) return { prefix: m[1], num: m[2] };
+  return { prefix: "", num: s };
+}
+function groupXlsxRecords(records) {
+  const map = /* @__PURE__ */ new Map();
+  const groups = [];
+  for (const r of records) {
+    const { prefix } = parseHolePrefix(r?.engineering?.holeCode);
+    const key = prefix ? `${String(r?.engineering?.projectCode ?? "").trim()}|${prefix}` : `\0${r?.id ?? Math.random()}`;
+    const arr = map.get(key);
+    if (arr) arr.push(r);
+    else {
+      const g = [r];
+      map.set(key, g);
+      groups.push(g);
+    }
+  }
+  return groups;
+}
+function mergedSoilNumber(holeCode, soilNumber) {
+  const hole = String(holeCode ?? "").trim();
+  const sn = String(soilNumber ?? "").trim();
+  if (!hole || !sn) return sn;
+  if (sn.startsWith(hole)) return sn;
+  let m = sn.match(/^原(\d+)$/);
+  if (m) return `${hole}-${m[1]}`;
+  m = sn.match(/^(?:扰|[rR])(\d+)$/);
+  if (m) return `${hole}-R${m[1]}`;
+  m = sn.match(/^-?(\d+)$/);
+  if (m) return `${hole}-${m[1]}`;
+  return sn;
+}
+function buildXlsxGroupFileName(records) {
+  const first = records?.[0];
+  const project = sanitizeFileNamePart(first?.engineering?.projectCode, "");
+  const { prefix } = parseHolePrefix(first?.engineering?.holeCode);
+  const n = records?.length ?? 0;
+  const parts = [project, prefix].filter(Boolean).join("-");
+  return sanitizeFileNamePart(`${parts || "\u5F00\u571F\u8BB0\u5F55"}(${n}\u5B54).xlsx`);
 }
 
 // src/constants.ts
@@ -192,13 +228,11 @@ function styleCell(cell, opts = {}) {
     right: { style: "thin", color: { argb: "FF000000" } }
   };
 }
-function buildFileName(record) {
-  return buildXlsxFileName(record);
-}
-async function buildWorkbook(record, XL) {
-  const soilType = record.mode === "A" ? SOIL_TYPE_A : SOIL_TYPE_B;
-  const eng = record.engineering;
-  const testCols = recordTestColumns(record);
+async function buildWorkbook(records, XL) {
+  const first = records[0];
+  const soilType = first.mode === "A" ? SOIL_TYPE_A : SOIL_TYPE_B;
+  const eng = first.engineering;
+  const testCols = recordTestColumns(first);
   const wb = new XL.Workbook();
   wb.creator = "\u5F00\u571F\u8BB0\u5F55\u5F55\u5165";
   wb.lastModifiedBy = "\u5F00\u571F\u8BB0\u5F55\u5F55\u5165";
@@ -232,12 +266,9 @@ async function buildWorkbook(record, XL) {
     styleCell(cell, { bold: true, size: 16, align: "center" });
     ws.mergeCells(TITLE_ROW, 1, TITLE_ROW, TOTAL);
   }
-  const infoFields = [
-    `\u5DE5\u7A0B\u7F16\u53F7\uFF1A${eng.projectCode}`,
-    `\u5B54\u53F7\uFF1A${eng.holeCode}`,
-    `\u5B54\u53E3\u6807\u9AD8(m)\uFF1A${eng.holeElevation}`,
-    `\u5F00\u571F\u65E5\u671F(\u5E74/\u6708/\u65E5)\uFF1A${eng.openDate}`
-  ];
+  const openDates = new Set(records.map((r) => (r.engineering?.openDate ?? "").trim()));
+  const openDateStr = openDates.size === 1 ? [...openDates][0] : "";
+  const infoFields = [`\u5DE5\u7A0B\u7F16\u53F7\uFF1A${eng.projectCode}`, "", "", openDateStr ? `\u5F00\u571F\u65E5\u671F(\u5E74/\u6708/\u65E5)\uFF1A${openDateStr}` : ""];
   const infoGroupSize = Math.ceil(TOTAL / 4);
   for (let g = 0; g < 4; g++) {
     const s = g * infoGroupSize + 1;
@@ -281,36 +312,41 @@ async function buildWorkbook(record, XL) {
   TEST_SUB_COLS.forEach((c, i) => {
     ws.getCell(SUB_ROW, c).value = testCols[i]?.label ?? TEST_ITEMS[i];
   });
-  record.samples.forEach((s, idx) => {
-    const r = FIRST_DATA_ROW + idx;
-    const set = (c, v) => {
-      const cell = ws.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: c <= BASE ? "left" : "center" });
-    };
-    set(1, s.soilNumber);
-    set(2, s.fieldRecord);
-    set(3, "");
-    set(4, s.sampleElevation);
-    set(5, s.color);
-    set(6, s.smell);
-    SOIL_TYPE_SUB_COLS.forEach((c, i) => {
-      set(c, s.soilType.includes(soilType[i]) ? "\u221A" : "");
+  let dataRow = FIRST_DATA_ROW;
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? "";
+    const recCols = recordTestColumns(rec);
+    rec.samples.forEach((s) => {
+      const r = dataRow++;
+      const set = (c, v) => {
+        const cell = ws.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: c <= BASE ? "left" : "center" });
+      };
+      set(1, mergedSoilNumber(hole, s.soilNumber));
+      set(2, s.fieldRecord);
+      set(3, "");
+      set(4, s.sampleElevation);
+      set(5, s.color);
+      set(6, s.smell);
+      SOIL_TYPE_SUB_COLS.forEach((c, i) => {
+        set(c, s.soilType.includes(soilType[i]) ? "\u221A" : "");
+      });
+      set(DISTURBANCE_COL, s.disturbance === "\u6270\u52A8" ? "\u221A" : "");
+      INCL_SUB_COLS.forEach((c, i) => {
+        set(c, s.inclusions.includes(INCLUSIONS[i]) ? "\u221A" : "");
+      });
+      STATE_SUB_COLS.forEach((c, i) => {
+        set(c, s.soilState.includes(SOIL_STATES[i]) ? "\u221A" : "");
+      });
+      set(STATE_NOTE_COL, s.soilStateNote);
+      TEST_SUB_COLS.forEach((c, i) => {
+        set(c, s.testItems.includes(recCols[i]?.key ?? TEST_ITEMS[i]) ? "\u221A" : "");
+      });
+      styleCell(ws.getCell(r, 12), { align: "center" });
+      styleCell(ws.getCell(r, 14), { align: "center" });
     });
-    set(DISTURBANCE_COL, s.disturbance === "\u6270\u52A8" ? "\u221A" : "");
-    INCL_SUB_COLS.forEach((c, i) => {
-      set(c, s.inclusions.includes(INCLUSIONS[i]) ? "\u221A" : "");
-    });
-    STATE_SUB_COLS.forEach((c, i) => {
-      set(c, s.soilState.includes(SOIL_STATES[i]) ? "\u221A" : "");
-    });
-    set(STATE_NOTE_COL, s.soilStateNote);
-    TEST_SUB_COLS.forEach((c, i) => {
-      set(c, s.testItems.includes(testCols[i]?.key ?? TEST_ITEMS[i]) ? "\u221A" : "");
-    });
-    styleCell(ws.getCell(r, 12), { align: "center" });
-    styleCell(ws.getCell(r, 14), { align: "center" });
-  });
+  }
   ws.pageSetup = {
     orientation: "landscape",
     paperSize: 8,
@@ -343,20 +379,24 @@ async function buildWorkbook(record, XL) {
     cell.value = head2[c - 1];
     styleCell(cell, { bold: true, fill: true });
   }
-  record.samples.forEach((s, idx) => {
-    const r = 3 + idx;
-    const rows = [
-      [1, s.soilNumber],
-      [2, s.ip],
-      [3, s.il],
-      [4, siltySandSymbol(s.siltySand ?? "none")]
-    ];
-    rows.forEach(([c, v]) => {
-      const cell = ws2.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: "center" });
+  let ws2Row = 3;
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? "";
+    rec.samples.forEach((s) => {
+      const r = ws2Row++;
+      const rows = [
+        [1, mergedSoilNumber(hole, s.soilNumber)],
+        [2, s.ip],
+        [3, s.il],
+        [4, siltySandSymbol(s.siltySand ?? "none")]
+      ];
+      rows.forEach(([c, v]) => {
+        const cell = ws2.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: "center" });
+      });
     });
-  });
+  }
   ws2.pageSetup = {
     orientation: "landscape",
     paperSize: 9,
@@ -393,25 +433,28 @@ async function buildWorkbook(record, XL) {
     styleCell(cell, { bold: true, fill: true });
   }
   let ws3Row = 3;
-  record.samples.forEach((s) => {
-    const ipNum = parseFloat(s.ip);
-    const ipLe10 = !Number.isNaN(ipNum) && ipNum <= 10;
-    const isDisturbed = s.disturbance === "\u6270\u52A8";
-    if (!(ipLe10 || isDisturbed)) return;
-    const r = ws3Row++;
-    const rows3 = [
-      [1, s.soilNumber],
-      [2, s.ip],
-      [3, s.il],
-      [4, s.disturbance],
-      [5, "\u221A"]
-    ];
-    rows3.forEach(([c, v]) => {
-      const cell = ws3.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: "center" });
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? "";
+    rec.samples.forEach((s) => {
+      const ipNum = parseFloat(s.ip);
+      const ipLe10 = !Number.isNaN(ipNum) && ipNum <= 10;
+      const isDisturbed = s.disturbance === "\u6270\u52A8";
+      if (!(ipLe10 || isDisturbed)) return;
+      const r = ws3Row++;
+      const rows3 = [
+        [1, mergedSoilNumber(hole, s.soilNumber)],
+        [2, s.ip],
+        [3, s.il],
+        [4, s.disturbance],
+        [5, "\u221A"]
+      ];
+      rows3.forEach(([c, v]) => {
+        const cell = ws3.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: "center" });
+      });
     });
-  });
+  }
   ws3.pageSetup = {
     orientation: "landscape",
     paperSize: 9,
@@ -444,22 +487,25 @@ async function buildWorkbook(record, XL) {
     styleCell(cell, { bold: true, fill: true });
   }
   let ws4Row = 3;
-  record.samples.forEach((s) => {
-    const vPerm = s.testItems.includes("\u5782\u76F4\u6E17\u900F");
-    const hPerm = s.testItems.includes("\u6C34\u5E73\u6E17\u900F");
-    if (!vPerm && !hPerm) return;
-    const r = ws4Row++;
-    const rows4 = [
-      [1, s.soilNumber],
-      [2, vPerm ? "\u221A" : ""],
-      [3, hPerm ? "\u221A" : ""]
-    ];
-    rows4.forEach(([c, v]) => {
-      const cell = ws4.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: "center" });
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? "";
+    rec.samples.forEach((s) => {
+      const vPerm = s.testItems.includes("\u5782\u76F4\u6E17\u900F");
+      const hPerm = s.testItems.includes("\u6C34\u5E73\u6E17\u900F");
+      if (!vPerm && !hPerm) return;
+      const r = ws4Row++;
+      const rows4 = [
+        [1, mergedSoilNumber(hole, s.soilNumber)],
+        [2, vPerm ? "\u221A" : ""],
+        [3, hPerm ? "\u221A" : ""]
+      ];
+      rows4.forEach(([c, v]) => {
+        const cell = ws4.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: "center" });
+      });
     });
-  });
+  }
   ws4.pageSetup = {
     orientation: "landscape",
     paperSize: 9,
@@ -471,14 +517,16 @@ async function buildWorkbook(record, XL) {
   ws4.views = [{ state: "frozen", ySplit: 2 }];
   const extraNames = [];
   const extraSeen = /* @__PURE__ */ new Set();
-  record.samples.forEach((s) => {
-    (s.otherTestItems ?? []).forEach((name) => {
-      if (name && !extraSeen.has(name)) {
-        extraSeen.add(name);
-        extraNames.push(name);
-      }
+  for (const rec of records) {
+    rec.samples.forEach((s) => {
+      (s.otherTestItems ?? []).forEach((name) => {
+        if (name && !extraSeen.has(name)) {
+          extraSeen.add(name);
+          extraNames.push(name);
+        }
+      });
     });
-  });
+  }
   if (extraNames.length > 0) {
     const ws5 = wb.addWorksheet("\u989D\u5916\u8BD5\u9A8C\u9879\u76EE");
     ws5.columns = [
@@ -501,19 +549,22 @@ async function buildWorkbook(record, XL) {
       styleCell(cell, { bold: true, fill: true });
     }
     let ws5Row = 3;
-    record.samples.forEach((s) => {
-      const items = s.otherTestItems ?? [];
-      if (items.length === 0) return;
-      const r = ws5Row++;
-      const c0 = ws5.getCell(r, 1);
-      c0.value = s.soilNumber;
-      styleCell(c0, { align: "center" });
-      extraNames.forEach((name, i) => {
-        const cell = ws5.getCell(r, i + 2);
-        cell.value = items.includes(name) ? "\u221A" : "";
-        styleCell(cell, { align: "center" });
+    for (const rec of records) {
+      const hole = rec.engineering?.holeCode ?? "";
+      rec.samples.forEach((s) => {
+        const items = s.otherTestItems ?? [];
+        if (items.length === 0) return;
+        const r = ws5Row++;
+        const c0 = ws5.getCell(r, 1);
+        c0.value = mergedSoilNumber(hole, s.soilNumber);
+        styleCell(c0, { align: "center" });
+        extraNames.forEach((name, i) => {
+          const cell = ws5.getCell(r, i + 2);
+          cell.value = items.includes(name) ? "\u221A" : "";
+          styleCell(cell, { align: "center" });
+        });
       });
-    });
+    }
     ws5.pageSetup = {
       orientation: "landscape",
       paperSize: 9,
@@ -526,49 +577,42 @@ async function buildWorkbook(record, XL) {
   }
   return wb;
 }
-async function exportRecord(record) {
-  try {
-    const XL = await getExcelJS();
-    const wb = await buildWorkbook(record, XL);
-    const buf = await wb.xlsx.writeBuffer();
-    const uint8 = new Uint8Array(buf);
-    const fileName = buildFileName(record);
-    if (import_core.Capacitor.isNativePlatform()) {
-      const base64 = uint8ToBase64(uint8);
-      const fsResult = await import_filesystem.Filesystem.writeFile({
-        path: fileName,
-        data: base64,
-        directory: import_filesystem.Directory.Documents
-      });
-      try {
-        await import_share.Share.share({
-          title: "\u5F00\u571F\u8BB0\u5F55\u8868",
-          text: "\u5F00\u571F\u8BB0\u5F55\u8868\u5BFC\u51FA",
-          files: [fsResult.uri]
-        });
-      } catch {
-      }
-      return {
-        success: true,
-        message: `\u5DF2\u751F\u6210\u5E76\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\uFF1A${fileName}`,
-        path: fsResult.uri
-      };
-    }
-    const blob = new Blob([uint8], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+async function saveWorkbook(wb, fileName) {
+  const buf = await wb.xlsx.writeBuffer();
+  const uint8 = new Uint8Array(buf);
+  if (import_core.Capacitor.isNativePlatform()) {
+    const base64 = uint8ToBase64(uint8);
+    const fsResult = await import_filesystem.Filesystem.writeFile({
+      path: fileName,
+      data: base64,
+      directory: import_filesystem.Directory.Documents
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return { success: true, message: `\u5DF2\u5BFC\u51FA ${fileName}\uFF08\u6D4F\u89C8\u5668\u4E0B\u8F7D\uFF09` };
-  } catch (e) {
-    return { success: false, message: "\u5BFC\u51FA\u5931\u8D25\uFF1A" + (e?.message ?? String(e)) };
+    try {
+      await import_share.Share.share({
+        title: "\u5F00\u571F\u8BB0\u5F55\u8868",
+        text: "\u5F00\u571F\u8BB0\u5F55\u8868\u5BFC\u51FA",
+        files: [fsResult.uri]
+      });
+    } catch {
+    }
+    return {
+      success: true,
+      message: `\u5DF2\u751F\u6210\u5E76\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\uFF1A${fileName}`,
+      path: fsResult.uri
+    };
   }
+  const blob = new Blob([uint8], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return { success: true, message: `\u5DF2\u5BFC\u51FA ${fileName}\uFF08\u6D4F\u89C8\u5668\u4E0B\u8F7D\uFF09` };
 }
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -577,14 +621,17 @@ async function exportRecordsXlsx(records) {
   if (!records || records.length === 0) {
     return { success: false, message: "\u6CA1\u6709\u9009\u62E9\u8981\u5BFC\u51FA\u7684\u5B54" };
   }
+  const groups = groupXlsxRecords(records);
   let successCount = 0;
   const failures = [];
-  for (let i = 0; i < records.length; i++) {
+  for (let i = 0; i < groups.length; i++) {
     if (i > 0) await delay(300);
-    const record = records[i];
-    const label = (record.engineering?.holeCode ?? "").trim() || "\u672A\u547D\u540D\u5B54";
+    const group = groups[i];
+    const label = buildXlsxGroupFileName(group);
     try {
-      const res = await exportRecord(record);
+      const XL = await getExcelJS();
+      const wb = await buildWorkbook(group, XL);
+      const res = await saveWorkbook(wb, label);
       if (res.success) {
         successCount += 1;
       } else {
@@ -597,7 +644,7 @@ async function exportRecordsXlsx(records) {
   if (successCount === 0) {
     return {
       success: false,
-      message: `\u5BFC\u51FA\u5931\u8D25\uFF08${records.length} \u4E2A\u6587\u4EF6\u5747\u672A\u6210\u529F\uFF09\uFF1A${failures.join("\uFF1B")}`
+      message: `\u5BFC\u51FA\u5931\u8D25\uFF08${groups.length} \u4E2A\u6587\u4EF6\u5747\u672A\u6210\u529F\uFF09\uFF1A${failures.join("\uFF1B")}`
     };
   }
   const native = import_core.Capacitor.isNativePlatform();
@@ -610,12 +657,11 @@ async function exportRecordsXlsx(records) {
   }
   return {
     success: true,
-    message: `\u5DF2\u5BFC\u51FA ${successCount} \u4E2A\u6587\u4EF6\uFF08\u6BCF\u4E2A\u5B54\u4E00\u4E2A\u6587\u4EF6\uFF0C\u6D4F\u89C8\u5668\u53EF\u80FD\u8BE2\u95EE\u662F\u5426\u5141\u8BB8\u591A\u4E2A\u4E0B\u8F7D\uFF09${tail}`
+    message: `\u5DF2\u5BFC\u51FA ${successCount} \u4E2A\u6587\u4EF6\uFF08\u6309\u5B54\u53F7\u524D\u7F00\u5206\u7EC4\uFF0C\u6D4F\u89C8\u5668\u53EF\u80FD\u8BE2\u95EE\u662F\u5426\u5141\u8BB8\u591A\u4E2A\u4E0B\u8F7D\uFF09${tail}`
   };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   buildWorkbook,
-  exportRecord,
   exportRecordsXlsx
 });

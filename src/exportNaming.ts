@@ -39,3 +39,77 @@ export function buildXlsxFileName(record: Pick<SoilRecord, 'engineering'>): stri
   const prefix = [project, hole].filter(Boolean).join('_');
   return `${prefix || '开土记录'}_开土记录表.xlsx`;
 }
+
+/**
+ * 解析孔号的「字母前缀 + 数字」：`ZK12` → `{ prefix: 'ZK', num: '12' }`；
+ * 不含字母前缀（纯数字 / 空 / 非「字母+数字」形态）→ prefix 为空串。
+ */
+export function parseHolePrefix(holeCode: unknown): { prefix: string; num: string } {
+  const s = String(holeCode ?? '').trim();
+  const m = s.match(/^([A-Za-z]+)(\d+)$/);
+  if (m) return { prefix: m[1], num: m[2] };
+  return { prefix: '', num: s };
+}
+
+/**
+ * Excel 导出分组（2026-10-30 用户确认）：同一「工程编号 + 字母孔号前缀」的孔
+ * 合并到一张表（一个文件），如同为 ZK1/ZK2/ZK3 → `26T123-ZK(3孔).xlsx`。
+ * - 分组键含工程编号（不同工程即使同前缀也不合并）；
+ * - 前缀区分大小写（与孔号精确匹配规则一致）；
+ * - 无法解析出字母前缀的孔（空号 / 纯数字）单独一组，退化为逐孔一个文件。
+ * 组间保持传入顺序。
+ */
+export function groupXlsxRecords(records: SoilRecord[]): SoilRecord[][] {
+  const map = new Map<string, SoilRecord[]>();
+  const groups: SoilRecord[][] = [];
+  for (const r of records) {
+    const { prefix } = parseHolePrefix(r?.engineering?.holeCode);
+    const key = prefix
+      ? `${String(r?.engineering?.projectCode ?? '').trim()}|${prefix}`
+      : `\u0000${r?.id ?? Math.random()}`; // 无前缀：按记录 id 单独成组
+    const arr = map.get(key);
+    if (arr) arr.push(r);
+    else {
+      const g = [r];
+      map.set(key, g);
+      groups.push(g);
+    }
+  }
+  return groups;
+}
+
+/**
+ * 合并表内的土样编号归一（用户确认规则）：土号补上孔号前缀，跨孔不重号：
+ * - 已以孔号开头（`ZK1-1`、`ZK1-1-01`）→ 原样保留；
+ * - `原1` → `ZK1-1`（去掉「原」字）；
+ * - `扰1` / `R1` → `ZK1-R1`（扰动样 R 前缀）；
+ * - 纯数字 / 前导 `-`（`1`、`-1`、`-01`）→ `ZK1-1` / `ZK1-01`（数字原样保留）；
+ * - 其他复杂编号原样保留（不做猜测性改写）。
+ * 无孔号 / 无土号时原样返回。
+ */
+export function mergedSoilNumber(holeCode: unknown, soilNumber: unknown): string {
+  const hole = String(holeCode ?? '').trim();
+  const sn = String(soilNumber ?? '').trim();
+  if (!hole || !sn) return sn;
+  if (sn.startsWith(hole)) return sn;
+  let m = sn.match(/^原(\d+)$/);
+  if (m) return `${hole}-${m[1]}`;
+  m = sn.match(/^(?:扰|[rR])(\d+)$/);
+  if (m) return `${hole}-R${m[1]}`;
+  m = sn.match(/^-?(\d+)$/);
+  if (m) return `${hole}-${m[1]}`;
+  return sn;
+}
+
+/**
+ * 合并表文件名：`<工程编号>-<字母前缀>(<N>孔).xlsx`，如 `26T123-ZK(3孔).xlsx`。
+ * 工程编号 / 前缀缺失时逐级回落，全空回落「开土记录」。
+ */
+export function buildXlsxGroupFileName(records: SoilRecord[]): string {
+  const first = records?.[0];
+  const project = sanitizeFileNamePart(first?.engineering?.projectCode, '');
+  const { prefix } = parseHolePrefix(first?.engineering?.holeCode);
+  const n = records?.length ?? 0;
+  const parts = [project, prefix].filter(Boolean).join('-');
+  return sanitizeFileNamePart(`${parts || '开土记录'}(${n}孔).xlsx`);
+}

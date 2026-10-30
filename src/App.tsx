@@ -163,6 +163,9 @@ export default function App() {
   // 批量修改开土日期（选择模式内）
   const [batchDateOpen, setBatchDateOpen] = useState(false);
   const [batchDate, setBatchDate] = useState('');
+  // 批量填写工程编号（选择模式内）
+  const [batchCodeOpen, setBatchCodeOpen] = useState(false);
+  const [batchCode, setBatchCode] = useState('');
 
   /** 持久化记录列表 */
   const persist = async (next: SoilRecord[]) => {
@@ -485,6 +488,23 @@ export default function App() {
     setSelectMode(false);
   };
 
+  /** 批量把选中记录的工程编号统一改为 batchCode（写入存储，后续导出均生效） */
+  const applyBatchCode = async () => {
+    const code = batchCode.trim();
+    if (!code || selected.length === 0) return;
+    await persist(
+      records.map((r) =>
+        selected.includes(r.id)
+          ? { ...r, engineering: { ...r.engineering, projectCode: code } }
+          : r,
+      ),
+    );
+    setSnack({ msg: `已把 ${selected.length} 份记录的工程编号改为 ${code}`, sev: 'success' });
+    setBatchCodeOpen(false);
+    setSelected([]);
+    setSelectMode(false);
+  };
+
   const clearAll = async () => {
     await persist([]);
     setSnack({ msg: '已清空全部记录', sev: 'info' });
@@ -650,19 +670,31 @@ export default function App() {
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Box>
-            {/* 第二行：批量操作。三个按钮在 375px 宽度下合计约 262px，单行容纳；清空全部靠右隔离 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
+            {/* 第二行：批量操作。四个按钮窄屏单行容纳（文案压缩+去间距）；清空靠右隔离 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
               <Button
                 size="small"
                 variant="outlined"
                 disabled={selected.length === 0}
-              onClick={() => {
-                setBatchDate(todayStr());
-                setBatchDateOpen(true);
-              }}
-                sx={{ flexShrink: 0 }}
+                onClick={() => {
+                  setBatchDate(todayStr());
+                  setBatchDateOpen(true);
+                }}
+                sx={{ flexShrink: 0, minWidth: 0, px: 1 }}
               >
                 改日期
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={selected.length === 0}
+                onClick={() => {
+                  setBatchCode('');
+                  setBatchCodeOpen(true);
+                }}
+                sx={{ flexShrink: 0, minWidth: 0, px: 1 }}
+              >
+                填编号
               </Button>
               <Button
                 size="small"
@@ -670,16 +702,16 @@ export default function App() {
                 variant="contained"
                 disabled={selected.length === 0}
                 onClick={() => setBatchConfirm('selected')}
-                sx={{ flexShrink: 0 }}
+                sx={{ flexShrink: 0, minWidth: 0, px: 1 }}
               >
-                删除选中
+                删除
               </Button>
               <Button
                 size="small"
                 onClick={() => setBatchConfirm('all')}
-                sx={{ flexShrink: 0, color: 'text.secondary', ml: 'auto' }}
+                sx={{ flexShrink: 0, minWidth: 0, px: 1, color: 'text.secondary', ml: 'auto' }}
               >
-                清空全部
+                清空
               </Button>
             </Box>
           </Box>
@@ -1342,6 +1374,47 @@ export default function App() {
             variant="contained"
             disabled={!batchDate.trim() || selected.length === 0}
             onClick={() => void applyBatchDate()}
+          >
+            应用
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 批量填写工程编号（选择模式）：写入各记录工程信息，后续导出均生效 */}
+      <Dialog
+        open={batchCodeOpen}
+        onClose={() => setBatchCodeOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>批量填写工程编号</DialogTitle>
+        <DialogContent>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            sx={{ mb: 1.5, lineHeight: 1.7 }}
+          >
+            将把已选 {selected.length} 份记录的工程编号统一改为该编号，并立即写入本机记录；
+            之后导出 PDF / Excel 表头与文件名都使用它。
+          </Typography>
+          <TextField
+            autoFocus
+            label="工程编号"
+            type="text"
+            fullWidth
+            value={batchCode}
+            onChange={(e) => setBatchCode(e.target.value)}
+            disabled={selected.length === 0}
+            helperText="应用后写入选中的记录，例如 26T123 或 EX26T2211"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBatchCodeOpen(false)}>取消</Button>
+          <Button
+            variant="contained"
+            disabled={!batchCode.trim() || selected.length === 0}
+            onClick={() => void applyBatchCode()}
           >
             应用
           </Button>

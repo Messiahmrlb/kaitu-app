@@ -71,7 +71,7 @@ const cellKey = (row, col) => row * 100 + col;
   // ---- xlsx：别名记录 ----
   {
     const record = rec({ shearLabels: ['固结快剪', '慢剪'], consolidationLabel: '回弹压缩' }, ['固结', '慢剪']);
-    const wb = await buildWorkbook(record, XL);
+    const wb = await buildWorkbook([record], XL);
     const ws = wb.getWorksheet('开土记录表');
     const labels = [];
     for (let c = 33; c <= 40; c++) labels.push(String(ws.getCell(4, c).value));
@@ -89,7 +89,7 @@ const cellKey = (row, col) => row * 100 + col;
   // ---- xlsx：默认记录不变 ----
   {
     const record = rec({}, ['固结', '饱固快剪']);
-    const wb = await buildWorkbook(record, XL);
+    const wb = await buildWorkbook([record], XL);
     const ws = wb.getWorksheet('开土记录表');
     const labels = [];
     for (let c = 33; c <= 40; c++) labels.push(String(ws.getCell(4, c).value));

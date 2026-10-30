@@ -4,7 +4,11 @@ import { importWithRecovery } from './pwaRecovery';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { SoilRecord } from './types';
-import { buildXlsxFileName } from './exportNaming';
+import {
+  buildXlsxGroupFileName,
+  groupXlsxRecords,
+  mergedSoilNumber,
+} from './exportNaming';
 import {
   SOIL_TYPE_A,
   SOIL_TYPE_B,
@@ -82,23 +86,24 @@ function styleCell(
 }
 
 /**
- * 生成文件名：<工程编号>_<孔号>_开土记录表.xlsx
- * 片段清洗规则与 PDF 共用 exportNaming（非法字符 → `-`），
- * 避免 Excel 文件名含 `/`、`:` 等被系统/浏览器截断。
+ * 组装工作簿（纯逻辑，不依赖平台，便于测试）。
+ *
+ * 2026-10-30 起支持多孔合并：传入同一「工程编号 + 字母孔号前缀」分组内的多条
+ * 记录，土样行连续排在同一张主表里——土号经 mergedSoilNumber 补孔号前缀
+ * （原1→ZK1-1、扰1→ZK1-R1、纯数字→ZK1-N）跨孔不重号；信息行只写工程编号
+ * （孔号不再单独写，孔口标高留空，开土日期组内一致时写）。
+ * 传入单条记录即为单孔表（土号同样归一）。
  */
-function buildFileName(record: SoilRecord): string {
-  return buildXlsxFileName(record);
-}
-
-/** 组装工作簿（纯逻辑，不依赖平台，便于测试） */
 export async function buildWorkbook(
-  record: SoilRecord,
+  records: SoilRecord[],
   XL: typeof import('exceljs'),
 ): Promise<ExcelJS.Workbook> {
-  const soilType = record.mode === 'A' ? SOIL_TYPE_A : SOIL_TYPE_B;
-  const eng = record.engineering;
-  // 试验列（固结/剪切两列显示名可按记录覆盖，见 testHeader / constants.recordTestColumns）
-  const testCols = recordTestColumns(record);
+  const first = records[0];
+  const soilType = first.mode === 'A' ? SOIL_TYPE_A : SOIL_TYPE_B;
+  const eng = first.engineering;
+  // 试验列（固结/剪切两列显示名可按记录覆盖）——子表头取第一孔的列名；
+  // 数据行 √ 判定用各孔自己的列 key（槽位固定不串列，见下方数据行）
+  const testCols = recordTestColumns(first);
 
   const wb = new XL.Workbook();
   wb.creator = '开土记录录入';
@@ -146,13 +151,12 @@ export async function buildWorkbook(
     ws.mergeCells(TITLE_ROW, 1, TITLE_ROW, TOTAL);
   }
 
-  // ---- 行2：工程信息（每组合并成一格，美观；分组仍对应原表列）----
-  const infoFields = [
-    `工程编号：${eng.projectCode}`,
-    `孔号：${eng.holeCode}`,
-    `孔口标高(m)：${eng.holeElevation}`,
-    `开土日期(年/月/日)：${eng.openDate}`,
-  ];
+  // ---- 行2：工程信息（每组合并成一格；分组仍对应原表列）----
+  // 2026-10-30 用户确认：土号已带孔号前缀，信息行不再写孔号；孔口标高多孔各异留空；
+  // 开土日期组内一致且非空时写（批量改日期后通常已统一），否则留空
+  const openDates = new Set(records.map((r) => (r.engineering?.openDate ?? '').trim()));
+  const openDateStr = openDates.size === 1 ? [...openDates][0] : '';
+  const infoFields = [`工程编号：${eng.projectCode}`, '', '', openDateStr ? `开土日期(年/月/日)：${openDateStr}` : ''];
   const infoGroupSize = Math.ceil(TOTAL / 4);
   for (let g = 0; g < 4; g++) {
     const s = g * infoGroupSize + 1;
@@ -201,41 +205,46 @@ export async function buildWorkbook(
     ws.getCell(SUB_ROW, c).value = testCols[i]?.label ?? TEST_ITEMS[i];
   });
 
-  // ---- 行5+：每条土样一行 ----
-  record.samples.forEach((s, idx) => {
-    const r = FIRST_DATA_ROW + idx;
-    const set = (c: number, v: string) => {
-      const cell = ws.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: c <= BASE ? 'left' : 'center' });
-    };
-    set(1, s.soilNumber);
-    set(2, s.fieldRecord);
-    // 取土深度：保留原列（列宽/表头不变，保证粘贴进 Word 格式不乱），但数据格留空
-    set(3, '');
-    set(4, s.sampleElevation);
-    set(5, s.color);
-    set(6, s.smell);
-    SOIL_TYPE_SUB_COLS.forEach((c, i) => {
-      set(c, s.soilType.includes(soilType[i]) ? '√' : '');
+  // ---- 行5+：每条土样一行（多孔合并：土号归一为「孔号-序号」形态跨孔不重号）----
+  let dataRow = FIRST_DATA_ROW;
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? '';
+    const recCols = recordTestColumns(rec); // 该孔自己的列 key（覆盖列名时与第一孔可能不同）
+    rec.samples.forEach((s) => {
+      const r = dataRow++;
+      const set = (c: number, v: string) => {
+        const cell = ws.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: c <= BASE ? 'left' : 'center' });
+      };
+      set(1, mergedSoilNumber(hole, s.soilNumber));
+      set(2, s.fieldRecord);
+      // 取土深度：保留原列（列宽/表头不变，保证粘贴进 Word 格式不乱），但数据格留空
+      set(3, '');
+      set(4, s.sampleElevation);
+      set(5, s.color);
+      set(6, s.smell);
+      SOIL_TYPE_SUB_COLS.forEach((c, i) => {
+        set(c, s.soilType.includes(soilType[i]) ? '√' : '');
+      });
+      // 第15列扰动土：仅「扰动」打 √，原状留空
+      set(DISTURBANCE_COL, s.disturbance === '扰动' ? '√' : '');
+      INCL_SUB_COLS.forEach((c, i) => {
+        set(c, s.inclusions.includes(INCLUSIONS[i]) ? '√' : '');
+      });
+      STATE_SUB_COLS.forEach((c, i) => {
+        set(c, s.soilState.includes(SOIL_STATES[i]) ? '√' : '');
+      });
+      set(STATE_NOTE_COL, s.soilStateNote);
+      TEST_SUB_COLS.forEach((c, i) => {
+        set(c, s.testItems.includes(recCols[i]?.key ?? TEST_ITEMS[i]) ? '√' : '');
+      });
+      // 留空占位列（第12列=目力鉴别土类、第14列=夹杂物合并起始）补边框
+      styleCell(ws.getCell(r, 12), { align: 'center' });
+      styleCell(ws.getCell(r, 14), { align: 'center' });
+      // IL / Ip 不写入主表
     });
-    // 第15列扰动土：仅「扰动」打 √，原状留空
-    set(DISTURBANCE_COL, s.disturbance === '扰动' ? '√' : '');
-    INCL_SUB_COLS.forEach((c, i) => {
-      set(c, s.inclusions.includes(INCLUSIONS[i]) ? '√' : '');
-    });
-    STATE_SUB_COLS.forEach((c, i) => {
-      set(c, s.soilState.includes(SOIL_STATES[i]) ? '√' : '');
-    });
-    set(STATE_NOTE_COL, s.soilStateNote);
-    TEST_SUB_COLS.forEach((c, i) => {
-      set(c, s.testItems.includes(testCols[i]?.key ?? TEST_ITEMS[i]) ? '√' : '');
-    });
-    // 留空占位列（第12列=目力鉴别土类、第14列=夹杂物合并起始）补边框
-    styleCell(ws.getCell(r, 12), { align: 'center' });
-    styleCell(ws.getCell(r, 14), { align: 'center' });
-    // IL / Ip 不写入主表
-  });
+  }
 
   // ---- 页面设置：A3 横向，适配一页宽 ----
   ws.pageSetup = {
@@ -276,21 +285,25 @@ export async function buildWorkbook(
     styleCell(cell, { bold: true, fill: true });
   }
 
-  // 数据行
-  record.samples.forEach((s, idx) => {
-    const r = 3 + idx;
-    const rows: [number, string][] = [
-      [1, s.soilNumber],
-      [2, s.ip],
-      [3, s.il],
-      [4, siltySandSymbol(s.siltySand ?? 'none')],
-    ];
-    rows.forEach(([c, v]) => {
-      const cell = ws2.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: 'center' });
+  // 数据行（多孔合并：土号同样归一，跨孔不重号）
+  let ws2Row = 3;
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? '';
+    rec.samples.forEach((s) => {
+      const r = ws2Row++;
+      const rows: [number, string][] = [
+        [1, mergedSoilNumber(hole, s.soilNumber)],
+        [2, s.ip],
+        [3, s.il],
+        [4, siltySandSymbol(s.siltySand ?? 'none')],
+      ];
+      rows.forEach(([c, v]) => {
+        const cell = ws2.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: 'center' });
+      });
     });
-  });
+  }
 
   // 页面设置与冻结表头
   ws2.pageSetup = {
@@ -328,25 +341,28 @@ export async function buildWorkbook(
   }
   // 仅保留纳入颗分的土样（Ip≤10 或 勾选扰动），剔除不做的行
   let ws3Row = 3;
-  record.samples.forEach((s) => {
-    const ipNum = parseFloat(s.ip);
-    const ipLe10 = !Number.isNaN(ipNum) && ipNum <= 10;
-    const isDisturbed = s.disturbance === '扰动';
-    if (!(ipLe10 || isDisturbed)) return;
-    const r = ws3Row++;
-    const rows3: [number, string][] = [
-      [1, s.soilNumber],
-      [2, s.ip],
-      [3, s.il],
-      [4, s.disturbance],
-      [5, '√'],
-    ];
-    rows3.forEach(([c, v]) => {
-      const cell = ws3.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: 'center' });
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? '';
+    rec.samples.forEach((s) => {
+      const ipNum = parseFloat(s.ip);
+      const ipLe10 = !Number.isNaN(ipNum) && ipNum <= 10;
+      const isDisturbed = s.disturbance === '扰动';
+      if (!(ipLe10 || isDisturbed)) return;
+      const r = ws3Row++;
+      const rows3: [number, string][] = [
+        [1, mergedSoilNumber(hole, s.soilNumber)],
+        [2, s.ip],
+        [3, s.il],
+        [4, s.disturbance],
+        [5, '√'],
+      ];
+      rows3.forEach(([c, v]) => {
+        const cell = ws3.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: 'center' });
+      });
     });
-  });
+  }
   ws3.pageSetup = {
     orientation: 'landscape',
     paperSize: 9 as ExcelJS.PaperSize, // 9 = A4
@@ -380,22 +396,25 @@ export async function buildWorkbook(
   }
   // 仅保留做了渗透（垂直或水平）的土样，剔除不做的行
   let ws4Row = 3;
-  record.samples.forEach((s) => {
-    const vPerm = s.testItems.includes('垂直渗透');
-    const hPerm = s.testItems.includes('水平渗透');
-    if (!vPerm && !hPerm) return;
-    const r = ws4Row++;
-    const rows4: [number, string][] = [
-      [1, s.soilNumber],
-      [2, vPerm ? '√' : ''],
-      [3, hPerm ? '√' : ''],
-    ];
-    rows4.forEach(([c, v]) => {
-      const cell = ws4.getCell(r, c);
-      cell.value = v;
-      styleCell(cell, { align: 'center' });
+  for (const rec of records) {
+    const hole = rec.engineering?.holeCode ?? '';
+    rec.samples.forEach((s) => {
+      const vPerm = s.testItems.includes('垂直渗透');
+      const hPerm = s.testItems.includes('水平渗透');
+      if (!vPerm && !hPerm) return;
+      const r = ws4Row++;
+      const rows4: [number, string][] = [
+        [1, mergedSoilNumber(hole, s.soilNumber)],
+        [2, vPerm ? '√' : ''],
+        [3, hPerm ? '√' : ''],
+      ];
+      rows4.forEach(([c, v]) => {
+        const cell = ws4.getCell(r, c);
+        cell.value = v;
+        styleCell(cell, { align: 'center' });
+      });
     });
-  });
+  }
   ws4.pageSetup = {
     orientation: 'landscape',
     paperSize: 9 as ExcelJS.PaperSize, // 9 = A4
@@ -411,14 +430,16 @@ export async function buildWorkbook(
   // 汇总全部土样的未知试验项目名称（去重，保持首次出现顺序）
   const extraNames: string[] = [];
   const extraSeen = new Set<string>();
-  record.samples.forEach((s) => {
-    (s.otherTestItems ?? []).forEach((name) => {
-      if (name && !extraSeen.has(name)) {
-        extraSeen.add(name);
-        extraNames.push(name);
-      }
+  for (const rec of records) {
+    rec.samples.forEach((s) => {
+      (s.otherTestItems ?? []).forEach((name) => {
+        if (name && !extraSeen.has(name)) {
+          extraSeen.add(name);
+          extraNames.push(name);
+        }
+      });
     });
-  });
+  }
   // 仅在存在未知试验项目时才新增此表（无则不影响原 4 表结构）
   if (extraNames.length > 0) {
     const ws5 = wb.addWorksheet('额外试验项目');
@@ -441,19 +462,22 @@ export async function buildWorkbook(
     }
     // 仅列出含未知试验项目的土样，避免空白行
     let ws5Row = 3;
-    record.samples.forEach((s) => {
-      const items = s.otherTestItems ?? [];
-      if (items.length === 0) return;
-      const r = ws5Row++;
-      const c0 = ws5.getCell(r, 1);
-      c0.value = s.soilNumber;
-      styleCell(c0, { align: 'center' });
-      extraNames.forEach((name, i) => {
-        const cell = ws5.getCell(r, i + 2);
-        cell.value = items.includes(name) ? '√' : '';
-        styleCell(cell, { align: 'center' });
+    for (const rec of records) {
+      const hole = rec.engineering?.holeCode ?? '';
+      rec.samples.forEach((s) => {
+        const items = s.otherTestItems ?? [];
+        if (items.length === 0) return;
+        const r = ws5Row++;
+        const c0 = ws5.getCell(r, 1);
+        c0.value = mergedSoilNumber(hole, s.soilNumber);
+        styleCell(c0, { align: 'center' });
+        extraNames.forEach((name, i) => {
+          const cell = ws5.getCell(r, i + 2);
+          cell.value = items.includes(name) ? '√' : '';
+          styleCell(cell, { align: 'center' });
+        });
       });
-    });
+    }
     ws5.pageSetup = {
       orientation: 'landscape',
       paperSize: 9 as ExcelJS.PaperSize, // 9 = A4
@@ -475,57 +499,50 @@ export interface ExportResult {
 }
 
 /**
- * 生成并导出 xlsx：
+ * 把工作簿写盘/下载：
  * - 原生（安卓）：写入文档目录后用系统分享菜单导出（微信/邮件/保存到下载等）。
  * - Web：通过浏览器下载（Blob + a 标签）。
  */
-export async function exportRecord(record: SoilRecord): Promise<ExportResult> {
-  try {
-    const XL = await getExcelJS();
-    const wb = await buildWorkbook(record, XL);
-    const buf = await wb.xlsx.writeBuffer();
-    const uint8 = new Uint8Array(buf as unknown as ArrayBuffer);
-    const fileName = buildFileName(record);
+async function saveWorkbook(wb: ExcelJS.Workbook, fileName: string): Promise<ExportResult> {
+  const buf = await wb.xlsx.writeBuffer();
+  const uint8 = new Uint8Array(buf as unknown as ArrayBuffer);
 
-    if (Capacitor.isNativePlatform()) {
-      const base64 = uint8ToBase64(uint8);
-      const fsResult = await Filesystem.writeFile({
-        path: fileName,
-        data: base64,
-        directory: Directory.Documents,
-      });
-      try {
-        await Share.share({
-          title: '开土记录表',
-          text: '开土记录表导出',
-          files: [fsResult.uri],
-        });
-      } catch {
-        // 用户取消分享或无可分享目标，文件已保存
-      }
-      return {
-        success: true,
-        message: `已生成并保存到文档目录：${fileName}`,
-        path: fsResult.uri,
-      };
-    }
-
-    // Web 端：浏览器下载
-    const blob = new Blob([uint8], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  if (Capacitor.isNativePlatform()) {
+    const base64 = uint8ToBase64(uint8);
+    const fsResult = await Filesystem.writeFile({
+      path: fileName,
+      data: base64,
+      directory: Directory.Documents,
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return { success: true, message: `已导出 ${fileName}（浏览器下载）` };
-  } catch (e: any) {
-    return { success: false, message: '导出失败：' + (e?.message ?? String(e)) };
+    try {
+      await Share.share({
+        title: '开土记录表',
+        text: '开土记录表导出',
+        files: [fsResult.uri],
+      });
+    } catch {
+      // 用户取消分享或无可分享目标，文件已保存
+    }
+    return {
+      success: true,
+      message: `已生成并保存到文档目录：${fileName}`,
+      path: fsResult.uri,
+    };
   }
+
+  // Web 端：浏览器下载
+  const blob = new Blob([uint8], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return { success: true, message: `已导出 ${fileName}（浏览器下载）` };
 }
 
 /** 等待指定毫秒（批量下载间隔，避免浏览器把连续下载判定为弹窗/多文件拦截） */
@@ -534,12 +551,14 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * 批量导出 xlsx：每个孔生成一个独立文件（不会把多个孔塞进同一个工作簿）。
+ * 批量导出 xlsx（2026-10-30 用户确认规则）：按「工程编号 + 字母孔号前缀」分组，
+ * 同前缀的孔合并为一个文件一张表（如 ZK1/ZK2/ZK3 → `26T123-ZK(3孔).xlsx`），
+ * 组内土号自动补孔号前缀（原1→ZK1-1、扰1→ZK1-R1、纯数字→ZK1-N）跨孔不重号。
+ * 无法解析前缀的孔退化为逐孔一个文件。
  *
- * - Web 端：逐个触发浏览器下载，孔之间间隔 300ms，降低被浏览器拦截的概率；
+ * - Web 端：逐个触发浏览器下载，文件之间间隔 300ms，降低被浏览器拦截的概率；
  *   首次多文件下载时浏览器可能弹出「是否允许多个下载」的询问。
- * - 原生端：逐个写入文档目录并调用系统分享（沿用 {@link exportRecord} 的既有行为），
- *   文件较多时会依次弹出分享面板，取消分享不影响文件已保存。
+ * - 原生端：逐个写入文档目录并调用系统分享，取消分享不影响文件已保存。
  *
  * 返回汇总结果：全部成功 / 部分失败 / 全部失败。
  */
@@ -548,15 +567,18 @@ export async function exportRecordsXlsx(records: SoilRecord[]): Promise<ExportRe
     return { success: false, message: '没有选择要导出的孔' };
   }
 
+  const groups = groupXlsxRecords(records);
   let successCount = 0;
   const failures: string[] = [];
 
-  for (let i = 0; i < records.length; i++) {
+  for (let i = 0; i < groups.length; i++) {
     if (i > 0) await delay(300);
-    const record = records[i];
-    const label = (record.engineering?.holeCode ?? '').trim() || '未命名孔';
+    const group = groups[i];
+    const label = buildXlsxGroupFileName(group);
     try {
-      const res = await exportRecord(record);
+      const XL = await getExcelJS();
+      const wb = await buildWorkbook(group, XL);
+      const res = await saveWorkbook(wb, label);
       if (res.success) {
         successCount += 1;
       } else {
@@ -570,7 +592,7 @@ export async function exportRecordsXlsx(records: SoilRecord[]): Promise<ExportRe
   if (successCount === 0) {
     return {
       success: false,
-      message: `导出失败（${records.length} 个文件均未成功）：${failures.join('；')}`,
+      message: `导出失败（${groups.length} 个文件均未成功）：${failures.join('；')}`,
     };
   }
 
@@ -588,6 +610,6 @@ export async function exportRecordsXlsx(records: SoilRecord[]): Promise<ExportRe
 
   return {
     success: true,
-    message: `已导出 ${successCount} 个文件（每个孔一个文件，浏览器可能询问是否允许多个下载）${tail}`,
+    message: `已导出 ${successCount} 个文件（按孔号前缀分组，浏览器可能询问是否允许多个下载）${tail}`,
   };
 }

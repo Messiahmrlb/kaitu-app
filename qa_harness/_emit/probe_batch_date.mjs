@@ -169,9 +169,13 @@ async function main() {
     `);
     await sleep(800);
 
-    // 新工具条：第一行「已选 + 全选 + X(退出批量操作)」，第二行「改日期/删除选中/清空全部」
+    // 新工具条：第一行「已选 + 全选 + X(退出批量操作)」，第二行「改日期/填编号/删除/清空」
     const exitBtn = await evalJs(`!!document.querySelector('button[aria-label="退出批量操作"]')`);
     check('工具条含「退出批量操作」X 按钮（aria-label）', exitBtn);
+    const hasCodeBtn = await evalJs(
+      `[...document.querySelectorAll('button')].some((b) => b.textContent.trim() === '填编号')`,
+    );
+    check('工具条含「填编号」按钮', hasCodeBtn);
 
     // 320/360/390/430 宽度下工具条无横向溢出、按钮不出屏
     const WIDTHS = [320, 360, 390, 430];
@@ -271,7 +275,67 @@ async function main() {
     check('存储中两条记录 openDate 均改为 2026-10-15', Array.isArray(stored) && stored.length === 2 && stored.every((d) => d === '2026-10-15'), JSON.stringify(stored));
     const bodyAfter = await evalJs('document.body.innerText');
     check('snack 提示「已把 2 份记录的开土日期改为 2026-10-15」', bodyAfter.includes('已把 2 份记录的开土日期改为 2026-10-15'));
-    check('应用后自动退出选择模式', !bodyAfter.includes('删除选中'));
+    check('应用后自动退出选择模式', !bodyAfter.includes('删除'));
+
+    // ②b 批量填写工程编号
+    const clickBatch1 = await evalJs(`
+      (() => {
+        const b = [...document.querySelectorAll('button')].find((x) => x.textContent.replace(/\\s/g,'') === '批量操作');
+        b?.click();
+        return b ? 'clicked' : 'not-found';
+      })()
+    `);
+    console.log('  [dbg] 批量操作按钮:', clickBatch1);
+    await sleep(800);
+    // 进入选择模式后 selected 为空，批量按钮 disabled —— 先点「全选」
+    await evalJs(`
+      (() => {
+        const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === '全选');
+        b?.click();
+        return 'ok';
+      })()
+    `);
+    await sleep(400);
+    const clickCode = await evalJs(`
+      (() => {
+        const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === '填编号');
+        b?.click();
+        return b ? 'clicked' : 'not-found';
+      })()
+    `);
+    console.log('  [dbg] 填编号按钮:', clickCode);
+    await sleep(800);
+    const dlgCode = await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        return dlgs[dlgs.length - 1]?.innerText ?? '';
+      })()
+    `);
+    check('批量填写工程编号对话框打开', dlgCode.includes('批量填写工程编号'), dlgCode.slice(0, 30));
+    await evalJs(`
+      (() => {
+        const input = [...document.querySelectorAll('.MuiDialog-root input')].find((i) => i.type === 'text');
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, '26T999');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return input?.value ?? 'no-input';
+      })()
+    `);
+    await sleep(300);
+    await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        const b = [...dlgs[dlgs.length - 1].querySelectorAll('button')].find((x) => x.textContent.trim() === '应用');
+        b?.click();
+        return 'applied';
+      })()
+    `);
+    await sleep(1500);
+    const storedCodes = await evalJs(`JSON.parse(localStorage.getItem('CapacitorStorage.kaitu_records_v1') || '[]').map((r) => r.engineering.projectCode)`);
+    check('存储中两条记录工程编号均改为 26T999', Array.isArray(storedCodes) && storedCodes.length === 2 && storedCodes.every((c) => c === '26T999'), JSON.stringify(storedCodes));
+    const bodyCode = await evalJs('document.body.innerText');
+    check('snack 提示「已把 2 份记录的工程编号改为 26T999」', bodyCode.includes('已把 2 份记录的工程编号改为 26T999'));
 
     // ③ 导出对话框日期覆盖字段
     await evalJs(`
