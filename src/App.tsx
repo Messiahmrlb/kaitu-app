@@ -147,11 +147,14 @@ export default function App() {
   // 记录级排序方向（首页列表视图）
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  // 批量选择 / 删除模式
+  // 批量选择 / 删除 / 改日期模式
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   // 批量删除确认：'selected'=删除选中，'all'=清空全部
   const [batchConfirm, setBatchConfirm] = useState<'selected' | 'all' | null>(null);
+  // 批量修改开土日期（选择模式内）
+  const [batchDateOpen, setBatchDateOpen] = useState(false);
+  const [batchDate, setBatchDate] = useState('');
 
   /** 持久化记录列表 */
   const persist = async (next: SoilRecord[]) => {
@@ -429,11 +432,14 @@ export default function App() {
    * - xlsx → 每个孔一个文件（连续下载）。
    * 导出结束后由对话框关闭自身，结果统一用 Snackbar 提示。
    */
-  const handleExportSelected = async (selected: SoilRecord[]): Promise<void> => {
+  const handleExportSelected = async (
+    selected: SoilRecord[],
+    openDateOverride = '',
+  ): Promise<void> => {
     try {
       const res =
         exportMode === 'pdf'
-          ? await exportRecordsPdf(selected, cmaHeader)
+          ? await exportRecordsPdf(selected, cmaHeader, openDateOverride)
           : await exportRecordsXlsx(selected);
       setSnack({ msg: res.message, sev: res.success ? 'success' : 'error' });
     } catch (e: any) {
@@ -450,6 +456,23 @@ export default function App() {
   const deleteSelected = async () => {
     await persist(records.filter((r) => !selected.includes(r.id)));
     setSnack({ msg: `已删除选中的 ${selected.length} 份记录`, sev: 'info' });
+    setSelected([]);
+    setSelectMode(false);
+  };
+
+  /** 批量把选中记录的开土日期统一改为 batchDate（写入存储，后续导出均生效） */
+  const applyBatchDate = async () => {
+    const d = batchDate.trim();
+    if (!d || selected.length === 0) return;
+    await persist(
+      records.map((r) =>
+        selected.includes(r.id)
+          ? { ...r, engineering: { ...r.engineering, openDate: d } }
+          : r,
+      ),
+    );
+    setSnack({ msg: `已把 ${selected.length} 份记录的开土日期改为 ${d}`, sev: 'success' });
+    setBatchDateOpen(false);
     setSelected([]);
     setSelectMode(false);
   };
@@ -498,7 +521,7 @@ export default function App() {
                   fontSize: { xs: 12, sm: 14 },
                 }}
               >
-                批量删除
+                批量操作
               </Button>
             )}
             <Button
@@ -592,14 +615,25 @@ export default function App() {
               py: 1,
               display: 'flex',
               alignItems: 'center',
+              flexWrap: 'wrap',
               gap: 1,
             }}
           >
-            <Typography variant="body2" sx={{ flexGrow: 1 }}>
+            <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 64 }}>
               已选 {selected.length} 项
             </Typography>
             <Button size="small" onClick={() => setSelected(records.map((r) => r.id))}>
               全选
+            </Button>
+            <Button
+              size="small"
+              disabled={selected.length === 0}
+              onClick={() => {
+                setBatchDate('');
+                setBatchDateOpen(true);
+              }}
+            >
+              改日期
             </Button>
             <Button
               size="small"
@@ -1235,6 +1269,40 @@ export default function App() {
             }}
           >
             删除
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 批量修改开土日期（选择模式）：写入各记录工程信息，后续导出均生效 */}
+      <Dialog
+        open={batchDateOpen}
+        onClose={() => setBatchDateOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>批量修改开土日期</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="开土日期"
+            type="date"
+            fullWidth
+            value={batchDate}
+            onChange={(e) => setBatchDate(e.target.value)}
+            disabled={selected.length === 0}
+            InputLabelProps={{ shrink: true }}
+            helperText={`将把选中的 ${selected.length} 份记录的开土日期统一改为该日期（写入记录，之后的导出都用它）`}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBatchDateOpen(false)}>取消</Button>
+          <Button
+            variant="contained"
+            disabled={!batchDate.trim() || selected.length === 0}
+            onClick={() => void applyBatchDate()}
+          >
+            应用
           </Button>
         </DialogActions>
       </Dialog>

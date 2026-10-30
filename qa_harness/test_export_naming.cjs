@@ -133,5 +133,36 @@ check(
   buildXlsxFileName(recXlsx('', '')),
 );
 
+// ---------- 开土日期覆盖（导出 PDF 可选日期） ----------
+const { withOpenDate } = require(path.join(__dirname, '_emit', 'pdfExport.cjs'));
+
+check(
+  '覆盖：单孔文件名使用覆盖日期',
+  buildSinglePdfFileName(withOpenDate([rec('2026-10-26', 'ZK1')], '2026-11-01')[0]) ===
+    '2026-11-01_ZK1.pdf',
+  buildSinglePdfFileName(withOpenDate([rec('2026-10-26', 'ZK1')], '2026-11-01')[0]),
+);
+check(
+  '覆盖：合并文件名使用覆盖日期',
+  buildMergedPdfFileName(withOpenDate([rec('2026-10-26', 'ZK1'), rec('2026-10-26', 'ZK2')], '2026-11-01'), '2026-11-01') ===
+    '开土记录_2孔_2026-11-01.pdf',
+  buildMergedPdfFileName(withOpenDate([rec('2026-10-26', 'ZK1'), rec('2026-10-26', 'ZK2')], '2026-11-01'), '2026-11-01'),
+);
+{
+  const originals = [rec('2026-10-26', 'ZK1'), rec('', 'ZK2')];
+  const stamped = withOpenDate(originals, '2026-11-01');
+  check(
+    '覆盖：所有记录日期统一、无日期的也补上',
+    stamped.every((r) => r.engineering.openDate === '2026-11-01'),
+    stamped.map((r) => r.engineering.openDate).join(','),
+  );
+  check(
+    '覆盖：不改原记录（openDate 保持不变）',
+    originals[0].engineering.openDate === '2026-10-26' && originals[1].engineering.openDate === '',
+    `${originals[0].engineering.openDate},${originals[1].engineering.openDate}`,
+  );
+  check('覆盖：空串原样返回（同一引用）', withOpenDate(originals, '  ') === originals);
+}
+
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);

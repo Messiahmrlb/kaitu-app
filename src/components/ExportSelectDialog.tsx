@@ -11,6 +11,7 @@ import {
   List,
   ListItem,
   ListItemButton,
+  TextField,
   Typography,
 } from '@mui/material';
 import type { SoilRecord } from '../types';
@@ -21,7 +22,8 @@ interface Props {
   mode: 'pdf' | 'xlsx';
   records: SoilRecord[];
   onClose: () => void;
-  onExport: (selected: SoilRecord[]) => void | Promise<void>;
+  /** 导出回传：selected 为勾选记录；openDateOverride 仅 PDF 模式使用（可选日期覆盖） */
+  onExport: (selected: SoilRecord[], openDateOverride: string) => void | Promise<void>;
 }
 
 /** 孔号展示名：空孔号统一用「未命名孔」 */
@@ -39,15 +41,19 @@ function holeLabel(record: SoilRecord): string {
 export default function ExportSelectDialog({ open, mode, records, onClose, onExport }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
+  /** PDF 模式可选：统一本次导出的开土日期（留空按各记录自身日期） */
+  const [dateOverride, setDateOverride] = useState('');
 
   // 打开时默认全选；关闭时重置，避免下次打开残留上次的勾选
   useEffect(() => {
     if (open) {
       setSelectedIds(records.map((r) => r.id));
       setExporting(false);
+      setDateOverride('');
     } else {
       setSelectedIds([]);
       setExporting(false);
+      setDateOverride('');
     }
     // 仅在开关状态变化时重置；records 变化不应打断用户正在进行的勾选
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +86,7 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
     if (exporting || selectedCount === 0) return;
     setExporting(true);
     try {
-      await onExport(selected);
+      await onExport(selected, mode === 'pdf' ? dateOverride.trim() : '');
     } finally {
       setExporting(false);
     }
@@ -178,6 +184,22 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
               })}
             </List>
           </>
+        )}
+
+        {mode === 'pdf' && totalCount > 0 && (
+          <Box sx={{ mt: 1.5 }}>
+            <TextField
+              label="开土日期（可选）"
+              type="date"
+              size="small"
+              fullWidth
+              value={dateOverride}
+              onChange={(e) => setDateOverride(e.target.value)}
+              disabled={exporting}
+              InputLabelProps={{ shrink: true }}
+              helperText="留空按各记录自身日期；填写后本次导出的 PDF 页内日期与文件名日期统一使用该日期（不改动记录）"
+            />
+          </Box>
         )}
 
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>

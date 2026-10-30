@@ -460,24 +460,43 @@ async function deliverPdfBlob(blob: Blob, fileName: string): Promise<ExportResul
 }
 
 /**
+ * 导出用开土日期覆盖（纯函数）：填写日期时克隆记录并统一 engineering.openDate，
+ * 不改动调用方传入的原记录；留空原样返回。
+ */
+export function withOpenDate(records: SoilRecord[], openDate: string): SoilRecord[] {
+  const d = (openDate ?? '').trim();
+  if (!d) return records;
+  return records.map((r) => ({
+    ...r,
+    engineering: { ...r.engineering, openDate: d },
+  }));
+}
+
+/**
  * 批量导出 PDF：
  * - 1 个记录 → 单文件，命名为 `<开土日期>_<孔号>.pdf`；
  * - >1 个记录 → 合并为一个 PDF，命名为 `开土记录_<N>孔_<当天日期>.pdf`。
+ * - openDateOverride 非空时：本次导出的所有记录开土日期（页内工程信息行）
+ *   与文件名日期统一使用该日期（仅影响本次导出，不改动存储的记录）。
  */
 export async function exportRecordsPdf(
   records: SoilRecord[],
   header: CmaHeaderSettings = CMA_DEFAULT,
+  openDateOverride = '',
 ): Promise<ExportResult> {
   if (!records || records.length === 0) {
     return { success: false, message: '没有选择要导出的孔' };
   }
   try {
-    const merged = records.length > 1;
-    const fileName = merged ? buildMergedPdfFileName(records) : buildSinglePdfFileName(records[0]);
-    const blob = await buildRecordsPdfBlob(records, header);
+    const stamped = withOpenDate(records, openDateOverride);
+    const merged = stamped.length > 1;
+    const fileName = merged
+      ? buildMergedPdfFileName(stamped, openDateOverride.trim() || undefined)
+      : buildSinglePdfFileName(stamped[0]);
+    const blob = await buildRecordsPdfBlob(stamped, header);
     const result = await deliverPdfBlob(blob, fileName);
     if (result.success && merged) {
-      return { ...result, message: `${result.message}（${records.length} 个孔已合并为一个 PDF）` };
+      return { ...result, message: `${result.message}（${stamped.length} 个孔已合并为一个 PDF）` };
     }
     return result;
   } catch (e: any) {

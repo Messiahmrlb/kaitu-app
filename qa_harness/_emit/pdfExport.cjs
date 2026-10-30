@@ -38,7 +38,8 @@ __export(pdfExport_exports, {
   exportRecordPdf: () => exportRecordPdf,
   exportRecordsPdf: () => exportRecordsPdf,
   renderHeaderTexts: () => renderHeaderTexts,
-  sanitizeFileNamePart: () => sanitizeFileNamePart
+  sanitizeFileNamePart: () => sanitizeFileNamePart,
+  withOpenDate: () => withOpenDate
 });
 module.exports = __toCommonJS(pdfExport_exports);
 
@@ -511,17 +512,26 @@ async function deliverPdfBlob(blob, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 1e3);
   return { success: true, message: `\u5DF2\u5BFC\u51FA ${fileName}\uFF08\u6D4F\u89C8\u5668\u4E0B\u8F7D\uFF09` };
 }
-async function exportRecordsPdf(records, header = CMA_DEFAULT) {
+function withOpenDate(records, openDate) {
+  const d = (openDate ?? "").trim();
+  if (!d) return records;
+  return records.map((r) => ({
+    ...r,
+    engineering: { ...r.engineering, openDate: d }
+  }));
+}
+async function exportRecordsPdf(records, header = CMA_DEFAULT, openDateOverride = "") {
   if (!records || records.length === 0) {
     return { success: false, message: "\u6CA1\u6709\u9009\u62E9\u8981\u5BFC\u51FA\u7684\u5B54" };
   }
   try {
-    const merged = records.length > 1;
-    const fileName = merged ? buildMergedPdfFileName(records) : buildSinglePdfFileName(records[0]);
-    const blob = await buildRecordsPdfBlob(records, header);
+    const stamped = withOpenDate(records, openDateOverride);
+    const merged = stamped.length > 1;
+    const fileName = merged ? buildMergedPdfFileName(stamped, openDateOverride.trim() || void 0) : buildSinglePdfFileName(stamped[0]);
+    const blob = await buildRecordsPdfBlob(stamped, header);
     const result = await deliverPdfBlob(blob, fileName);
     if (result.success && merged) {
-      return { ...result, message: `${result.message}\uFF08${records.length} \u4E2A\u5B54\u5DF2\u5408\u5E76\u4E3A\u4E00\u4E2A PDF\uFF09` };
+      return { ...result, message: `${result.message}\uFF08${stamped.length} \u4E2A\u5B54\u5DF2\u5408\u5E76\u4E3A\u4E00\u4E2A PDF\uFF09` };
     }
     return result;
   } catch (e) {
@@ -546,5 +556,6 @@ async function exportRecordPdf(record, header = CMA_DEFAULT) {
   exportRecordPdf,
   exportRecordsPdf,
   renderHeaderTexts,
-  sanitizeFileNamePart
+  sanitizeFileNamePart,
+  withOpenDate
 });
