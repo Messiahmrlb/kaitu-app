@@ -495,7 +495,7 @@ export default function App() {
                   minWidth: 0,
                   px: { xs: 0.75, sm: 1.5 },
                   whiteSpace: 'nowrap',
-                  fontSize: { xs: 13, sm: 14 },
+                  fontSize: { xs: 12, sm: 14 },
                 }}
               >
                 批量删除
@@ -515,7 +515,7 @@ export default function App() {
                 px: { xs: 0.5, sm: 1.5 },
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
-                fontSize: { xs: 12.5, sm: 14 },
+                fontSize: { xs: 12, sm: 14 },
                 '& .MuiButton-endIcon': { mr: 0, ml: { xs: 0.25, sm: 1 } },
               }}
             >

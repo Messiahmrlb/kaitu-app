@@ -49,6 +49,15 @@ const theme = createTheme({
     success: {
       main: '#16A34A',
     },
+    // 信息色：默认归属品牌主色青绿（而非 MUI 默认蓝），让 info 类提示框也落在
+    // 青绿 + 琥珀 + 红 + 绿 的同一套色族里，不出现离群的蓝色。（目前用于导入合并提示、
+    // CMA 二次确认里的「仅本机保存」说明等 severity="info" 提示框。）
+    info: {
+      main: '#0F766E',
+      light: '#14B8A6',
+      dark: '#115E59',
+      contrastText: '#FFFFFF',
+    },
     // 警示色：与辅色 secondary（琥珀 #D97706）同源，统一「注意/警示」语义。
     // 不定义时 MUI 的 severity="warning" 会用默认橙 #ED6C02，与我们禁用的默认橙冲突。
     warning: {
