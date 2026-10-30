@@ -236,6 +236,14 @@ async function main() {
     check('批量改日期对话框打开', dlg1.includes('批量修改开土日期'), dlg1.slice(0, 30));
     check('对话框提示选中 2 份', dlg1.includes('2'));
     check('对话框新说明「并立即写入本机记录」', dlg1.includes('并立即写入本机记录'));
+    // 默认填当天
+    const today = await evalJs(
+      `(() => { const d = new Date(); const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); })()`,
+    );
+    const dlgDateVal = await evalJs(
+      `[...document.querySelectorAll('.MuiDialog-root input[type="date"]')].pop()?.value ?? ''`,
+    );
+    check(`批量改日期对话框日期默认填当天（${today}）`, dlgDateVal === today, `value=${dlgDateVal}`);
 
     // React 受控 input：原生 setter 赋值
     await evalJs(`
@@ -292,6 +300,10 @@ async function main() {
     check('PDF 模式含「导出选项」分组框', dlg2.includes('导出选项'));
     check('PDF 模式含「统一开土日期（可选）」字段', dlg2.includes('统一开土日期（可选）'));
     check('字段 helperText 说明留空按各记录日期', dlg2.includes('留空'));
+    const expDateVal = await evalJs(
+      `[...document.querySelectorAll('.MuiDialog-root input[type="date"]')].pop()?.value ?? ''`,
+    );
+    check(`导出对话框日期默认填当天（${today}）`, expDateVal === today, `value=${expDateVal}`);
 
     // 编辑页土样卡片：别名显示（testLabelMap，key「饱固快剪」→ 显示「饱和固结快剪」）
     await evalJs(`

@@ -84,6 +84,7 @@ import {
   isQuickShearBothConflict,
   upsertRecord,
   isRecordDirty,
+  todayStr,
 } from './utils';
 import { exportRecordsXlsx } from './xlsxExport';
 import { RADIUS } from './theme';
@@ -655,10 +656,10 @@ export default function App() {
                 size="small"
                 variant="outlined"
                 disabled={selected.length === 0}
-                onClick={() => {
-                  setBatchDate('');
-                  setBatchDateOpen(true);
-                }}
+              onClick={() => {
+                setBatchDate(todayStr());
+                setBatchDateOpen(true);
+              }}
                 sx={{ flexShrink: 0 }}
               >
                 改日期

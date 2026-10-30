@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import type { SoilRecord } from '../types';
 import { RADIUS } from '../theme';
+import { todayStr } from '../utils';
 
 interface Props {
   open: boolean;
@@ -44,12 +45,12 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
   /** PDF 模式可选：统一本次导出的开土日期（留空按各记录自身日期） */
   const [dateOverride, setDateOverride] = useState('');
 
-  // 打开时默认全选；关闭时重置，避免下次打开残留上次的勾选
+  // 打开时默认全选、日期默认当天；关闭时重置，避免下次打开残留上次的勾选
   useEffect(() => {
     if (open) {
       setSelectedIds(records.map((r) => r.id));
       setExporting(false);
-      setDateOverride('');
+      setDateOverride(todayStr());
     } else {
       setSelectedIds([]);
       setExporting(false);
