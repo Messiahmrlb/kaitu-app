@@ -242,12 +242,20 @@ var ROWS_PER_PAGE = 23;
 var TOTAL_COLS = 39;
 var SUB_ROW_H_PT = { A: 98.2, B: 103 };
 var cellKey = (row, col) => row * 1e3 + col;
-function fillRow(cells, row, s, mode, seq, testKeys) {
+function fillRow(cells, row, s, mode, seq, testKeys, holeCode) {
   const set = (col, v) => {
     cells[cellKey(row, col)] = v;
   };
   const soilType = soilTypeOptions(mode);
-  set(1, `-${seq}`);
+  const raw = (s.soilNumber ?? "").trim();
+  let short = "";
+  if (raw) {
+    const hole = (holeCode ?? "").trim();
+    if (hole && raw.startsWith(hole + "-")) short = raw.slice(hole.length + 1);
+    else if (raw.startsWith("-")) short = raw.slice(1);
+    else short = raw;
+  }
+  set(1, short ? `-${short}` : `-${seq}`);
   set(2, s.fieldRecord ?? "");
   set(3, "");
   set(4, "");
@@ -272,13 +280,14 @@ function fillRow(cells, row, s, mode, seq, testKeys) {
 function buildPdfPages(record) {
   const samples = record.samples ?? [];
   const testKeys = recordTestColumns(record).map((c) => c.key);
+  const holeCode = record.engineering?.holeCode ?? "";
   const totalPages = Math.max(1, Math.ceil(samples.length / ROWS_PER_PAGE));
   const pages = [];
   for (let p = 0; p < totalPages; p++) {
     const cells = {};
     for (let r = 0; r < ROWS_PER_PAGE; r++) {
       const s = samples[p * ROWS_PER_PAGE + r];
-      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1, testKeys);
+      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1, testKeys, holeCode);
     }
     pages.push({ cells });
   }

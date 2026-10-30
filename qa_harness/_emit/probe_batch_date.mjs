@@ -393,6 +393,62 @@ async function main() {
     check('编辑页土样卡片实验名显示「回弹压缩」', bodyEdit.includes('回弹压缩'));
     check('编辑页土样卡片不再裸显归一键「固结」', !bodyEdit.includes('实验：固结'));
 
+    // ⑤ 批量勾选矩阵内直接改土号
+    await evalJs(`
+      (() => {
+        const b = [...document.querySelectorAll('button')].find((x) => x.textContent.replace(/\\s/g,'').includes('批量勾选'));
+        b?.click();
+        return 'ok';
+      })()
+    `);
+    await sleep(1000);
+    const dlg3 = await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        return dlgs[dlgs.length - 1]?.innerText ?? '';
+      })()
+    `);
+    check('批量勾选对话框打开（标题含土号）', dlg3.includes('土号 / 试验项目 / 扰动土'), dlg3.slice(0, 30));
+    // 土号输入框（standard 变体），原值 -1
+    const oldSn = await evalJs(
+      `[...document.querySelectorAll('.MuiDialog-root .MuiInput-root input')][0]?.value ?? 'no-input'`,
+    );
+    check('矩阵土号输入框显示原值 -1', oldSn === '-1', String(oldSn));
+    await evalJs(`
+      (() => {
+        const input = [...document.querySelectorAll('.MuiDialog-root .MuiInput-root input')][0];
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, 'ZK1-9');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        return input?.value ?? 'no-input';
+      })()
+    `);
+    await sleep(300);
+    await evalJs(`
+      (() => {
+        const dlgs = [...document.querySelectorAll('.MuiDialog-root')].filter((d) => d.getBoundingClientRect().width > 0);
+        const b = [...dlgs[dlgs.length - 1].querySelectorAll('button')].find((x) => x.textContent.trim() === '保存');
+        b?.click();
+        return 'saved';
+      })()
+    `);
+    await sleep(1200);
+    const bodySn = await evalJs('document.body.innerText');
+    check('保存后卡片土号显示 ZK1-9', bodySn.includes('ZK1-9'));
+    // 编辑页草稿靠 visibilitychange(hidden) 兜底落盘（既有设计）——模拟切后台后验证存储
+    await evalJs(`
+      (() => {
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+        return 'flushed';
+      })()
+    `);
+    await sleep(800);
+    const storedSn = await evalJs(`JSON.parse(localStorage.getItem('CapacitorStorage.kaitu_records_v1') || '[]')[0].samples.map((s) => s.soilNumber)`);
+    check('切后台兜底保存后存储中土号为 ZK1-9', JSON.stringify(storedSn) === JSON.stringify(['ZK1-9']), JSON.stringify(storedSn));
+
     await cdp.send('Page.captureScreenshot', {}).then(async (r) => {
       await writeFile(path.join(OUT_DIR, 'batch_date_export_dialog.png'), Buffer.from(r.data, 'base64'));
     });

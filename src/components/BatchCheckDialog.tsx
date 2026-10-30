@@ -243,6 +243,26 @@ export default function BatchCheckDialog({
     setConfirmDelete(null);
   };
 
+  /** 修改单行土样编号（2026-10-30：土号列直接内联编辑，免去逐条进土样卡片改） */
+  const renameSoilNumber = (id: string, value: string) =>
+    setWorking((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, soilNumber: value } : s)),
+    );
+
+  /** 土号重复检测（trim 后比对，空值不算）：重复行的土号输入框标红提醒，但不阻止保存 */
+  const duplicateIds = new Set<string>();
+  {
+    const counts = new Map<string, number>();
+    working.forEach((s) => {
+      const k = (s.soilNumber ?? '').trim();
+      if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+    });
+    working.forEach((s) => {
+      const k = (s.soilNumber ?? '').trim();
+      if (k && (counts.get(k) ?? 0) > 1) duplicateIds.add(s.id);
+    });
+  }
+
   const handleSave = () => {
     onSave(working);
     onClose();
@@ -250,14 +270,14 @@ export default function BatchCheckDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>批量勾选（试验项目 / 扰动土）</DialogTitle>
+      <DialogTitle>批量勾选（土号 / 试验项目 / 扰动土）</DialogTitle>
       <DialogContent dividers>
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.7 }}>
-          逐列「全选」可快速应用到全部土样；勾选「扰动土」会自动联动「颗分」。
+          土号列可直接点击修改；逐列「全选」可快速应用到全部土样；勾选「扰动土」会自动联动「颗分」。
           对扰动土不适用的试验项目（固结/渗透/剪切/三轴）点「全选」时自动跳过扰动土（仅勾原状）。
           同时含「渗透+剪切」或「饱固快剪+自然快剪」的行将
           <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}> 标红 </Box>
-          （可能的冲突组合）。
+          （可能的冲突组合）；土号重复也会标红提醒。
         </Typography>
         {/* 说明文字独占一行：与下方按钮/表单上下排布，避免窄屏被挤成竖排 */}
         <Box sx={{ display: 'block', mb: 1 }}>
@@ -504,7 +524,34 @@ export default function BatchCheckDialog({
                       }}
                     >
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <span>{s.soilNumber || '(未填)'}</span>
+                        <TextField
+                          size="small"
+                          variant="standard"
+                          value={s.soilNumber}
+                          placeholder="(未填)"
+                          onChange={(e) => renameSoilNumber(s.id, e.target.value)}
+                          error={duplicateIds.has(s.id)}
+                          title="点击可直接修改土号"
+                          sx={{
+                            width: '100%',
+                            minWidth: 72,
+                            '& .MuiInput-root': {
+                              fontWeight: 600,
+                              fontSize: 13,
+                              '&:before': { borderBottomColor: 'divider' },
+                              '&:hover:before': { borderBottomColor: 'primary.light' },
+                            },
+                          }}
+                        />
+                        {duplicateIds.has(s.id) && (
+                          <Typography
+                            variant="caption"
+                            color="error.main"
+                            sx={{ fontSize: 11, lineHeight: 1.4 }}
+                          >
+                            土号重复
+                          </Typography>
+                        )}
                         {conflict && (
                           <Chip
                             size="small"

@@ -65,14 +65,26 @@ export interface PdfPage {
 }
 
 /** 把一条土样按 39 列数据映射写入某页某行的单元格；seq 为该土样在全记录中的序号（1 起）；
- *  testKeys 为该记录 8 个试验列的数据键（固结/剪切列显示名可按记录覆盖，见 recordTestColumns） */
-function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number, testKeys: string[]): void {
+ *  testKeys 为该记录 8 个试验列的数据键（固结/剪切列显示名可按记录覆盖，见 recordTestColumns）；
+ *  holeCode 为孔号（土号去前缀时使用） */
+function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number, testKeys: string[], holeCode: string): void {
   const set = (col: number, v: string): void => {
     cells[cellKey(row, col)] = v;
   };
   const soilType = soilTypeOptions(mode);
-  // 土号列：按全记录顺序输出 -1, -2 …（不含孔号前缀，与纸质开土记录表一致）
-  set(1, `-${seq}`);
+  // 土号列：显示记录土号（去掉孔号前缀/前导「-」后补「-」，与纸质开土记录表一致）。
+  // 2026-10-30 用户确认：送样单里的 R1/R2 扰动样编号在 PDF 相应位置原样显示（-R1/-R2），
+  // 数字编号跳过 R 样顺位（数字样显示忠实于记录土号，App 内插入重排后即连续）。
+  // 土号未填时按行序兜底 -1、-2…。
+  const raw = (s.soilNumber ?? '').trim();
+  let short = '';
+  if (raw) {
+    const hole = (holeCode ?? '').trim();
+    if (hole && raw.startsWith(hole + '-')) short = raw.slice(hole.length + 1);
+    else if (raw.startsWith('-')) short = raw.slice(1);
+    else short = raw;
+  }
+  set(1, short ? `-${short}` : `-${seq}`);
   set(2, s.fieldRecord ?? '');
   set(3, ''); // 取样深度：模板留空手填
   set(4, ''); // 取样标高：模板留空手填
@@ -103,13 +115,14 @@ function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode
 export function buildPdfPages(record: SoilRecord): PdfPage[] {
   const samples = record.samples ?? [];
   const testKeys = recordTestColumns(record).map((c) => c.key);
+  const holeCode = record.engineering?.holeCode ?? '';
   const totalPages = Math.max(1, Math.ceil(samples.length / ROWS_PER_PAGE));
   const pages: PdfPage[] = [];
   for (let p = 0; p < totalPages; p++) {
     const cells: Record<number, string> = {};
     for (let r = 0; r < ROWS_PER_PAGE; r++) {
       const s = samples[p * ROWS_PER_PAGE + r];
-      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1, testKeys);
+      if (s) fillRow(cells, r, s, record.mode, p * ROWS_PER_PAGE + r + 1, testKeys, holeCode);
     }
     pages.push({ cells });
   }
