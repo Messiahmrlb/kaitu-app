@@ -580,16 +580,35 @@ function parseOneBlock(
   }
   if (!projectName) warnings.push('未在工作表中找到“工程名称”。');
 
-/** 逐行解析土样（土样编号非空即视为数据行；遇表尾标记则结束本块） */
+  // 逐行解析土样（土样编号非空即视为数据行；遇表尾标记则结束本块）
   const samples: SoilSample[] = [];
   let headerJunkRows = 0;
   /** 深度列非数字的行（疑似土号写串行/列错位）：[行号, 列名, 原文] */
   const depthJunk: { row: number; colName: string; value: string }[] = [];
+  /** 未填土号但深度列有内容的行：暂用「孔号-深度」编号，避免丢样 */
+  const provisionalRows: number[] = [];
+  let provisionalExample = '';
+  const usedProvisional = new Set<string>();
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
-    const soilNumberRaw = soilNoCol >= 0 ? cellText(row.getCell(soilNoCol).value).trim() : '';
-    if (soilNumberRaw === '') continue; // 非数据行（空白行 / 块间间隔）
+    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : '';
+    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : '';
+    let soilNumberRaw = soilNoCol >= 0 ? cellText(row.getCell(soilNoCol).value).trim() : '';
+    if (soilNumberRaw === '') {
+      // 未填土号：若深度列也全空则为空白行/块间间隔，跳过；
+      // 若深度列有内容则视为漏填土号的土样，暂用「孔号-至深度（缺至用自）」
+      // 编号避免丢样（用户 2026-10-30 确认），重复时追加 -2/-3 后缀
+      if (!from && !to) continue;
+      const base = `${holeCode || '待编'}-${to || from}`;
+      let pid = base;
+      let n = 2;
+      while (usedProvisional.has(pid)) pid = `${base}-${n++}`;
+      usedProvisional.add(pid);
+      if (!provisionalExample) provisionalExample = pid;
+      provisionalRows.push(r);
+      soilNumberRaw = pid;
+    }
     // 多行表头残留（如「表二」结果表的错位表头）：土号列出现结构标签而非真实土号，跳过该行
     if (soilNumberRaw === '土样编号' || soilNumberRaw === '野外定名') {
       headerJunkRows += 1;
@@ -599,8 +618,6 @@ function parseOneBlock(
 
     // 深度列检查：「自/至」必须是数字深度。出现「扰1」这类内容说明数据行
     // 整体写串行/列错位（如数据区多了一列孔号），会导致每孔只识别到 1 条土样
-    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : '';
-    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : '';
     if (from && !isNumericDepth(from)) depthJunk.push({ row: r, colName: '自', value: from });
     if (to && !isNumericDepth(to)) depthJunk.push({ row: r, colName: '至', value: to });
 
@@ -647,6 +664,13 @@ function parseOneBlock(
         `工作表「${ws.name}」第 ${hr} 行未写孔号、土号又从 ${firstSoilNumber} 重新开始，疑似送样单来源有误（同一孔的续页应接续编号），已按沿用「${holeCode}」合并，请核对该表是否属于本孔。`,
       );
     }
+  }
+
+  // 暂用编号提示（黄色 warning）：漏填土号的行已按深度暂编，提醒改回真实土号
+  if (provisionalRows.length > 0) {
+    warnings.push(
+      `工作表「${ws.name}」第 ${provisionalRows.join('、')} 行未填土样编号，已暂用「${provisionalExample}」格式的编号（孔号-至深度，缺至用自深度），请核对后改为实际土号。`,
+    );
   }
 
   // 深度列写串行检查（来源错误级，红色提示，不阻止导入）

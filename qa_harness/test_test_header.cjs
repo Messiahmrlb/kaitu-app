@@ -379,6 +379,57 @@ async function parseSheets(sheetDefs) {
     check('3 条土样全部识别', res.records[0]?.record.samples.length === 3, String(res.records[0]?.record.samples.length));
   }
 
+  // 场景 9：漏填土号但深度列有内容 → 暂用「孔号-至深度」编号 + 黄色提示；同深度自动加后缀
+  {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('漏号表');
+    ws.getCell('A1').value = '土工试验送样单';
+    ws.getCell('A2').value = '工程名称：漏号测试工程';
+    ws.getCell('A3').value = '孔号';
+    ws.getCell('B3').value = 'ZK1';
+    ws.getCell('A4').value = '土样编号';
+    ws.getCell('B4').value = '野外定名';
+    ['土样编号', '自', '至', '野外 定名', '原状', '扰动', '饱和固结快剪'].forEach((h, i) => {
+      ws.getCell(String.fromCharCode('A'.charCodeAt(0) + i) + 5).value = h;
+    });
+    // 第 1 行正常：原1
+    ws.getCell('A6').value = '原1';
+    ws.getCell('B6').value = '1.3';
+    ws.getCell('C6').value = '1.5';
+    ws.getCell('D6').value = '粉质黏土';
+    ws.getCell('E6').value = '√';
+    // 第 2 行漏填土号，深度 4.0~4.5 → 暂编 ZK1-4.5
+    ws.getCell('B7').value = '4.0';
+    ws.getCell('C7').value = '4.5';
+    ws.getCell('D7').value = '粉质黏土';
+    ws.getCell('E7').value = '√';
+    // 第 3 行漏填土号，无至深度只有自 6.0 → 暂编 ZK1-6.0
+    ws.getCell('B8').value = '6.0';
+    ws.getCell('D8').value = '粉砂';
+    ws.getCell('E8').value = '√';
+    // 第 4 行漏填土号，至深度与第 2 行相同 4.5 → 暂编 ZK1-4.5-2（防撞）
+    ws.getCell('B9').value = '4.2';
+    ws.getCell('C9').value = '4.5';
+    ws.getCell('D9').value = '粉质黏土';
+    ws.getCell('E9').value = '√';
+    // 空白行（无土号无深度）→ 应跳过
+    ws.getCell('A11').value = '送样人：';
+    const buf = await wb.xlsx.writeBuffer();
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const res = await parseDeliveryFile(ab);
+    check('识别 1 条记录', res.records.length === 1, JSON.stringify(res.warnings));
+    const samples = res.records[0].record.samples;
+    check('4 条土样全部识别（不丢漏号行）', samples.length === 4, samples.map((s) => s.soilNumber).join('|'));
+    eq('漏号行暂编为 孔号-至深度', samples[1].soilNumber, 'ZK1-4.5');
+    eq('缺至深度用自深度', samples[2].soilNumber, 'ZK1-6.0');
+    eq('同深度重复自动加后缀', samples[3].soilNumber, 'ZK1-4.5-2');
+    check(
+      '黄色提示暂编行与格式示例',
+      res.records[0].warnings.some((w) => w.includes('第 7、8、9 行') && w.includes('ZK1-4.5') && w.includes('改为实际土号')),
+      res.records[0].warnings.join(' | '),
+    );
+  }
+
   console.log(`\n通过 ${pass} 项，失败 ${fail} 项`);
   process.exit(fail > 0 ? 1 : 0);
 })();

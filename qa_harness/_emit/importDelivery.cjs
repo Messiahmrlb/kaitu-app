@@ -520,18 +520,31 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
   const samples = [];
   let headerJunkRows = 0;
   const depthJunk = [];
+  const provisionalRows = [];
+  let provisionalExample = "";
+  const usedProvisional = /* @__PURE__ */ new Set();
   let idx = 0;
   for (let r = sub + 1; r <= endRow; r++) {
     const row = ws.getRow(r);
-    const soilNumberRaw = soilNoCol >= 0 ? cellText(row.getCell(soilNoCol).value).trim() : "";
-    if (soilNumberRaw === "") continue;
+    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : "";
+    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : "";
+    let soilNumberRaw = soilNoCol >= 0 ? cellText(row.getCell(soilNoCol).value).trim() : "";
+    if (soilNumberRaw === "") {
+      if (!from && !to) continue;
+      const base = `${holeCode || "\u5F85\u7F16"}-${to || from}`;
+      let pid = base;
+      let n = 2;
+      while (usedProvisional.has(pid)) pid = `${base}-${n++}`;
+      usedProvisional.add(pid);
+      if (!provisionalExample) provisionalExample = pid;
+      provisionalRows.push(r);
+      soilNumberRaw = pid;
+    }
     if (soilNumberRaw === "\u571F\u6837\u7F16\u53F7" || soilNumberRaw === "\u91CE\u5916\u5B9A\u540D") {
       headerJunkRows += 1;
       continue;
     }
     if (FOOTER_KEYWORDS.some((k) => soilNumberRaw.includes(k))) break;
-    const from = fromCol >= 0 ? cellText(row.getCell(fromCol).value).trim() : "";
-    const to = toCol >= 0 ? cellText(row.getCell(toCol).value).trim() : "";
     if (from && !isNumericDepth(from)) depthJunk.push({ row: r, colName: "\u81EA", value: from });
     if (to && !isNumericDepth(to)) depthJunk.push({ row: r, colName: "\u81F3", value: to });
     idx += 1;
@@ -565,6 +578,11 @@ function parseOneBlock(ws, hr, sub, nextHr, inheritedHole = "", holeSearchStart 
         `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${hr} \u884C\u672A\u5199\u5B54\u53F7\u3001\u571F\u53F7\u53C8\u4ECE ${firstSoilNumber} \u91CD\u65B0\u5F00\u59CB\uFF0C\u7591\u4F3C\u9001\u6837\u5355\u6765\u6E90\u6709\u8BEF\uFF08\u540C\u4E00\u5B54\u7684\u7EED\u9875\u5E94\u63A5\u7EED\u7F16\u53F7\uFF09\uFF0C\u5DF2\u6309\u6CBF\u7528\u300C${holeCode}\u300D\u5408\u5E76\uFF0C\u8BF7\u6838\u5BF9\u8BE5\u8868\u662F\u5426\u5C5E\u4E8E\u672C\u5B54\u3002`
       );
     }
+  }
+  if (provisionalRows.length > 0) {
+    warnings.push(
+      `\u5DE5\u4F5C\u8868\u300C${ws.name}\u300D\u7B2C ${provisionalRows.join("\u3001")} \u884C\u672A\u586B\u571F\u6837\u7F16\u53F7\uFF0C\u5DF2\u6682\u7528\u300C${provisionalExample}\u300D\u683C\u5F0F\u7684\u7F16\u53F7\uFF08\u5B54\u53F7-\u81F3\u6DF1\u5EA6\uFF0C\u7F3A\u81F3\u7528\u81EA\u6DF1\u5EA6\uFF09\uFF0C\u8BF7\u6838\u5BF9\u540E\u6539\u4E3A\u5B9E\u9645\u571F\u53F7\u3002`
+    );
   }
   if (depthJunk.length > 0) {
     const shown = depthJunk.slice(0, 3).map((d) => `\u7B2C ${d.row} \u884C\u300C${d.colName}\u300D\u5217\u51FA\u73B0\u300C${d.value}\u300D`).join("\u3001");
