@@ -1,8 +1,13 @@
-// 回归测试：disturbedTestConflicts / isDisturbedTestConflict
+// 回归测试：disturbedTestConflicts / isDisturbedTestConflict / sampleHasConflict / recordConflictCount
 // 扰动土仅适用 物性/颗分，勾选 固结/两种渗透/两种剪切/三轴 中任意一个即提示冲突。
 // 运行：node qa_harness/test_disturbed_conflict.cjs
 const path = require('path');
-const { disturbedTestConflicts, isDisturbedTestConflict } = require(path.join(__dirname, '_emit', 'utils.cjs'));
+const {
+  disturbedTestConflicts,
+  isDisturbedTestConflict,
+  sampleHasConflict,
+  recordConflictCount,
+} = require(path.join(__dirname, '_emit', 'utils.cjs'));
 
 let pass = 0;
 let fail = 0;
@@ -41,6 +46,29 @@ check('扰动 混合 仅报不兼容项', c4.includes('固结') && c4.includes('
 
 // 8) 扰动土 testItems 为空 -> 无冲突
 check('扰动 无试验项 无冲突', !isDisturbedTestConflict(mk('扰动', [])));
+
+// ---------- 9) 孔级汇总（2026-11-02 用户需求：卡片「⚠N」+ 导出对话框提示） ----------
+// sampleHasConflict：三类判定任一命中
+check('sampleHasConflict：扰动+固结 命中', sampleHasConflict(mk('扰动', ['固结'])));
+check('sampleHasConflict：原状+固结 不命中', !sampleHasConflict(mk('原状', ['固结'])));
+check('sampleHasConflict：渗透+剪切 命中', sampleHasConflict(mk('原状', ['垂直渗透', '饱固快剪'])));
+check('sampleHasConflict：饱固快剪+自然快剪 命中', sampleHasConflict(mk('原状', ['饱固快剪', '自然快剪'])));
+check('sampleHasConflict：空试验项 不命中', !sampleHasConflict(mk('扰动', [])));
+check('sampleHasConflict：testItems 缺失字段 不崩溃', !sampleHasConflict({ id: 's', soilNumber: '-1' }));
+// recordConflictCount：统计有冲突的土样条数
+const rec = (samples) => ({ id: 'r1', mode: 'A', samples, engineering: { projectCode: '', holeCode: 'ZK1', holeElevation: '', openDate: '' } });
+check('recordConflictCount：3 样 1 冲突 → 1', recordConflictCount(rec([
+  mk('原状', ['物性']),
+  mk('扰动', ['固结']),
+  mk('原状', ['颗分']),
+])) === 1);
+check('recordConflictCount：全冲突 → 3', recordConflictCount(rec([
+  mk('扰动', ['三轴']),
+  mk('原状', ['水平渗透', '慢剪']),
+  mk('原状', ['饱固快剪', '自然快剪']),
+])) === 3);
+check('recordConflictCount：无冲突 → 0', recordConflictCount(rec([mk('原状', ['物性', '颗分'])])) === 0);
+check('recordConflictCount：samples 缺失 → 0 且不崩溃', recordConflictCount({ id: 'r' }) === 0);
 
 console.log(`\ndisturbedTestConflicts 测试：${pass} 通过 / ${fail} 失败`);
 process.exit(fail === 0 ? 0 : 1);

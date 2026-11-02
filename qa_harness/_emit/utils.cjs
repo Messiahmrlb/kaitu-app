@@ -34,8 +34,10 @@ __export(utils_exports, {
   newSamplesBatch: () => newSamplesBatch,
   nextSeq: () => nextSeq,
   parseTrailingSeq: () => parseTrailingSeq,
+  recordConflictCount: () => recordConflictCount,
   renumberDigitsOnly: () => renumberDigitsOnly,
   renumberSamplesByHole: () => renumberSamplesByHole,
+  sampleHasConflict: () => sampleHasConflict,
   setDisturbance: () => setDisturbance,
   sortRecordsByHole: () => sortRecordsByHole,
   todayStr: () => todayStr,
@@ -55,6 +57,7 @@ var TEST_ITEMS = [
   "\u4E09\u8F74"
 ];
 var DISTURBED_APPLICABLE_TESTS = ["\u7269\u6027", "\u9897\u5206"];
+var SHEAR_TEST_KEYS = ["\u9971\u56FA\u5FEB\u526A", "\u56FA\u7ED3\u5FEB\u526A", "\u81EA\u7136\u5FEB\u526A", "\u6162\u526A"];
 var DISTURBED_INCOMPATIBLE_TESTS = TEST_ITEMS.filter(
   (t) => !DISTURBED_APPLICABLE_TESTS.includes(t)
 );
@@ -180,8 +183,8 @@ function setDisturbance(sample, next) {
 function isPermQuickConflict(sample) {
   const items = sample.testItems ?? [];
   const hasPermeability = items.includes("\u5782\u76F4\u6E17\u900F") || items.includes("\u6C34\u5E73\u6E17\u900F");
-  const hasQuickShear = items.includes("\u9971\u56FA\u5FEB\u526A") || items.includes("\u81EA\u7136\u5FEB\u526A");
-  return hasPermeability && hasQuickShear;
+  const hasShear = SHEAR_TEST_KEYS.some((k) => items.includes(k));
+  return hasPermeability && hasShear;
 }
 function isQuickShearBothConflict(sample) {
   const items = sample.testItems ?? [];
@@ -194,6 +197,12 @@ function disturbedTestConflicts(sample) {
 }
 function isDisturbedTestConflict(sample) {
   return disturbedTestConflicts(sample).length > 0;
+}
+function sampleHasConflict(sample) {
+  return isDisturbedTestConflict(sample) || isPermQuickConflict(sample) || isQuickShearBothConflict(sample);
+}
+function recordConflictCount(record) {
+  return (record?.samples ?? []).filter(sampleHasConflict).length;
 }
 function newRecord(mode) {
   return {
@@ -255,8 +264,10 @@ function isRecordDirty(records, rec) {
   newSamplesBatch,
   nextSeq,
   parseTrailingSeq,
+  recordConflictCount,
   renumberDigitsOnly,
   renumberSamplesByHole,
+  sampleHasConflict,
   setDisturbance,
   sortRecordsByHole,
   todayStr,

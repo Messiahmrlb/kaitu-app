@@ -56,6 +56,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -83,6 +84,7 @@ import {
   disturbedTestConflicts,
   isPermQuickConflict,
   isQuickShearBothConflict,
+  recordConflictCount,
   upsertRecord,
   isRecordDirty,
   todayStr,
@@ -793,6 +795,9 @@ export default function App() {
                 {records.map((rec, idx) => {
                   const disturb = disturbCount(rec);
                   const intact = rec.samples.length - disturb;
+                  // 孔级试验冲突：有冲突的土样条数（与土样卡片/批量勾选同一套判定规则，
+                  // 2026-11-02 用户需求：进编辑前在孔号卡片上即可一眼看到）
+                  const conflictN = recordConflictCount(rec);
                   const isSel = selectedSet.has(rec.id);
                   return (
                     <Card
@@ -858,6 +863,17 @@ export default function App() {
                                 label={`扰动 ${disturb}`}
                                 color="error"
                                 variant="outlined"
+                                sx={{ flexShrink: 0 }}
+                              />
+                            )}
+                            {/* 试验冲突标记：实心红（与描边「扰动 N」区分层级），
+                                仅计数不做文字说明——具体冲突项进编辑页看土样卡片红条 */}
+                            {conflictN > 0 && (
+                              <Chip
+                                size="small"
+                                icon={<WarningAmberIcon fontSize="small" />}
+                                label={`冲突 ${conflictN}`}
+                                color="error"
                                 sx={{ flexShrink: 0 }}
                               />
                             )}

@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import type { SoilRecord } from '../types';
 import { RADIUS } from '../theme';
-import { todayStr } from '../utils';
+import { recordConflictCount, todayStr } from '../utils';
 
 interface Props {
   open: boolean;
@@ -66,6 +66,18 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
   const totalCount = records.length;
   const allSelected = totalCount > 0 && selectedCount === totalCount;
   const indeterminate = selectedCount > 0 && selectedCount < totalCount;
+
+  // 试验冲突汇总（2026-11-02 用户需求：导出前最后一道提示，只提示不拦截——
+  // 冲突组合有时是现场确实要做的，交给用户自行确认）
+  let conflictHoles = 0;
+  let conflictSamples = 0;
+  for (const r of selected) {
+    const n = recordConflictCount(r);
+    if (n > 0) {
+      conflictHoles += 1;
+      conflictSamples += n;
+    }
+  }
 
   const toggleOne = (id: string): void => {
     if (exporting) return;
@@ -171,9 +183,22 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
                         sx={{ py: 0.5 }}
                       />
                       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                          {holeLabel(record)}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0 }}>
+                            {holeLabel(record)}
+                          </Typography>
+                          {/* 冲突孔标红：N = 该孔有冲突的土样条数；具体冲突项进编辑页查看 */}
+                          {recordConflictCount(record) > 0 && (
+                            <Typography
+                              variant="caption"
+                              color="error"
+                              sx={{ flexShrink: 0, fontWeight: 700 }}
+                              aria-label={`孔号 ${holeLabel(record)} 有 ${recordConflictCount(record)} 个试验冲突`}
+                            >
+                              ⚠{recordConflictCount(record)}
+                            </Typography>
+                          )}
+                        </Box>
                         <Typography variant="caption" color="text.secondary" display="block" noWrap>
                           {date || '未填写开土日期'}
                         </Typography>
@@ -186,6 +211,19 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
                 );
               })}
             </List>
+
+            {/* 选中孔中有试验冲突时给出汇总提醒（只提示不拦截，导出按钮不禁用） */}
+            {conflictHoles > 0 && (
+              <Typography
+                variant="caption"
+                color="error"
+                display="block"
+                sx={{ mt: 0.75, fontWeight: 600 }}
+                role="alert"
+              >
+                注意：选中的孔中有 {conflictSamples} 个试验冲突（{conflictHoles} 个孔），请确认后再导出
+              </Typography>
+            )}
           </>
         )}
 

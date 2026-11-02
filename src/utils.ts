@@ -247,6 +247,25 @@ export function isDisturbedTestConflict(sample: SoilSample): boolean {
   return disturbedTestConflicts(sample).length > 0;
 }
 
+/**
+ * 单个土样是否存在任意试验冲突（三类判定任一命中）：
+ * ① 扰动土做了不兼容项目；② 渗透与剪切同时勾选；③ 饱固快剪与自然快剪同时勾选。
+ * 与土样卡片提示条、批量勾选对话框标红共用同一套规则（单一事实来源）。
+ */
+export function sampleHasConflict(sample: SoilSample): boolean {
+  return (
+    isDisturbedTestConflict(sample) || isPermQuickConflict(sample) || isQuickShearBothConflict(sample)
+  );
+}
+
+/**
+ * 孔级冲突统计：该记录中有冲突的土样条数（2026-11-02 用户需求：
+ * 孔号卡片「⚠N」小标与导出对话框冲突提示共用，只提示不拦截导出）。
+ */
+export function recordConflictCount(record: SoilRecord): number {
+  return (record?.samples ?? []).filter(sampleHasConflict).length;
+}
+
 /** 创建一份空白记录（含一条默认土样） */
 export function newRecord(mode: RecordMode): SoilRecord {
   return {
