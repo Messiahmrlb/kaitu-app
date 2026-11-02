@@ -52,6 +52,10 @@ const TOTAL_COLS = 39;
 
 // 子项带高按模式：A=98.2pt / B=103.0pt
 const SUB_ROW_H_PT: Record<'A' | 'B', number> = { A: 98.2, B: 103.0 };
+/** 表头字号（pt，px() 已含 pt→px 换算）：2026-11-02 用户反馈 9pt 在格内偏小、
+ *  留白多，全表头放大到 15pt。例外：土号/野外记录两个横排窄格保持 9pt
+ *  （列宽不足，15pt 会裁字，实测「野外记录」超宽 5px）。 */
+const HEADER_FONT_PT = 15;
 
 /** 单元格键：行(0..22)与列(1..39)编码为唯一整数，便于 QA 单测查值 */
 const cellKey = (row: number, col: number): number => row * 1000 + col;
@@ -293,16 +297,17 @@ function renderFooter(pageIndex: number, totalPages: number): string {
     <div class="pdf-txt" style="left:${px(1110.4)}px;top:${top}px;font-size:${fsSmall}px;">页</div>`;
 }
 
-/** 跨两带的整高表头单元格（rowspan=2）；vertical=true 表示竖排文字 */
+/** 跨两带的整高表头单元格（rowspan=2）；vertical=true 表示竖排文字。
+ *  竖排格加 pdf-hbig 放大到表头字号；土号/野外记录横排窄格保持基准 9pt */
 function wholeHeightHeader(text: string, vertical: boolean): string {
   if (vertical) {
-    return `<th class="pdf-th pdf-whole pdf-vlabel" rowspan="2">${vchars(text)}</th>`;
+    return `<th class="pdf-th pdf-whole pdf-vlabel pdf-hbig" rowspan="2">${vchars(text)}</th>`;
   }
   return `<th class="pdf-th pdf-whole" rowspan="2">${esc(text)}</th>`;
 }
 
-function renderTable(page: PdfPage, record: SoilRecord): string {
-  const mode = record.mode;
+/** 渲染单页表格 HTML（导出供预览/QA 脚本复用） */
+export function renderTable(page: PdfPage, record: SoilRecord): string {  const mode = record.mode;
   const soilType = soilTypeOptions(mode);
   const subH = SUB_ROW_H_PT[mode];
   const colDefs = COL_WIDTHS_PT.map((w) => `<col style="width:${w * PT}px"/>`).join('');
@@ -315,11 +320,11 @@ function renderTable(page: PdfPage, record: SoilRecord): string {
       ${wholeHeightHeader('取样标高', true)}
       ${wholeHeightHeader('颜色', true)}
       ${wholeHeightHeader('气味', true)}
-      <th class="pdf-th" colspan="6">目力鉴别土类</th>
+      <th class="pdf-th pdf-hbig" colspan="6">目力鉴别土类</th>
       ${wholeHeightHeader('夹杂物', true)}
       ${wholeHeightHeader('扰动土', true)}
-      <th class="pdf-th" colspan="17">土样情况</th>
-      <th class="pdf-th" colspan="8">要求实验项目</th>
+      <th class="pdf-th pdf-hbig" colspan="17">土样情况</th>
+      <th class="pdf-th pdf-hbig" colspan="8">要求实验项目</th>
     </tr>`;
 
   const subRow = `
@@ -329,7 +334,7 @@ function renderTable(page: PdfPage, record: SoilRecord): string {
       ${SOIL_STATES.map((t) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(t)}</th>`).join('')}
       <th class="pdf-th pdf-vlabel pdf-vsmall">${vchars('备注')}</th>
       ${recordTestColumns(record)
-        .map((c) => `<th class="pdf-th pdf-vlabel pdf-vsmall">${vchars(c.label)}</th>`)
+        .map((c) => `<th class="pdf-th pdf-vlabel pdf-vtest">${vchars(c.label)}</th>`)
         .join('')}
     </tr>`;
 
@@ -355,7 +360,12 @@ function renderTable(page: PdfPage, record: SoilRecord): string {
     .pdf-datarow td{height:${px(DATA_ROW_H_PT)}px;}
     .pdf-whole{font-weight:bold;}
     .pdf-vlabel{white-space:normal;line-height:1.05;}
-    .pdf-vsmall{font-size:${px(9)}px;}`;
+    .pdf-vsmall{font-size:${px(HEADER_FONT_PT)}px;}
+    /* 表头放大统一 15pt（2026-11-02）：pdf-hbig 覆盖分组行 + 整高竖排标题，
+       vsmall 为子项带竖排标题，vtest 为要求实验项目 8 列；
+       土号/野外记录横排窄格不加 hbig，保持基准 9pt（列宽不足会裁字） */
+    .pdf-hbig{font-size:${px(HEADER_FONT_PT)}px;}
+    .pdf-vtest{font-size:${px(HEADER_FONT_PT)}px;}`;
 
   return `
     <style>${tableCss}</style>
