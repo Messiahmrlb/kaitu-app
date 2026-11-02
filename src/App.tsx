@@ -88,6 +88,7 @@ import {
   upsertRecord,
   isRecordDirty,
   todayStr,
+  recordTitle,
 } from './utils';
 import { exportRecordsXlsx } from './xlsxExport';
 import { exportRecordsDocx } from './docxExport';
@@ -241,7 +242,9 @@ export default function App() {
     const rec = newRecord(mode);
     const hole = holeCode.trim();
     rec.engineering.holeCode = hole;
-    if (hole) rec.name = `开土记录 ${hole}`;
+    // 名称直接用孔号：列表里每条都是开土记录，「开土记录 ZK5」这种前缀纯属重复，
+    // 手机上还会把标题行挤到换行。旧记录由 recordTitle() 在显示时统一剥离。
+    if (hole) rec.name = hole;
     rec.samples = buildRecordSamples(hole, count, rCount);
     setSetupOpen(false);
     setPendingMode(null);
@@ -605,6 +608,8 @@ export default function App() {
                 </ListItemIcon>
                 导入送样单
               </MenuItem>
+              {/* 导入与三个导出项方向相反，加一条分隔线避免误点 */}
+              <Divider sx={{ my: 0.5 }} />
               <MenuItem
                 onClick={() => {
                   setExportMenuAnchor(null);
@@ -811,9 +816,12 @@ export default function App() {
                         position: 'relative',
                         overflow: 'hidden',
                         borderColor: isSel ? 'primary.main' : 'divider',
+                        // 左侧色条只标记「需要处理」的异常（试验冲突）。
+                        // 扰动是正常业务属性（多数孔都有扰动样），不再占用红色，
+                        // 否则红色同时表示三件事，真正的冲突就淹没在里面。
                         borderLeft: (t) =>
                           `4px solid ${
-                            disturb > 0 ? t.palette.error.main : t.palette.primary.main
+                            conflictN > 0 ? t.palette.error.main : t.palette.primary.main
                           }`,
                         bgcolor: isSel
                           ? (t) => alpha(t.palette.primary.main, 0.06)
@@ -822,82 +830,50 @@ export default function App() {
                         '&:hover': { boxShadow: 3, transform: 'translateY(-1px)' },
                       }}
                     >
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          p: 1.5,
-                          gap: 1,
-                        }}
-                      >
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Box
+                      {/* 标题行放「孔名 + 冲突标志 + 扰动」，右侧图标与标题同一行：
+                          这样信息行能占满整卡宽度，长工程编号不再折成三行。
+                          冲突已简化为一枚圆标，让出的宽度正好放回扰动条数 */}
+                      <Box sx={{ p: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Typography
+                            fontWeight={700}
+                            noWrap
                             sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              flexWrap: 'wrap',
+                              flexShrink: 1,
+                              minWidth: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
                             }}
                           >
-                            <Typography
-                              fontWeight={700}
-                              noWrap
-                              sx={{
-                                flexShrink: 1,
-                                minWidth: 0,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {rec.name}
-                            </Typography>
+                            {recordTitle(rec.name)}
+                          </Typography>
+                          {/* 试验冲突标志：只写「冲突」不带条数——列表里只需要
+                              知道「有没有、要不要点进去看」，具体哪几项冲突进编辑页。
+                              高度与「扰动」chip 同为 20px，两者并排不错位 */}
+                          {conflictN > 0 && (
                             <Chip
                               size="small"
-                              label={MODE_LABELS[rec.mode]}
-                              color={rec.mode === 'A' ? 'primary' : 'secondary'}
-                              sx={{ flexShrink: 0 }}
+                              icon={<WarningAmberIcon sx={{ fontSize: 14 }} />}
+                              label="冲突"
+                              color="error"
+                              aria-label="该孔存在试验冲突"
+                              sx={{
+                                flexShrink: 0,
+                                height: 20,
+                                '& .MuiChip-label': { px: 0.5 },
+                                '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
+                              }}
                             />
-                            {disturb > 0 && (
-                              <Chip
-                                size="small"
-                                label={`扰动 ${disturb}`}
-                                color="error"
-                                variant="outlined"
-                                sx={{ flexShrink: 0 }}
-                              />
-                            )}
-                            {/* 试验冲突标记：实心红（与描边「扰动 N」区分层级），
-                                仅计数不做文字说明——具体冲突项进编辑页看土样卡片红条 */}
-                            {conflictN > 0 && (
-                              <Chip
-                                size="small"
-                                icon={<WarningAmberIcon fontSize="small" />}
-                                label={`冲突 ${conflictN}`}
-                                color="error"
-                                sx={{ flexShrink: 0 }}
-                              />
-                            )}
-                          </Box>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mt: 0.5 }}
+                          )}
+                          <Box
+                            sx={{
+                              ml: 'auto',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.25,
+                              flexShrink: 0,
+                            }}
                           >
-                            {`工程编号：${rec.engineering.projectCode || '—'} ｜ 孔号：${
-                              rec.engineering.holeCode || '—'
-                            } ｜ 土样 ${rec.samples.length} 条 ｜ 原状 ${intact} · 扰动 ${disturb}`}
-                            {selectMode ? '（点按选择）' : ''}
-                          </Typography>
-                        </Box>
-
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.25,
-                            flexShrink: 0,
-                          }}
-                        >
                           {selectMode ? (
                             <Checkbox
                               edge="end"
@@ -942,7 +918,47 @@ export default function App() {
                               </IconButton>
                             </>
                           )}
+                          </Box>
                         </Box>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          // keep-all：中文默认可以在任意两字之间折行，会把「孔号：」拆成
+                          // 「孔」「号：」两行；只在分隔符处折行，超长段落再用 break-word 兜底
+                          sx={{
+                            mt: 0.5,
+                            wordBreak: 'keep-all',
+                            overflowWrap: 'break-word',
+                          }}
+                        >
+                          {`${MODE_LABELS[rec.mode]} ｜ 工程编号：${
+                            rec.engineering.projectCode || '—'
+                          } ｜ 孔号：${rec.engineering.holeCode || '—'} ｜ 土样 ${
+                            rec.samples.length
+                          } 条 ｜ `}
+                          {/* 原状/扰动是本卡最有决策价值的一组数（决定要不要求原状样），
+                              从标题行的 chip 挪到这里后加重字色与字重；
+                              扰动为 0 时保持次要色，避免「0」也抢注意力 */}
+                          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+                            <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                              {`原状 ${intact}`}
+                            </Box>
+                            <Box component="span" sx={{ mx: 0.5, color: 'text.disabled' }}>
+                              ·
+                            </Box>
+                            <Box
+                              component="span"
+                              sx={
+                                disturb > 0
+                                  ? { fontWeight: 700, color: 'secondary.dark' }
+                                  : { color: 'text.secondary' }
+                              }
+                            >
+                              {`扰动 ${disturb}`}
+                            </Box>
+                          </Box>
+                          {selectMode ? '（点按选择）' : ''}
+                        </Typography>
                       </Box>
                     </Card>
                   );

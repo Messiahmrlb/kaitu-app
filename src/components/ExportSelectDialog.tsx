@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -17,6 +18,8 @@ import {
 import type { SoilRecord } from '../types';
 import { RADIUS } from '../theme';
 import { recordConflictCount, todayStr } from '../utils';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { alpha } from '@mui/material/styles';
 
 interface Props {
   open: boolean;
@@ -69,14 +72,10 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
 
   // 试验冲突汇总（2026-11-02 用户需求：导出前最后一道提示，只提示不拦截——
   // 冲突组合有时是现场确实要做的，交给用户自行确认）
+  // 只统计「有没有」：具体是哪几个孔由列表行内的红叹号指出，不在汇总里报数量
   let conflictHoles = 0;
-  let conflictSamples = 0;
   for (const r of selected) {
-    const n = recordConflictCount(r);
-    if (n > 0) {
-      conflictHoles += 1;
-      conflictSamples += n;
-    }
+    if (recordConflictCount(r) > 0) conflictHoles += 1;
   }
 
   const toggleOne = (id: string): void => {
@@ -158,12 +157,39 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
               </Typography>
             </ListItemButton>
 
+            {/* 冲突汇总：放在列表「之上」而非之下——列表可滚动，
+                放下面时长列表会把它顶出可视区，导出前最该看到的一句反而看不到。
+                只提示不拦截（导出按钮不禁用），冲突组合有时现场确实要做。 */}
+            {conflictHoles > 0 && (
+              <Box
+                role="alert"
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 0.75,
+                  px: 1,
+                  py: 0.75,
+                  mb: 0.5,
+                  borderRadius: RADIUS.tile,
+                  bgcolor: (t) => alpha(t.palette.error.main, 0.08),
+                  border: (t) => `1px solid ${alpha(t.palette.error.main, 0.32)}`,
+                  color: 'error.dark',
+                }}
+              >
+                <WarningAmberIcon sx={{ fontSize: 18, mt: '1px', flexShrink: 0 }} />
+                <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.5 }}>
+                  选中的孔中存在试验冲突（行内红标），只提示不拦截，导出前请核对
+                </Typography>
+              </Box>
+            )}
+
             <Divider />
 
             <List dense disablePadding sx={{ maxHeight: 320, overflowY: 'auto', mt: 0.5 }}>
               {records.map((record) => {
                 const checked = selectedSet.has(record.id);
                 const date = (record.engineering?.openDate ?? '').trim();
+                const conflictN = recordConflictCount(record);
                 return (
                   <ListItem key={record.id} disablePadding>
                     <ListItemButton
@@ -187,16 +213,23 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
                           <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0 }}>
                             {holeLabel(record)}
                           </Typography>
-                          {/* 冲突孔标红：N = 该孔有冲突的土样条数；具体冲突项进编辑页查看 */}
-                          {recordConflictCount(record) > 0 && (
-                            <Typography
-                              variant="caption"
+                          {/* 冲突孔标红：与首页卡片同一个「冲突」标签、同一套配色，
+                              只标存在性不带条数（口径统一）。
+                              用 MUI 图标而非 emoji——emoji 在各机型上字重和基线都不一样 */}
+                          {conflictN > 0 && (
+                            <Chip
+                              size="small"
+                              icon={<WarningAmberIcon sx={{ fontSize: 14 }} />}
+                              label="冲突"
                               color="error"
-                              sx={{ flexShrink: 0, fontWeight: 700 }}
-                              aria-label={`孔号 ${holeLabel(record)} 有 ${recordConflictCount(record)} 个试验冲突`}
-                            >
-                              ⚠{recordConflictCount(record)}
-                            </Typography>
+                              aria-label={`孔号 ${holeLabel(record)} 存在试验冲突`}
+                              sx={{
+                                flexShrink: 0,
+                                height: 20,
+                                '& .MuiChip-label': { px: 0.5 },
+                                '& .MuiChip-icon': { ml: 0.5, mr: -0.25 },
+                              }}
+                            />
                           )}
                         </Box>
                         <Typography variant="caption" color="text.secondary" display="block" noWrap>
@@ -211,19 +244,6 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
                 );
               })}
             </List>
-
-            {/* 选中孔中有试验冲突时给出汇总提醒（只提示不拦截，导出按钮不禁用） */}
-            {conflictHoles > 0 && (
-              <Typography
-                variant="caption"
-                color="error"
-                display="block"
-                sx={{ mt: 0.75, fontWeight: 600 }}
-                role="alert"
-              >
-                注意：选中的孔中有 {conflictSamples} 个试验冲突（{conflictHoles} 个孔），请确认后再导出
-              </Typography>
-            )}
           </>
         )}
 

@@ -335,3 +335,14 @@ export function isRecordDirty(records: SoilRecord[], rec: SoilRecord): boolean {
   const stored = records.find((r) => r.id === rec.id);
   return !stored || stored.updatedAt !== rec.updatedAt;
 }
+
+/**
+ * 列表卡片标题的显示名。
+ * 新建记录时名称会自动写成「开土记录 ZK5」这类格式，但列表里每一条都是
+ * 开土记录，重复标注只会挤掉真正有区分度的孔号（手机上还会多占一行）。
+ * 这里统一剥离「开土记录」字样；剥离后为空则回退原名，避免标题空白。
+ */
+export function recordTitle(name: string): string {
+  const t = name.replace(/开土记录/g, '').replace(/\s+/g, ' ').trim();
+  return t || name;
+}

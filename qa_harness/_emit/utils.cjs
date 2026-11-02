@@ -35,6 +35,7 @@ __export(utils_exports, {
   nextSeq: () => nextSeq,
   parseTrailingSeq: () => parseTrailingSeq,
   recordConflictCount: () => recordConflictCount,
+  recordTitle: () => recordTitle,
   renumberDigitsOnly: () => renumberDigitsOnly,
   renumberSamplesByHole: () => renumberSamplesByHole,
   sampleHasConflict: () => sampleHasConflict,
@@ -248,6 +249,10 @@ function isRecordDirty(records, rec) {
   const stored = records.find((r) => r.id === rec.id);
   return !stored || stored.updatedAt !== rec.updatedAt;
 }
+function recordTitle(name) {
+  const t = name.replace(/开土记录/g, "").replace(/\s+/g, " ").trim();
+  return t || name;
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   buildRecordSamples,
@@ -265,6 +270,7 @@ function isRecordDirty(records, rec) {
   nextSeq,
   parseTrailingSeq,
   recordConflictCount,
+  recordTitle,
   renumberDigitsOnly,
   renumberSamplesByHole,
   sampleHasConflict,
