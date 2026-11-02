@@ -5,9 +5,6 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -29,24 +26,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-// src/docxAssets.ts
-var docxAssets_exports = {};
-__export(docxAssets_exports, {
-  DOCX_TEMPLATE_URLS: () => DOCX_TEMPLATE_URLS
-});
-var import_tpl_normal, import_tpl_triangle, DOCX_TEMPLATE_URLS;
-var init_docxAssets = __esm({
-  "src/docxAssets.ts"() {
-    "use strict";
-    import_tpl_normal = __toESM(require("./assets/tpl-normal.docx?url"), 1);
-    import_tpl_triangle = __toESM(require("./assets/tpl-triangle.docx?url"), 1);
-    DOCX_TEMPLATE_URLS = {
-      A: import_tpl_normal.default,
-      B: import_tpl_triangle.default
-    };
-  }
-});
 
 // src/docxExport.ts
 var docxExport_exports = {};
@@ -168,9 +147,9 @@ function stripSoilNumber(holeCode, soilNumber) {
 
 // src/pdfExport.ts
 var PT = 4 / 3;
-var INFO_YEAR_LEFT_PT = 978.4;
-var INFO_YEAR_RIGHT_PT = 1104.8;
-var INFO_YEAR_WIDTH_PT = INFO_YEAR_RIGHT_PT - INFO_YEAR_LEFT_PT;
+var INFO_DATE_SHIFT_PT = 24.4;
+var INFO_YEAR_LEFT_PT = 978.4 - INFO_DATE_SHIFT_PT;
+var INFO_YEAR_RIGHT_PT = 1104.8 - INFO_DATE_SHIFT_PT;
 function withOpenDate(records, openDate) {
   const d = (openDate ?? "").trim();
   if (!d) return records;
@@ -181,7 +160,7 @@ function withOpenDate(records, openDate) {
 }
 
 // src/docxExport.ts
-var DOCX_ROWS_PER_PAGE = 22;
+var DOCX_ROWS_PER_PAGE = 23;
 var DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -333,7 +312,7 @@ function buildDocxBody(tplXml, records) {
   if (gridWidths.length === 0) throw new Error("docx \u6A21\u677F\u7F3A\u5C11 tblGrid");
   const trs = tbl.slice(firstTr, tbl.length - TBL_END.length).match(TR_RE) ?? [];
   if (trs.length < 26) throw new Error(`docx \u6A21\u677F\u884C\u6570\u5F02\u5E38\uFF1A${trs.length}`);
-  const tailRow = cleanCloneXml(trs[25] ?? "");
+  const tailRowTpl = cleanCloneXml(trs[25] ?? "");
   const rowTpl = cleanCloneXml(trs[3] ?? "");
   const headRow1 = cleanCloneXml(trs[1] ?? "");
   const infoRowTpl = trs[0] ?? "";
@@ -356,9 +335,10 @@ function buildDocxBody(tplXml, records) {
         const idx = p * DOCX_ROWS_PER_PAGE + r;
         const s = samples[idx];
         const fill = s ? cellsToFill(sampleDocxCells(s, record.mode, idx + 1, testKeys, holeCode)) : null;
-        rows.push(fillDataRow(rowTpl, gridWidths, fill));
+        const rowXml = r === DOCX_ROWS_PER_PAGE - 1 ? tailRowTpl : rowTpl;
+        rows.push(fillDataRow(rowXml, gridWidths, fill));
       }
-      pages.push(tblOpen + rows.join("") + tailRow + TBL_END);
+      pages.push(tblOpen + rows.join("") + TBL_END);
     }
   }
   return tplXml.slice(0, tblStart) + pages.join(PAGE_BREAK_P) + tplXml.slice(tblEnd + TBL_END.length);
@@ -380,8 +360,8 @@ function buildMergedDocxFileName(records, today) {
   return `\u5F00\u571F\u8BB0\u5F55_${count}\u5B54_${day}.docx`;
 }
 async function fetchTemplateBytes(mode) {
-  const { DOCX_TEMPLATE_URLS: DOCX_TEMPLATE_URLS2 } = await Promise.resolve().then(() => (init_docxAssets(), docxAssets_exports));
-  const res = await fetch(DOCX_TEMPLATE_URLS2[mode]);
+  const { DOCX_TEMPLATE_URLS } = await import("./docxAssets");
+  const res = await fetch(DOCX_TEMPLATE_URLS[mode]);
   if (!res.ok) throw new Error(`\u6A21\u677F\u52A0\u8F7D\u5931\u8D25\uFF08${res.status}\uFF09`);
   return new Uint8Array(await res.arrayBuffer());
 }

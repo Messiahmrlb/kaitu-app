@@ -210,12 +210,19 @@ function buildPdfFileName(record: SoilRecord): string {
 const INFO_LINE_TOP_PT = 130.8;
 const INFO_LINE_FONT_PT = 11.1;
 /**
- * 「开土日期 + 年份」右对齐框：左缘 978.4pt、右缘 1104.8pt（正好是「年」字左缘），
- * 宽度 126.4pt。标签与年份同框，右对齐后年份右缘自动贴住「年」字。
+ * 日期组（开土日期标签 + 年/月/日）整体相对模板原坐标的左移量。
+ * 2026-11-02 用户反馈：日期组右移后「日」字（原 1170.8pt 起）超出表格右缘
+ * （TABLE_LEFT 48.6 + TABLE_WIDTH 1109 = 1157.6pt）。左移 24.4pt 后
+ * 「日」右缘 = 1146.4 + 11.1 ≈ 1157.5pt，正好贴齐表格右缘不越界。
  */
-const INFO_YEAR_LEFT_PT = 978.4;
-const INFO_YEAR_RIGHT_PT = 1104.8;
-const INFO_YEAR_WIDTH_PT = INFO_YEAR_RIGHT_PT - INFO_YEAR_LEFT_PT;
+const INFO_DATE_SHIFT_PT = 24.4;
+/**
+ * 「开土日期 + 年份」右对齐框：右缘 = 「年」字左缘，宽度 126.4pt。
+ * 标签与年份同框，右对齐后年份右缘自动贴住「年」字。
+ */
+const INFO_YEAR_LEFT_PT = 978.4 - INFO_DATE_SHIFT_PT;
+const INFO_YEAR_RIGHT_PT = 1104.8 - INFO_DATE_SHIFT_PT;
+const INFO_YEAR_WIDTH_PT = 126.4;
 
 function renderInfoLine(eng: SoilRecord['engineering']): string {
   const parts = (eng.openDate ?? '').trim().split('-');
@@ -225,10 +232,9 @@ function renderInfoLine(eng: SoilRecord['engineering']): string {
   const txt = (leftPt: number, html: string): string =>
     `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(INFO_LINE_TOP_PT)}px;font-size:${px(INFO_LINE_FONT_PT)}px;">${html}</div>`;
   // 「开土日期」标签与年份同框并右对齐（2026-11-02 用户反馈：标签离年份太远）。
-  // 年份位数固定 4 位，右对齐后年份右缘正好落在框右缘 = 「年」字左缘（1104.8pt），
+  // 年份位数固定 4 位，右对齐后年份右缘正好落在框右缘 = 「年」字左缘，
   // 标签紧贴年份左侧，不再与年份之间出现大段空白。
-  // 年份为空时（批量改日期允许留空）仍把标签放在 978.4pt 左缘，避免空年份把标签
-  // 整体推到右端、与其它信息项错位。
+  // 年份为空时（批量改日期允许留空）仍把标签放在框左缘，避免错位。
   const yearBox = (year: string): string => {
     const boxStyle = `left:${px(INFO_YEAR_LEFT_PT)}px;top:${px(INFO_LINE_TOP_PT)}px;`;
     if (!year) {
@@ -243,10 +249,10 @@ function renderInfoLine(eng: SoilRecord['engineering']): string {
     ${txt(742.2, 'm')}
     ${yearBox(y)}
     ${txt(INFO_YEAR_RIGHT_PT, '年')}
-    ${txt(1122, esc(m))}
-    ${txt(1137.8, '月')}
-    ${txt(1153, esc(d))}
-    ${txt(1170.8, '日')}`;
+    ${txt(1122 - INFO_DATE_SHIFT_PT, esc(m))}
+    ${txt(1137.8 - INFO_DATE_SHIFT_PT, '月')}
+    ${txt(1153 - INFO_DATE_SHIFT_PT, esc(d))}
+    ${txt(1170.8 - INFO_DATE_SHIFT_PT, '日')}`;
 }
 
 /**

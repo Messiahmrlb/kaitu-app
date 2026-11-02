@@ -343,9 +343,10 @@ function buildPdfFileName(record) {
 }
 var INFO_LINE_TOP_PT = 130.8;
 var INFO_LINE_FONT_PT = 11.1;
-var INFO_YEAR_LEFT_PT = 978.4;
-var INFO_YEAR_RIGHT_PT = 1104.8;
-var INFO_YEAR_WIDTH_PT = INFO_YEAR_RIGHT_PT - INFO_YEAR_LEFT_PT;
+var INFO_DATE_SHIFT_PT = 24.4;
+var INFO_YEAR_LEFT_PT = 978.4 - INFO_DATE_SHIFT_PT;
+var INFO_YEAR_RIGHT_PT = 1104.8 - INFO_DATE_SHIFT_PT;
+var INFO_YEAR_WIDTH_PT = 126.4;
 function renderInfoLine(eng) {
   const parts = (eng.openDate ?? "").trim().split("-");
   const y = parts[0] ?? "";
@@ -366,10 +367,10 @@ function renderInfoLine(eng) {
     ${txt(742.2, "m")}
     ${yearBox(y)}
     ${txt(INFO_YEAR_RIGHT_PT, "\u5E74")}
-    ${txt(1122, esc(m))}
-    ${txt(1137.8, "\u6708")}
-    ${txt(1153, esc(d))}
-    ${txt(1170.8, "\u65E5")}`;
+    ${txt(1122 - INFO_DATE_SHIFT_PT, esc(m))}
+    ${txt(1137.8 - INFO_DATE_SHIFT_PT, "\u6708")}
+    ${txt(1153 - INFO_DATE_SHIFT_PT, esc(d))}
+    ${txt(1170.8 - INFO_DATE_SHIFT_PT, "\u65E5")}`;
 }
 function renderHeaderTexts(record, header = CMA_DEFAULT) {
   const eng = record.engineering;

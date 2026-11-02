@@ -139,13 +139,15 @@ check('特殊字符被转义', htmlEsc.includes('A&amp;B &lt;C&gt;') && htmlEsc.
 
 check('未传 header 时用默认值', renderHeaderTexts(record).includes(d.versionLine));
 
-// --------------- 信息行：「开土日期」+ 年份同框右对齐贴住「年」（2026-11-02）
+// --------------- 信息行：「开土日期」+ 年份同框右对齐贴住「年」；日期组整体左移
+// 24.4pt 使「日」右缘贴表格右缘 1157.6pt（2026-11-02 用户反馈：日期超出表格）
 // px = pt × 4/3；使用与源码相同的乘算方式，保证浮点字符串逐字一致。
 const PT = 4 / 3;
 const infoTop = 130.8 * PT;
 const infoFont = 11.1 * PT;
-const yearLeft = 978.4 * PT;
-const yearWidth = (1104.8 - 978.4) * PT;
+const SHIFT = 24.4;
+const yearLeft = (978.4 - SHIFT) * PT;
+const yearWidth = 126.4 * PT;
 const yearBoxPrefix = `left:${yearLeft}px;top:${infoTop}px;width:${yearWidth}px;text-align:right;font-size:${infoFont}px;`;
 check(
   '信息行：标签与年份同框、右对齐（内容「开土日期2026」）',
@@ -153,8 +155,8 @@ check(
   `${yearBoxPrefix}">开土日期2026</div>`,
 );
 check(
-  '信息行：框宽度 = 1104.8 - 978.4（年份右缘贴「年」字左缘）',
-  Math.abs(yearWidth / PT - (1104.8 - 978.4)) < 1e-9,
+  '信息行：框宽度 = 126.4pt（年份右缘贴「年」字左缘）',
+  Math.abs(yearWidth / PT - 126.4) < 1e-9,
   yearWidth / PT,
 );
 check(
@@ -162,25 +164,25 @@ check(
   !htmlDefault.includes(`left:${yearLeft}px;top:${infoTop}px;font-size:${infoFont}px;">开土日期</div>`),
 );
 check(
-  '信息行：「年」字位置不变（1104.8pt）',
-  htmlDefault.includes(`left:${1104.8 * PT}px;top:${infoTop}px;font-size:${infoFont}px;">年</div>`),
+  '信息行：「年」字左移 24.4pt（1080.4pt）',
+  htmlDefault.includes(`left:${(1104.8 - SHIFT) * PT}px;top:${infoTop}px;font-size:${infoFont}px;">年</div>`),
 );
 check(
-  '信息行：「月」字位置不变（1137.8pt）',
-  htmlDefault.includes(`left:${1137.8 * PT}px;top:${infoTop}px;font-size:${infoFont}px;">月</div>`),
+  '信息行：「月」字左移 24.4pt（1113.4pt）',
+  htmlDefault.includes(`left:${(1137.8 - SHIFT) * PT}px;top:${infoTop}px;font-size:${infoFont}px;">月</div>`),
 );
 check(
-  '信息行：「日」字位置不变（1170.8pt）',
-  htmlDefault.includes(`left:${1170.8 * PT}px;top:${infoTop}px;font-size:${infoFont}px;">日</div>`),
+  '信息行：「日」字左移 24.4pt（1146.4pt，右缘≈1157.5 贴表格右缘 1157.6）',
+  htmlDefault.includes(`left:${(1170.8 - SHIFT) * PT}px;top:${infoTop}px;font-size:${infoFont}px;">日</div>`),
 );
-// 空开土日期（批量改日期允许留空）：标签仍按原左缘 978.4pt 单独立框，不右移到「年」前
+// 空开土日期（批量改日期允许留空）：标签仍按框左缘单独立框，不右移到「年」前
 const emptyDateRecord = {
   ...record,
   engineering: { ...record.engineering, openDate: '' },
 };
 const htmlEmptyDate = renderHeaderTexts(emptyDateRecord, d);
 check(
-  '信息行：空年份时标签仍在 978.4pt 左缘',
+  '信息行：空年份时标签仍在框左缘（954.0pt）',
   htmlEmptyDate.includes(`left:${yearLeft}px;top:${infoTop}px;font-size:${infoFont}px;">开土日期</div>`),
 );
 check('信息行：空年份时无「开土日期undefined」', !htmlEmptyDate.includes('开土日期undefined'));

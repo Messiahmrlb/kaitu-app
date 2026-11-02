@@ -33,8 +33,8 @@ import { withOpenDate } from './pdfExport';
 import { sanitizeFileNamePart, stripSoilNumber } from './exportNaming';
 import { CMA_DEFAULT, CmaHeaderSettings } from './cmaHeader';
 
-/** 每页数据行数：模板 row3..row24 共 22 行 */
-export const DOCX_ROWS_PER_PAGE = 22;
+/** 每页数据行数：模板 row3..row24 共 22 行 + 尾行 row25 作第 23 行（与 PDF 一致） */
+export const DOCX_ROWS_PER_PAGE = 23;
 
 /** Word 文档 MIME（Blob 与 Web Share File 共用） */
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -274,7 +274,9 @@ function cellsToFill(cells: string[]): Record<number, string> {
 
 /**
  * 纯函数：以模板 document.xml 为底生成整篇 document.xml。
- * - 每条记录按 22 行/页分页，页与页、孔与孔之间插入分页段落；
+ * - 每条记录按 23 行/页分页（row3..row24 共 22 行克隆 + 模板尾行 row25 作第 23
+ *   数据行——2026-11-02 用户反馈：尾行本就与数据行同构，23 个土样不应拆两页，
+ *   与 PDF 的 23 行/页一致），页与页、孔与孔之间插入分页段落；
  * - 每页都是完整一张表（信息行按所属记录填写，列标题/子项原样保留）。
  */
 export function buildDocxBody(tplXml: string, records: SoilRecord[]): string {
@@ -289,7 +291,7 @@ export function buildDocxBody(tplXml: string, records: SoilRecord[]): string {
   if (gridWidths.length === 0) throw new Error('docx 模板缺少 tblGrid');
   const trs = tbl.slice(firstTr, tbl.length - TBL_END.length).match(TR_RE) ?? [];
   if (trs.length < 26) throw new Error(`docx 模板行数异常：${trs.length}`);
-  const tailRow = cleanCloneXml(trs[25] ?? '');
+  const tailRowTpl = cleanCloneXml(trs[25] ?? ''); // 模板尾行：结构与数据行一致（trHeight 略高）
   const rowTpl = cleanCloneXml(trs[3] ?? '');
   const headRow1 = cleanCloneXml(trs[1] ?? '');
   const infoRowTpl = trs[0] ?? '';
@@ -315,9 +317,11 @@ export function buildDocxBody(tplXml: string, records: SoilRecord[]): string {
         const fill = s
           ? cellsToFill(sampleDocxCells(s, record.mode, idx + 1, testKeys, holeCode))
           : null;
-        rows.push(fillDataRow(rowTpl, gridWidths, fill));
+        // 每页第 23 行用模板尾行（row25）承载，其余 22 行克隆 row3；不足时留空
+        const rowXml = r === DOCX_ROWS_PER_PAGE - 1 ? tailRowTpl : rowTpl;
+        rows.push(fillDataRow(rowXml, gridWidths, fill));
       }
-      pages.push(tblOpen + rows.join('') + tailRow + TBL_END);
+      pages.push(tblOpen + rows.join('') + TBL_END);
     }
   }
   return tplXml.slice(0, tblStart) + pages.join(PAGE_BREAK_P) + tplXml.slice(tblEnd + TBL_END.length);

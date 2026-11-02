@@ -161,7 +161,7 @@ function mkRecord(id, hole, samples, extra = {}) {
   check('空土号兜底 -2', rowTcs(rows[4])[0] === '-2', rowTcs(rows[4])[0]);
 }
 
-// ---------- 3. 跨页：>22 行另起一表 + 分页段落 ----------
+// ---------- 3. 跨页：>23 行另起一表 + 分页段落（23 行/页，尾行 row25 作第 23 数据行） ----------
 {
   const samples = [];
   for (let i = 1; i <= 25; i++) samples.push(mkSample(String(i)));
@@ -170,9 +170,21 @@ function mkRecord(id, hole, samples, extra = {}) {
   check('1 个分页段落', (xml.match(/<w:br w:type="page"\/>/g) || []).length === 1);
   const rows = bodyRows(xml);
   check('总行数 = 2×26', rows.length === 52, String(rows.length));
-  check('第二页首行土号 -23（第 23 条）', rowTcs(rows[26 + 3])[0] === '-23', rowTcs(rows[29])[0]);
+  check('第二页首行土号 -24（第 24 条）', rowTcs(rows[26 + 3])[0] === '-24', rowTcs(rows[29])[0]);
   check('第二页信息行重复工程编号', rowTcs(rows[26])[0] === '工程编号：26T123', rowTcs(rows[26])[0]);
   check('第二页列标题保留', rowTcs(rows[26 + 1])[0] === '土    号', rowTcs(rows[27])[0]);
+  // 23 行/页：23 个土样恰好一页装下（尾行 row25 作第 23 数据行，与 PDF 一致）
+  const xml23 = dx.buildDocxBody(XML_A, [mkRecord('r1', 'ZK1', samples.slice(0, 23))]);
+  check('23 样 → 1 张表（不再拆页）', (xml23.match(/<w:tbl>/g) || []).length === 1);
+  check('23 样无分页符', !xml23.includes('<w:br w:type="page"/>'));
+  const rows23 = bodyRows(xml23);
+  check('23 样总行数 = 26', rows23.length === 26, String(rows23.length));
+  check('第 22 行土号 -22', rowTcs(rows23[3 + 21])[0] === '-22', rowTcs(rows23[24])[0]);
+  check('第 23 行（尾行）土号 -23', rowTcs(rows23[25])[0] === '-23', rowTcs(rows23[25])[0]);
+  // 不足 23 个时尾行仍保留为空白行
+  const xmlFew = dx.buildDocxBody(XML_A, [mkRecord('r1', 'ZK1', samples.slice(0, 3))]);
+  const rowsFew = bodyRows(xmlFew);
+  check('3 样：第 23 行（尾行）空白', rowsFew.length === 26 && rowTcs(rowsFew[25])[0] === '', rowTcs(rowsFew[25])[0]);
 }
 
 // ---------- 4. 多孔合并：各孔信息行独立、土号按孔内行序 ----------
