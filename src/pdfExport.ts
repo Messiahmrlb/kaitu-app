@@ -78,6 +78,7 @@ function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode
   const soilType = soilTypeOptions(mode);
   // 土号列：显示记录土号（统一归一，与 Excel/Word 同规则 stripSoilNumber）——
   // 原1→-1、扰1/R1→-R1、ZK1-3→-3、-1→-1（2026-10-30 用户反馈：不应带「原/扰」字）；
+  // 数字序号去前导零（2026-11-02：-01→-1、R01→-R1，导出不写前导零，存储不动）。
   // 数字编号跳过 R 样顺位（数字样显示忠实于归一结果，App 内插入重排后即连续）。
   // 土号未填时按行序兜底 -1、-2…。
   const short = stripSoilNumber(holeCode, s.soilNumber);

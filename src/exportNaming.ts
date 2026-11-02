@@ -79,25 +79,42 @@ export function groupXlsxRecords(records: SoilRecord[]): SoilRecord[][] {
 }
 
 /**
+ * 纯数字序号去前导零（2026-11-02 用户确认：导出不写 -01，写 -1）：
+ * `01`→`1`、`010`→`10`；`00`→`0`（全零保留一位 0）；非数字原样。
+ */
+function stripLeadingZeros(digits: string): string {
+  return digits.replace(/^0+(?=\d)/, '');
+}
+
+/** 短编号终归一：纯数字或 R+数字 的序号去前导零（R01→R1、01→1），其余原样 */
+function normalizeShortNumber(short: string): string {
+  const m = short.match(/^R(\d+)$/);
+  if (m) return `R${stripLeadingZeros(m[1])}`;
+  if (/^\d+$/.test(short)) return stripLeadingZeros(short);
+  return short;
+}
+
+/**
  * 土号「短编号」归一（2026-10-30 用户反馈：PDF/Word 土号列不应带「原/扰」字）：
  * - `原1` → `1`（去掉「原」字）；
  * - `扰1` / `R1` / `r1` → `R1`（扰动样 R 前缀）；
  * - 已带孔号前缀（`ZK1-3`）→ `3`；
  * - 前导 `-`（`-1`、`-R1`）→ 去掉 `-`；
- * - 纯数字原样（`1`、`01`）；其他复杂编号（`ZK38-1.65`、`abc`）原样保留。
+ * - 纯数字去前导零（2026-11-02：`01`→`1`、`R01`→`R1`，导出不写 -01）；
+ * - 其他复杂编号（`ZK38-1.65`、`abc`）原样保留。
  * 空土号返回空串。PDF / Word 导出显示时在前面补 `-`（空土号按行序兜底 -seq）。
  */
 export function stripSoilNumber(holeCode: unknown, soilNumber: unknown): string {
   const hole = String(holeCode ?? '').trim();
   const sn = String(soilNumber ?? '').trim();
   if (!sn) return '';
-  if (hole && sn.startsWith(hole + '-')) return sn.slice(hole.length + 1);
+  if (hole && sn.startsWith(hole + '-')) return normalizeShortNumber(sn.slice(hole.length + 1));
   let m = sn.match(/^原(\d+)$/);
-  if (m) return m[1];
+  if (m) return stripLeadingZeros(m[1]);
   m = sn.match(/^(?:扰|[rR])(\d+)$/);
-  if (m) return `R${m[1]}`;
-  if (sn.startsWith('-')) return sn.slice(1);
-  return sn;
+  if (m) return `R${stripLeadingZeros(m[1])}`;
+  if (sn.startsWith('-')) return normalizeShortNumber(sn.slice(1));
+  return normalizeShortNumber(sn);
 }
 
 /** 可归一形态：原N / 扰N / R N / 纯数字 / 前导-，其余（复杂编号）不补孔号前缀 */
@@ -105,10 +122,11 @@ const NORMALIZABLE_SN = /^(?:原\d+|扰\d+|[rR]\d+|-?\d+)$/;
 
 /**
  * 合并表内的土样编号归一（用户确认规则）：土号补上孔号前缀，跨孔不重号：
- * - 已以孔号开头（`ZK1-1`、`ZK1-1-01`）→ 原样保留；
+ * - 已以孔号开头（`ZK1-1`、`ZK1-1-01`）→ 保留前缀，数字序号仍去前导零
+ *   （2026-11-02 用户确认 Excel 与 PDF/Word 同步：`ZK1-01`→`ZK1-1`）；
  * - `原1` → `ZK1-1`（去掉「原」字）；
- * - `扰1` / `R1` → `ZK1-R1`（扰动样 R 前缀）；
- * - 纯数字 / 前导 `-`（`1`、`-1`、`-01`）→ `ZK1-1` / `ZK1-01`（数字原样保留）；
+ * - `扰1` / `R1` → `ZK1-R1`（扰动样 R 前缀，`R01`→`ZK1-R1`）；
+ * - 纯数字 / 前导 `-`（`1`、`-1`、`-01`）→ `ZK1-1`（去前导零）；
  * - 其他复杂编号原样保留（不做猜测性改写）。
  * 无孔号 / 无土号时原样返回。
  */
@@ -116,6 +134,7 @@ export function mergedSoilNumber(holeCode: unknown, soilNumber: unknown): string
   const hole = String(holeCode ?? '').trim();
   const sn = String(soilNumber ?? '').trim();
   if (!hole || !sn) return sn;
+  if (sn.startsWith(hole + '-')) return `${hole}-${normalizeShortNumber(sn.slice(hole.length + 1))}`;
   if (sn.startsWith(hole)) return sn;
   if (!NORMALIZABLE_SN.test(sn)) return sn;
   return `${hole}-${stripSoilNumber(hole, sn)}`;

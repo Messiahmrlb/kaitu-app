@@ -41783,17 +41783,26 @@ function sanitizeFileNamePart(input, fallback = "\u672A\u547D\u540D") {
   const cleaned = String(input ?? "").replace(ILLEGAL_FILENAME_CHARS, "-").trim();
   return cleaned || fallback;
 }
+function stripLeadingZeros(digits) {
+  return digits.replace(/^0+(?=\d)/, "");
+}
+function normalizeShortNumber(short) {
+  const m = short.match(/^R(\d+)$/);
+  if (m) return `R${stripLeadingZeros(m[1])}`;
+  if (/^\d+$/.test(short)) return stripLeadingZeros(short);
+  return short;
+}
 function stripSoilNumber(holeCode, soilNumber) {
   const hole = String(holeCode ?? "").trim();
   const sn = String(soilNumber ?? "").trim();
   if (!sn) return "";
-  if (hole && sn.startsWith(hole + "-")) return sn.slice(hole.length + 1);
+  if (hole && sn.startsWith(hole + "-")) return normalizeShortNumber(sn.slice(hole.length + 1));
   let m = sn.match(/^原(\d+)$/);
-  if (m) return m[1];
+  if (m) return stripLeadingZeros(m[1]);
   m = sn.match(/^(?:扰|[rR])(\d+)$/);
-  if (m) return `R${m[1]}`;
-  if (sn.startsWith("-")) return sn.slice(1);
-  return sn;
+  if (m) return `R${stripLeadingZeros(m[1])}`;
+  if (sn.startsWith("-")) return normalizeShortNumber(sn.slice(1));
+  return normalizeShortNumber(sn);
 }
 
 // src/pdfExport.ts

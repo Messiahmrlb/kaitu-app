@@ -257,7 +257,9 @@ function mkRecord(id, hole, samples, extra = {}) {
       ['ZK1', '原1', '1'], ['ZK1', '原12', '12'], ['ZK1', '扰1', 'R1'],
       ['ZK1', 'R1', 'R1'], ['ZK1', 'r2', 'R2'], ['ZK1', 'ZK1-3', '3'],
       ['ZK1', '-1', '1'], ['ZK1', '-R1', 'R1'], ['ZK1', '1', '1'],
-      ['ZK1', '01', '01'], ['ZK1', 'ZK38-1.65', 'ZK38-1.65'], ['ZK1', '', ''],
+      ['ZK1', '01', '1'], ['ZK1', 'R01', 'R1'], // 2026-11-02 去前导零：导出不写 -01
+      ['ZK1', 'ZK1-01', '1'], ['ZK1', '00', '0'],
+      ['ZK1', 'ZK38-1.65', 'ZK38-1.65'], ['ZK1', '', ''],
     ];
     for (const [hole, sn, want] of stripCases) {
       check(`stripSoilNumber(${hole}, ${sn})`, namingMod.stripSoilNumber(hole, sn) === want, namingMod.stripSoilNumber(hole, sn));
