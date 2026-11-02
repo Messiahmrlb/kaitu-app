@@ -360,9 +360,9 @@ async function fetchTemplateBytes(mode: 'A' | 'B'): Promise<Uint8Array> {
 // ---------------------------------------------------------------------------
 // CMA 页眉设置（版本行 / 文件编号）应用于 Word（2026-10-30 用户要求）
 // 模板 header1.xml（唯一非空页眉）单段落：公司名 run + 两个空格定位 run +
-// 版本行多个 run（'第','3','版第0次修改 202','4','年',…）。文件编号在模板里
-// 没有（PDF 是自绘），处理为与版本行同行追加——不在页眉加段落，避免页眉变高
-// 把浮动表锚点下移破坏一页版式。
+// 版本行多个 run（'第','3','版第0次修改 202','4','年',…）。文件编号不在页眉
+// （2026-10-30 用户澄清：在正文右对齐段落，见 applyDocCodeXml）——页眉只换版本行，
+// 不新增段落，避免页眉变高把浮动表锚点下移破坏版式。
 // ---------------------------------------------------------------------------
 const HEADER_RUN_RE = /<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/g;
 const HEADER_TEXT_RE = /<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g;
@@ -381,16 +381,302 @@ function runRPr(run: string): string {
   return run.match(RPR_RE)?.[0] ?? '';
 }
 
+// ---------------------------------------------------------------------------
+// 页眉宽度自适应（2026-11-02 用户反馈「实施」折行 / 分页异常）
+//
+// 根因：模板 header1.xml 只有一个段落（pStyle=5「header」，其 rPr 继承 sz=18 即
+// 9pt）：公司名 run + 两段共 162 个半角空格的定位 run + 版本行 9 个 run。版本行
+// 文本比模板原文长（CMA 默认值多了若干空格）时整段总宽超过 A3 可用宽度
+// （23814-1417-1417=20980 twips = 1049pt），Word 把末尾「实施」两字折到第二行，
+// 页眉变高 → 浮动表格整体下移 → 分页异常。
+//
+// 修法（三级，优先级从高到低，受控文档「字号比位置更敏感」）：
+//   1) 字号不动（9pt，与公司名同号）+ 轻微负字距 `<w:spacing w:val="-N"/>`：
+//      N = ceil(超出量 × 20 / 版本行字符数)，下限 -30（-1.5pt/字）；
+//   2) 字距到下限仍超宽 → 再缩版本行字号（下限 sz16 / 8pt）；
+//   3) 仍超宽（版本行极长）→ 才缩定位空格 run（会让版本行整体左移，仅兜底）。
+// 公司名与定位空格 run 默认不动，版本行起点保持模板的 934.8pt。
+// 见 {@link fitHeaderSizes}。
+//
+// 字宽刻度来自 Word 实测（导出 PDF 后 pdfplumber 量字符盒）：
+//   CJK/全角 1.0em、ASCII 字母数字 0.5em（9pt 下 4.5pt）、
+//   半角空格 0.5em（9pt 下实测 4.56pt ≈ 0.507em；宋体空格不是 0.25em）、
+//   全角空格 1.0em。
+// ---------------------------------------------------------------------------
+
+/** 页边几何（twips）：来自 document.xml 的 sectPr */
+export interface HeaderPageMetrics {
+  pageWidthTwips: number;
+  marginLeftTwips: number;
+  marginRightTwips: number;
+}
+
+/** 模板兜底几何（tpl-normal / tpl-triangle 相同：A3 横向 + 左右各 1417） */
+export const DEFAULT_HEADER_PAGE_METRICS: HeaderPageMetrics = {
+  pageWidthTwips: 23814,
+  marginLeftTwips: 1417,
+  marginRightTwips: 1417,
+};
+
+/** 页眉可用宽度（twips）：pgSz.w - pgMar.left - pgMar.right */
+export function headerAvailTwips(m: HeaderPageMetrics): number {
+  return Math.max(0, m.pageWidthTwips - m.marginLeftTwips - m.marginRightTwips);
+}
+
+/** 从 document.xml（模板）读取 sectPr 的页面宽度与左右页边距 */
+export function readHeaderPageMetrics(documentXml: string): HeaderPageMetrics {
+  const sect = documentXml.match(/<w:sectPr>[\s\S]*?<\/w:sectPr>/)?.[0] ?? documentXml;
+  const pgSz = sect.match(/<w:pgSz [^>]*\/>/)?.[0] ?? '';
+  const pgMar = sect.match(/<w:pgMar [^>]*\/>/)?.[0] ?? '';
+  const num = (xml: string, attr: string): number => {
+    const v = xml.match(new RegExp(`w:${attr}="(-?\\d+)"`))?.[1];
+    return v == null ? 0 : Number(v);
+  };
+  const width = num(pgSz, 'w') || DEFAULT_HEADER_PAGE_METRICS.pageWidthTwips;
+  const left = pgMar ? num(pgMar, 'left') : DEFAULT_HEADER_PAGE_METRICS.marginLeftTwips;
+  const right = pgMar ? num(pgMar, 'right') : DEFAULT_HEADER_PAGE_METRICS.marginRightTwips;
+  return { pageWidthTwips: width, marginLeftTwips: left, marginRightTwips: right };
+}
+
+/** 单字符宽度（em）：见上方实测刻度说明 */
+export function headerCharEm(c: string): number {
+  if (c === '　') return 1; // 全角空格
+  if (c === ' ') return 0.5; // 半角空格（宋体渲染为半个全角宽）
+  const code = c.codePointAt(0) ?? 0;
+  if (code >= 0x2e80) return 1; // CJK / 全角标点
+  return 0.5; // ASCII 字母、数字、标点
+}
+
+/** 估算一段页眉文本的宽度（pt）；halfPt 为该 run 的字号（半点） */
+export function estimateHeaderWidthPt(text: string, halfPt: number): number {
+  let em = 0;
+  for (const c of text) em += headerCharEm(c);
+  return (em * halfPt) / 2;
+}
+
+/** 版本行/空格 run 的最终字号（半点）、字距与推导信息 */
+export interface HeaderFitResult {
+  /** 版本行基准字号（半点），用于判定是否缩小 */
+  baseHalfPt: number;
+  /** 版本行最终字号（半点） */
+  versionHalfPt: number;
+  /** 空格定位 run 的最终字号（半点），未兜底时等于 baseHalfPt */
+  spaceHalfPt: number;
+  /** 版本行字距（twips，负值为压缩；0 表示不写 spacing） */
+  spacingTwips: number;
+  /** 可用宽度（pt） */
+  availablePt: number;
+  /** 按最终字号/字距估算的整段宽度（pt） */
+  estimatedPt: number;
+  /** 版本行是否被缩小 */
+  shrunkVersion: boolean;
+  /** 是否启用了空格 run 缩字号兜底 */
+  shrunkSpaces: boolean;
+}
+
+/** 版本行字号下限 8pt（sz16）：一级（负字距）不够时才用 */
+const HEADER_MIN_VERSION_HALF_PT = 16;
+/** 空格 run 兜底下限 5pt（sz10）：仅作安全阀，正常路径不会走到 */
+const HEADER_MIN_SPACE_HALF_PT = 10;
+/** 版本行字距下限：-1.5pt/字（w:spacing 单位为 1/20 pt，即 -30） */
+const HEADER_MIN_SPACING_TWIPS = -30;
+
+/**
+ * 计算页眉字号/字距：优先「不缩字号 + 轻微负字距」，缩字号与缩空格只作兜底。
+ *
+ * 1. 未超宽 → 保持基准字号，不写字距；
+ * 2. 超宽 → 版本行保持基准字号（9pt，与公司名同号），逐字压缩
+ *    `w:spacing = -ceil(超出量×20/字符数)`，下限 -30（-1.5pt/字）；
+ * 3. 字距到下限仍超宽 → 版本行缩字号（0.5pt 粒度，下限 8pt）；
+ * 4. 仍超宽（版本行极长）→ 逐级缩小空格 run（下限 5pt）。
+ *
+ * @param prefixText 版本行之前的全部可见文本（公司名 + 定位空格）
+ * @param versionText 新版本行文本
+ * @param baseHalfPt 页眉基准字号（半点，模板 pStyle=5 → 18）
+ * @param availablePt 页眉可用宽度（pt）
+ */
+export function fitHeaderSizes(
+  prefixText: string,
+  versionText: string,
+  baseHalfPt: number,
+  availablePt: number,
+): HeaderFitResult {
+  const base = baseHalfPt > 0 ? baseHalfPt : 18;
+  const prefixPt = estimateHeaderWidthPt(prefixText, base);
+  const versionPt = estimateHeaderWidthPt(versionText, base);
+  const totalPt = prefixPt + versionPt;
+  const charCount = [...versionText].length;
+  const noShrink: HeaderFitResult = {
+    baseHalfPt: base,
+    versionHalfPt: base,
+    spaceHalfPt: base,
+    spacingTwips: 0,
+    availablePt,
+    estimatedPt: totalPt,
+    shrunkVersion: false,
+    shrunkSpaces: false,
+  };
+  if (!versionText || !(availablePt > 0) || totalPt <= availablePt) return noShrink;
+
+  // 一级：字号不动，仅加负字距（每字符需压缩 = 超出量 / 字符数，向上取整到 twips）
+  const needPt = totalPt - availablePt;
+  if (charCount > 0) {
+    const needTwips = Math.ceil((needPt * 20) / charCount);
+    if (needTwips <= -HEADER_MIN_SPACING_TWIPS) {
+      return {
+        ...noShrink,
+        spacingTwips: -needTwips,
+        estimatedPt: totalPt - (needTwips / 20) * charCount,
+      };
+    }
+  }
+
+  // 二级：字距已到 -1.5pt/字 仍不够 → 再缩版本行字号
+  const spacingTwips = HEADER_MIN_SPACING_TWIPS;
+  const spacingPt = spacingTwips / 20;
+  const roomPt = availablePt - prefixPt - spacingPt * charCount;
+  let versionHalf = HEADER_MIN_VERSION_HALF_PT;
+  if (roomPt > 0 && versionPt > 0) {
+    versionHalf = Math.floor((base * roomPt) / versionPt);
+  }
+  versionHalf = Math.max(HEADER_MIN_VERSION_HALF_PT, Math.min(base, versionHalf));
+
+  const widthAt = (vHalf: number, sHalf: number): number =>
+    (prefixPt * sHalf) / base + (versionPt * vHalf) / base + spacingPt * charCount;
+
+  // 三级：仍超宽 → 空格 run 缩字号（仅此时才动定位）
+  let spaceHalf = base;
+  let estimatedPt = widthAt(versionHalf, spaceHalf);
+  while (estimatedPt > availablePt && spaceHalf > HEADER_MIN_SPACE_HALF_PT) {
+    spaceHalf -= 1;
+    estimatedPt = widthAt(versionHalf, spaceHalf);
+  }
+
+  return {
+    baseHalfPt: base,
+    versionHalfPt: versionHalf,
+    spaceHalfPt: spaceHalf,
+    spacingTwips,
+    availablePt,
+    estimatedPt,
+    shrunkVersion: versionHalf < base,
+    shrunkSpaces: spaceHalf < base,
+  };
+}
+
+/** 从 rPr 读取显式字号（半点），无则 0 */
+function rPrHalfPt(rPr: string): number {
+  const v = rPr.match(/<w:sz w:val="(\d+)"\/>/)?.[1];
+  return v == null ? 0 : Number(v);
+}
+
+/**
+ * 把字距 / 字号写入 rPr 的合法位置，保留 rFonts / w:u 等既有属性。
+ *
+ * OOXML `w:rPr` 子元素顺序固定：… color, **spacing**, w, kern, position, **sz, szCs**,
+ * highlight, u, effect, …, lang。因此 `<w:spacing>` 必须排在 `<w:sz>/<w:szCs>` 之前，
+ * 否则 Word 直接忽略（与「裸 sz 无效」是同一类坑）。已有的 spacing/sz/szCs 先剔除。
+ *
+ * @param halfPt 字号（半点）
+ * @param spacingTwips 字距（twips，负值压缩）；0 表示不写
+ */
+function withRunFormat(rPr: string, halfPt: number, spacingTwips = 0): string {
+  const sz = `<w:sz w:val="${halfPt}"/><w:szCs w:val="${halfPt}"/>`;
+  const sp = spacingTwips ? `<w:spacing w:val="${Math.round(spacingTwips)}"/>` : '';
+  const inject = sp + sz;
+  if (!rPr) return `<w:rPr>${inject}</w:rPr>`;
+  const body = rPr
+    .replace(/^<w:rPr>/, '')
+    .replace(/<\/w:rPr>$/, '')
+    .replace(/<w:spacing [^>]*\/>/g, '')
+    .replace(/<w:sz [^>]*\/>/g, '')
+    .replace(/<w:szCs [^>]*\/>/g, '');
+  const ANCHOR_RE =
+    /<w:u [^>]*\/>|<w:u\/>|<w:effect [^>]*\/>|<w:bdr [^>]*\/>|<w:shd [^>]*\/>|<w:vertAlign [^>]*\/>|<w:lang [^>]*\/>/;
+  const anchor = body.match(ANCHOR_RE);
+  if (anchor) return `<w:rPr>${body.replace(ANCHOR_RE, inject + anchor[0])}</w:rPr>`;
+  return `<w:rPr>${body}${inject}</w:rPr>`;
+}
+
+/** 段落样式 id（pPr 的 pStyle），无则空串 */
+function paragraphStyleId(pXml: string): string {
+  return pXml.match(/<w:pStyle w:val="([^"]+)"\/>/)?.[1] ?? '';
+}
+
+/** docDefaults 的默认字号（半点），无则 20（Word/OOXML 默认 10pt） */
+function docDefaultHalfPt(stylesXml: string): number {
+  const defaults = stylesXml.match(/<w:docDefaults>[\s\S]*?<\/w:docDefaults>/)?.[0] ?? '';
+  const v = defaults.match(/<w:sz w:val="(\d+)"\/>/)?.[1];
+  return v == null ? 20 : Number(v);
+}
+
+/**
+ * 解析页眉段落样式链的最终字号（半点）：styleId → basedOn → …（不处理表样式）。
+ * 找不到样式时回落 docDefaults。
+ */
+export function resolveStyleHalfPt(stylesXml: string, styleId: string): number {
+  if (!stylesXml || !styleId) return docDefaultHalfPt(stylesXml);
+  const styles = new Map<string, { basedOn: string; halfPt: number }>();
+  const re = /<w:style [\s\S]*?<\/w:style>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(stylesXml)) !== null) {
+    const xml = m[0];
+    const id = xml.match(/w:styleId="([^"]+)"/)?.[1];
+    if (!id) continue;
+    styles.set(id, {
+      basedOn: xml.match(/<w:basedOn w:val="([^"]+)"\/>/)?.[1] ?? '',
+      halfPt: rPrHalfPt(xml.match(RPR_RE)?.[0] ?? ''),
+    });
+  }
+  let cursor = styleId;
+  const seen = new Set<string>();
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const style = styles.get(cursor);
+    if (!style) break;
+    if (style.halfPt > 0) return style.halfPt;
+    cursor = style.basedOn;
+  }
+  return docDefaultHalfPt(stylesXml);
+}
+
+/**
+ * 页眉基准字号（半点）：版本行 run 的显式 sz → 页眉段落 pStyle 链 → Word 默认。
+ * 模板 pStyle=5（header 样式，basedOn Normal）→ 18（9pt）。
+ */
+export function headerBaseHalfPt(headerXml: string, stylesXml = ''): number {
+  const para = headerXml.match(/<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/)?.[0] ?? headerXml;
+  const runs = para.match(HEADER_RUN_RE) ?? [];
+  for (const run of runs) {
+    const t = runText(run);
+    if (t.trim() === '' || t.includes('公司')) continue;
+    const half = rPrHalfPt(runRPr(run));
+    if (half > 0) return half;
+  }
+  const styleId = paragraphStyleId(para);
+  if (stylesXml) return resolveStyleHalfPt(stylesXml, styleId);
+  return 20;
+}
+
 /**
  * 把 CMA 设置写入页眉 XML：公司名 / 空白定位 run 保留；版本行区（首个非空白且
  * 不含「公司」的 run 起，至最后一个非空白 run 止）合并替换为 `versionLine`
- * （沿用原版本行 run 的 rPr）。模板无版本行区时原样返回。
+ * （沿用原版本行 run 的 rPr，并写入显式 sz/szCs）。
  *
- * 2026-10-30 用户澄清：**文件编号在正文，不在页眉**，因此本函数不再处理 docCode
- * （由 {@link applyDocCodeXml} 写入 document.xml 的右对齐编号段落）。这样页眉
- * 段落高度/版式与模板完全一致，不会因追加编号 run 影响一页/孔。
+ * 2026-10-30 用户澄清：**文件编号在正文，不在页眉**，因此本函数不处理 docCode
+ * （由 {@link applyDocCodeXml} 写入 document.xml 的右对齐编号段落）。
+ *
+ * 2026-11-02 修复「实施」折行：版本行会按页眉可用宽度自动缩字号（见
+ * {@link fitHeaderSizes}），保证页眉始终只有一个段落、一行，不把浮动表下移。
+ *
+ * @param ctx.page      模板页面几何（缺省用 A3 横向 + 1417 左右边距）
+ * @param ctx.stylesXml 模板 styles.xml（用于解析 pStyle 继承字号）
  */
-export function applyCmaHeaderXml(headerXml: string, header: CmaHeaderSettings): string {
+export function applyCmaHeaderXml(
+  headerXml: string,
+  header: CmaHeaderSettings,
+  ctx: { page?: HeaderPageMetrics; stylesXml?: string } = {},
+): string {
   const runs = headerXml.match(HEADER_RUN_RE) ?? [];
   const texts = runs.map(runText);
   const isVersionRun = (t: string): boolean => t.trim() !== '' && !t.includes('公司');
@@ -403,11 +689,26 @@ export function applyCmaHeaderXml(headerXml: string, header: CmaHeaderSettings):
     }
   }
   if (first < 0) return headerXml;
-  const rPr = runRPr(runs[first]);
+
   const versionLine = (header.versionLine ?? '').trim();
+  const page = ctx.page ?? DEFAULT_HEADER_PAGE_METRICS;
+  // 可用宽度留 8pt 余量：估算式略小于 Word 实测（宋体空格实测 0.507em > 0.5em）
+  const availablePt = Math.max(0, headerAvailTwips(page) / 20 - 8);
+  const baseHalfPt = headerBaseHalfPt(headerXml, ctx.stylesXml ?? '');
+  const prefixText = texts.slice(0, first).join('');
+  const fit = fitHeaderSizes(prefixText, versionLine, baseHalfPt, availablePt);
+
+  const rPr = runRPr(runs[first]);
   const replacement = versionLine
-    ? `<w:r>${rPr}<w:t xml:space="preserve">${esc(versionLine)}</w:t></w:r>`
+    ? `<w:r>${withRunFormat(rPr, fit.versionHalfPt, fit.spacingTwips)}<w:t xml:space="preserve">${esc(versionLine)}</w:t></w:r>`
     : '';
+  // 兜底：仅对「纯空格」定位 run 缩字号（不带字距），公司名与版本行不动
+  const spaceSz = fit.shrunkSpaces ? fit.spaceHalfPt : 0;
+  const respaceRun = (run: string, text: string): string => {
+    if (!spaceSz || !text || text.trim() !== '') return run;
+    return run.replace(RPR_RE, withRunFormat(runRPr(run), spaceSz));
+  };
+
   let out = '';
   let cursor = 0;
   for (let i = 0; i < runs.length; i++) {
@@ -415,7 +716,8 @@ export function applyCmaHeaderXml(headerXml: string, header: CmaHeaderSettings):
     if (idx < 0) return headerXml; // 结构异常兜底：原样返回
     out += headerXml.slice(cursor, idx);
     if (i === first) out += replacement;
-    else if (i < first || i > last) out += runs[i];
+    else if (i < first) out += respaceRun(runs[i], texts[i]);
+    else if (i > last) out += runs[i];
     cursor = idx + runs[i].length;
   }
   return out + headerXml.slice(cursor);
@@ -486,16 +788,23 @@ export async function buildDocxBlob(
   const files = unzipSync(templateBytes);
   const xmlEntry = 'word/document.xml';
   if (!files[xmlEntry]) throw new Error('docx 模板缺少 document.xml');
+  const tplDocumentXml = strFromU8(files[xmlEntry]);
   // 顺序：先填表（buildDocxBody），再把文件编号写入正文右对齐段落。
   // 两者操作的是不同节点（表格 vs 表格前的编号段落），先后不影响表格结构。
-  const bodyXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
+  const bodyXml = buildDocxBody(tplDocumentXml, records);
   const outXml = applyDocCodeXml(bodyXml, header?.docCode ?? '');
   files[xmlEntry] = strToU8(outXml);
-  // CMA 页眉：只替换版本行（文件编号在正文，见 applyDocCodeXml）
+  // CMA 页眉：只替换版本行（文件编号在正文，见 applyDocCodeXml）；
+  // 页面几何取模板 sectPr，样式表用于解析页眉 pStyle 的继承字号
   if (header) {
     const headerEntry = 'word/header1.xml';
     if (files[headerEntry]) {
-      files[headerEntry] = strToU8(applyCmaHeaderXml(strFromU8(files[headerEntry]), header));
+      files[headerEntry] = strToU8(
+        applyCmaHeaderXml(strFromU8(files[headerEntry]), header, {
+          page: readHeaderPageMetrics(tplDocumentXml),
+          stylesXml: files['word/styles.xml'] ? strFromU8(files['word/styles.xml']) : '',
+        }),
+      );
     }
   }
   const zipped = zipSync(files, { level: 6 });

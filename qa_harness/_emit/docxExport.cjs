@@ -51,6 +51,7 @@ var init_docxAssets = __esm({
 // src/docxExport.ts
 var docxExport_exports = {};
 __export(docxExport_exports, {
+  DEFAULT_HEADER_PAGE_METRICS: () => DEFAULT_HEADER_PAGE_METRICS,
   DOCX_ROWS_PER_PAGE: () => DOCX_ROWS_PER_PAGE,
   applyCmaHeaderXml: () => applyCmaHeaderXml,
   applyDocCodeXml: () => applyDocCodeXml,
@@ -58,8 +59,15 @@ __export(docxExport_exports, {
   buildDocxBody: () => buildDocxBody,
   buildMergedDocxFileName: () => buildMergedDocxFileName,
   buildSingleDocxFileName: () => buildSingleDocxFileName,
+  estimateHeaderWidthPt: () => estimateHeaderWidthPt,
   exportRecordsDocx: () => exportRecordsDocx,
   fillInfoRow: () => fillInfoRow,
+  fitHeaderSizes: () => fitHeaderSizes,
+  headerAvailTwips: () => headerAvailTwips,
+  headerBaseHalfPt: () => headerBaseHalfPt,
+  headerCharEm: () => headerCharEm,
+  readHeaderPageMetrics: () => readHeaderPageMetrics,
+  resolveStyleHalfPt: () => resolveStyleHalfPt,
   sampleDocxCells: () => sampleDocxCells
 });
 module.exports = __toCommonJS(docxExport_exports);
@@ -389,7 +397,158 @@ function runText(run) {
 function runRPr(run) {
   return run.match(RPR_RE)?.[0] ?? "";
 }
-function applyCmaHeaderXml(headerXml, header) {
+var DEFAULT_HEADER_PAGE_METRICS = {
+  pageWidthTwips: 23814,
+  marginLeftTwips: 1417,
+  marginRightTwips: 1417
+};
+function headerAvailTwips(m) {
+  return Math.max(0, m.pageWidthTwips - m.marginLeftTwips - m.marginRightTwips);
+}
+function readHeaderPageMetrics(documentXml) {
+  const sect = documentXml.match(/<w:sectPr>[\s\S]*?<\/w:sectPr>/)?.[0] ?? documentXml;
+  const pgSz = sect.match(/<w:pgSz [^>]*\/>/)?.[0] ?? "";
+  const pgMar = sect.match(/<w:pgMar [^>]*\/>/)?.[0] ?? "";
+  const num = (xml, attr) => {
+    const v = xml.match(new RegExp(`w:${attr}="(-?\\d+)"`))?.[1];
+    return v == null ? 0 : Number(v);
+  };
+  const width = num(pgSz, "w") || DEFAULT_HEADER_PAGE_METRICS.pageWidthTwips;
+  const left = pgMar ? num(pgMar, "left") : DEFAULT_HEADER_PAGE_METRICS.marginLeftTwips;
+  const right = pgMar ? num(pgMar, "right") : DEFAULT_HEADER_PAGE_METRICS.marginRightTwips;
+  return { pageWidthTwips: width, marginLeftTwips: left, marginRightTwips: right };
+}
+function headerCharEm(c) {
+  if (c === "\u3000") return 1;
+  if (c === " ") return 0.5;
+  const code = c.codePointAt(0) ?? 0;
+  if (code >= 11904) return 1;
+  return 0.5;
+}
+function estimateHeaderWidthPt(text, halfPt) {
+  let em = 0;
+  for (const c of text) em += headerCharEm(c);
+  return em * halfPt / 2;
+}
+var HEADER_MIN_VERSION_HALF_PT = 16;
+var HEADER_MIN_SPACE_HALF_PT = 10;
+var HEADER_MIN_SPACING_TWIPS = -30;
+function fitHeaderSizes(prefixText, versionText, baseHalfPt, availablePt) {
+  const base = baseHalfPt > 0 ? baseHalfPt : 18;
+  const prefixPt = estimateHeaderWidthPt(prefixText, base);
+  const versionPt = estimateHeaderWidthPt(versionText, base);
+  const totalPt = prefixPt + versionPt;
+  const charCount = [...versionText].length;
+  const noShrink = {
+    baseHalfPt: base,
+    versionHalfPt: base,
+    spaceHalfPt: base,
+    spacingTwips: 0,
+    availablePt,
+    estimatedPt: totalPt,
+    shrunkVersion: false,
+    shrunkSpaces: false
+  };
+  if (!versionText || !(availablePt > 0) || totalPt <= availablePt) return noShrink;
+  const needPt = totalPt - availablePt;
+  if (charCount > 0) {
+    const needTwips = Math.ceil(needPt * 20 / charCount);
+    if (needTwips <= -HEADER_MIN_SPACING_TWIPS) {
+      return {
+        ...noShrink,
+        spacingTwips: -needTwips,
+        estimatedPt: totalPt - needTwips / 20 * charCount
+      };
+    }
+  }
+  const spacingTwips = HEADER_MIN_SPACING_TWIPS;
+  const spacingPt = spacingTwips / 20;
+  const roomPt = availablePt - prefixPt - spacingPt * charCount;
+  let versionHalf = HEADER_MIN_VERSION_HALF_PT;
+  if (roomPt > 0 && versionPt > 0) {
+    versionHalf = Math.floor(base * roomPt / versionPt);
+  }
+  versionHalf = Math.max(HEADER_MIN_VERSION_HALF_PT, Math.min(base, versionHalf));
+  const widthAt = (vHalf, sHalf) => prefixPt * sHalf / base + versionPt * vHalf / base + spacingPt * charCount;
+  let spaceHalf = base;
+  let estimatedPt = widthAt(versionHalf, spaceHalf);
+  while (estimatedPt > availablePt && spaceHalf > HEADER_MIN_SPACE_HALF_PT) {
+    spaceHalf -= 1;
+    estimatedPt = widthAt(versionHalf, spaceHalf);
+  }
+  return {
+    baseHalfPt: base,
+    versionHalfPt: versionHalf,
+    spaceHalfPt: spaceHalf,
+    spacingTwips,
+    availablePt,
+    estimatedPt,
+    shrunkVersion: versionHalf < base,
+    shrunkSpaces: spaceHalf < base
+  };
+}
+function rPrHalfPt(rPr) {
+  const v = rPr.match(/<w:sz w:val="(\d+)"\/>/)?.[1];
+  return v == null ? 0 : Number(v);
+}
+function withRunFormat(rPr, halfPt, spacingTwips = 0) {
+  const sz = `<w:sz w:val="${halfPt}"/><w:szCs w:val="${halfPt}"/>`;
+  const sp = spacingTwips ? `<w:spacing w:val="${Math.round(spacingTwips)}"/>` : "";
+  const inject = sp + sz;
+  if (!rPr) return `<w:rPr>${inject}</w:rPr>`;
+  const body = rPr.replace(/^<w:rPr>/, "").replace(/<\/w:rPr>$/, "").replace(/<w:spacing [^>]*\/>/g, "").replace(/<w:sz [^>]*\/>/g, "").replace(/<w:szCs [^>]*\/>/g, "");
+  const ANCHOR_RE = /<w:u [^>]*\/>|<w:u\/>|<w:effect [^>]*\/>|<w:bdr [^>]*\/>|<w:shd [^>]*\/>|<w:vertAlign [^>]*\/>|<w:lang [^>]*\/>/;
+  const anchor = body.match(ANCHOR_RE);
+  if (anchor) return `<w:rPr>${body.replace(ANCHOR_RE, inject + anchor[0])}</w:rPr>`;
+  return `<w:rPr>${body}${inject}</w:rPr>`;
+}
+function paragraphStyleId(pXml) {
+  return pXml.match(/<w:pStyle w:val="([^"]+)"\/>/)?.[1] ?? "";
+}
+function docDefaultHalfPt(stylesXml) {
+  const defaults = stylesXml.match(/<w:docDefaults>[\s\S]*?<\/w:docDefaults>/)?.[0] ?? "";
+  const v = defaults.match(/<w:sz w:val="(\d+)"\/>/)?.[1];
+  return v == null ? 20 : Number(v);
+}
+function resolveStyleHalfPt(stylesXml, styleId) {
+  if (!stylesXml || !styleId) return docDefaultHalfPt(stylesXml);
+  const styles = /* @__PURE__ */ new Map();
+  const re = /<w:style [\s\S]*?<\/w:style>/g;
+  let m;
+  while ((m = re.exec(stylesXml)) !== null) {
+    const xml = m[0];
+    const id = xml.match(/w:styleId="([^"]+)"/)?.[1];
+    if (!id) continue;
+    styles.set(id, {
+      basedOn: xml.match(/<w:basedOn w:val="([^"]+)"\/>/)?.[1] ?? "",
+      halfPt: rPrHalfPt(xml.match(RPR_RE)?.[0] ?? "")
+    });
+  }
+  let cursor = styleId;
+  const seen = /* @__PURE__ */ new Set();
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const style = styles.get(cursor);
+    if (!style) break;
+    if (style.halfPt > 0) return style.halfPt;
+    cursor = style.basedOn;
+  }
+  return docDefaultHalfPt(stylesXml);
+}
+function headerBaseHalfPt(headerXml, stylesXml = "") {
+  const para = headerXml.match(/<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/)?.[0] ?? headerXml;
+  const runs = para.match(HEADER_RUN_RE) ?? [];
+  for (const run of runs) {
+    const t = runText(run);
+    if (t.trim() === "" || t.includes("\u516C\u53F8")) continue;
+    const half = rPrHalfPt(runRPr(run));
+    if (half > 0) return half;
+  }
+  const styleId = paragraphStyleId(para);
+  if (stylesXml) return resolveStyleHalfPt(stylesXml, styleId);
+  return 20;
+}
+function applyCmaHeaderXml(headerXml, header, ctx = {}) {
   const runs = headerXml.match(HEADER_RUN_RE) ?? [];
   const texts = runs.map(runText);
   const isVersionRun = (t) => t.trim() !== "" && !t.includes("\u516C\u53F8");
@@ -402,9 +561,19 @@ function applyCmaHeaderXml(headerXml, header) {
     }
   }
   if (first < 0) return headerXml;
-  const rPr = runRPr(runs[first]);
   const versionLine = (header.versionLine ?? "").trim();
-  const replacement = versionLine ? `<w:r>${rPr}<w:t xml:space="preserve">${esc(versionLine)}</w:t></w:r>` : "";
+  const page = ctx.page ?? DEFAULT_HEADER_PAGE_METRICS;
+  const availablePt = Math.max(0, headerAvailTwips(page) / 20 - 8);
+  const baseHalfPt = headerBaseHalfPt(headerXml, ctx.stylesXml ?? "");
+  const prefixText = texts.slice(0, first).join("");
+  const fit = fitHeaderSizes(prefixText, versionLine, baseHalfPt, availablePt);
+  const rPr = runRPr(runs[first]);
+  const replacement = versionLine ? `<w:r>${withRunFormat(rPr, fit.versionHalfPt, fit.spacingTwips)}<w:t xml:space="preserve">${esc(versionLine)}</w:t></w:r>` : "";
+  const spaceSz = fit.shrunkSpaces ? fit.spaceHalfPt : 0;
+  const respaceRun = (run, text) => {
+    if (!spaceSz || !text || text.trim() !== "") return run;
+    return run.replace(RPR_RE, withRunFormat(runRPr(run), spaceSz));
+  };
   let out = "";
   let cursor = 0;
   for (let i = 0; i < runs.length; i++) {
@@ -412,7 +581,8 @@ function applyCmaHeaderXml(headerXml, header) {
     if (idx < 0) return headerXml;
     out += headerXml.slice(cursor, idx);
     if (i === first) out += replacement;
-    else if (i < first || i > last) out += runs[i];
+    else if (i < first) out += respaceRun(runs[i], texts[i]);
+    else if (i > last) out += runs[i];
     cursor = idx + runs[i].length;
   }
   return out + headerXml.slice(cursor);
@@ -446,13 +616,19 @@ async function buildDocxBlob(records, templateBytes, header = null) {
   const files = unzipSync(templateBytes);
   const xmlEntry = "word/document.xml";
   if (!files[xmlEntry]) throw new Error("docx \u6A21\u677F\u7F3A\u5C11 document.xml");
-  const bodyXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
+  const tplDocumentXml = strFromU8(files[xmlEntry]);
+  const bodyXml = buildDocxBody(tplDocumentXml, records);
   const outXml = applyDocCodeXml(bodyXml, header?.docCode ?? "");
   files[xmlEntry] = strToU8(outXml);
   if (header) {
     const headerEntry = "word/header1.xml";
     if (files[headerEntry]) {
-      files[headerEntry] = strToU8(applyCmaHeaderXml(strFromU8(files[headerEntry]), header));
+      files[headerEntry] = strToU8(
+        applyCmaHeaderXml(strFromU8(files[headerEntry]), header, {
+          page: readHeaderPageMetrics(tplDocumentXml),
+          stylesXml: files["word/styles.xml"] ? strFromU8(files["word/styles.xml"]) : ""
+        })
+      );
     }
   }
   const zipped = zipSync(files, { level: 6 });
@@ -560,6 +736,7 @@ async function exportRecordsDocx(records, openDateOverride = "", cmaHeader = CMA
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  DEFAULT_HEADER_PAGE_METRICS,
   DOCX_ROWS_PER_PAGE,
   applyCmaHeaderXml,
   applyDocCodeXml,
@@ -567,7 +744,14 @@ async function exportRecordsDocx(records, openDateOverride = "", cmaHeader = CMA
   buildDocxBody,
   buildMergedDocxFileName,
   buildSingleDocxFileName,
+  estimateHeaderWidthPt,
   exportRecordsDocx,
   fillInfoRow,
+  fitHeaderSizes,
+  headerAvailTwips,
+  headerBaseHalfPt,
+  headerCharEm,
+  readHeaderPageMetrics,
+  resolveStyleHalfPt,
   sampleDocxCells
 });

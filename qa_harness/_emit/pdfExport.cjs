@@ -352,13 +352,18 @@ function renderInfoLine(eng) {
   const m = parts[1] ?? "";
   const d = parts[2] ?? "";
   const txt = (leftPt, html) => `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(INFO_LINE_TOP_PT)}px;font-size:${px(INFO_LINE_FONT_PT)}px;">${html}</div>`;
-  const yearBox = (year) => `<div class="pdf-txt" style="left:${px(INFO_YEAR_LEFT_PT)}px;top:${px(INFO_LINE_TOP_PT)}px;width:${px(INFO_YEAR_WIDTH_PT)}px;text-align:right;font-size:${px(INFO_LINE_FONT_PT)}px;">${esc(year)}</div>`;
+  const yearBox = (year) => {
+    const boxStyle = `left:${px(INFO_YEAR_LEFT_PT)}px;top:${px(INFO_LINE_TOP_PT)}px;`;
+    if (!year) {
+      return `<div class="pdf-txt" style="${boxStyle}font-size:${px(INFO_LINE_FONT_PT)}px;">\u5F00\u571F\u65E5\u671F</div>`;
+    }
+    return `<div class="pdf-txt" style="${boxStyle}width:${px(INFO_YEAR_WIDTH_PT)}px;text-align:right;font-size:${px(INFO_LINE_FONT_PT)}px;">\u5F00\u571F\u65E5\u671F${esc(year)}</div>`;
+  };
   return `
     ${txt(54, `\u5DE5\u7A0B\u7F16\u53F7\uFF1A${esc(eng.projectCode ?? "")}`)}
     ${txt(494.6, `\u5B54\u53F7\uFF1A${esc(eng.holeCode ?? "")}`)}
     ${txt(673.4, `\u5B54\u53E3\u6807\u9AD8${esc(eng.holeElevation ?? "")}`)}
     ${txt(742.2, "m")}
-    ${txt(INFO_YEAR_LEFT_PT, "\u5F00\u571F\u65E5\u671F")}
     ${yearBox(y)}
     ${txt(INFO_YEAR_RIGHT_PT, "\u5E74")}
     ${txt(1122, esc(m))}

@@ -209,7 +209,10 @@ function buildPdfFileName(record: SoilRecord): string {
 /** 信息行第二排的基线（pt）与字号（pt）——同排所有文本共用，保证垂直对齐 */
 const INFO_LINE_TOP_PT = 130.8;
 const INFO_LINE_FONT_PT = 11.1;
-/** 年份输入区：左缘与「开土日期」同起点，右缘正好是「年」字左缘 */
+/**
+ * 「开土日期 + 年份」右对齐框：左缘 978.4pt、右缘 1104.8pt（正好是「年」字左缘），
+ * 宽度 126.4pt。标签与年份同框，右对齐后年份右缘自动贴住「年」字。
+ */
 const INFO_YEAR_LEFT_PT = 978.4;
 const INFO_YEAR_RIGHT_PT = 1104.8;
 const INFO_YEAR_WIDTH_PT = INFO_YEAR_RIGHT_PT - INFO_YEAR_LEFT_PT;
@@ -221,17 +224,23 @@ function renderInfoLine(eng: SoilRecord['engineering']): string {
   const d = parts[2] ?? '';
   const txt = (leftPt: number, html: string): string =>
     `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(INFO_LINE_TOP_PT)}px;font-size:${px(INFO_LINE_FONT_PT)}px;">${html}</div>`;
-  // 年份单独成框并右对齐（2026-10-30 用户反馈）：年份位数固定为 4 位，宽度小于
-  // 「开土日期」到「年」之间的可用宽度；只有右对齐才能让年份右缘贴住「年」字左缘。
-  // 此前年份与「开土日期」同框左对齐，年份短时中间会留出明显空隙。
-  const yearBox = (year: string): string =>
-    `<div class="pdf-txt" style="left:${px(INFO_YEAR_LEFT_PT)}px;top:${px(INFO_LINE_TOP_PT)}px;width:${px(INFO_YEAR_WIDTH_PT)}px;text-align:right;font-size:${px(INFO_LINE_FONT_PT)}px;">${esc(year)}</div>`;
+  // 「开土日期」标签与年份同框并右对齐（2026-11-02 用户反馈：标签离年份太远）。
+  // 年份位数固定 4 位，右对齐后年份右缘正好落在框右缘 = 「年」字左缘（1104.8pt），
+  // 标签紧贴年份左侧，不再与年份之间出现大段空白。
+  // 年份为空时（批量改日期允许留空）仍把标签放在 978.4pt 左缘，避免空年份把标签
+  // 整体推到右端、与其它信息项错位。
+  const yearBox = (year: string): string => {
+    const boxStyle = `left:${px(INFO_YEAR_LEFT_PT)}px;top:${px(INFO_LINE_TOP_PT)}px;`;
+    if (!year) {
+      return `<div class="pdf-txt" style="${boxStyle}font-size:${px(INFO_LINE_FONT_PT)}px;">开土日期</div>`;
+    }
+    return `<div class="pdf-txt" style="${boxStyle}width:${px(INFO_YEAR_WIDTH_PT)}px;text-align:right;font-size:${px(INFO_LINE_FONT_PT)}px;">开土日期${esc(year)}</div>`;
+  };
   return `
     ${txt(54, `工程编号：${esc(eng.projectCode ?? '')}`)}
     ${txt(494.6, `孔号：${esc(eng.holeCode ?? '')}`)}
     ${txt(673.4, `孔口标高${esc(eng.holeElevation ?? '')}`)}
     ${txt(742.2, 'm')}
-    ${txt(INFO_YEAR_LEFT_PT, '开土日期')}
     ${yearBox(y)}
     ${txt(INFO_YEAR_RIGHT_PT, '年')}
     ${txt(1122, esc(m))}

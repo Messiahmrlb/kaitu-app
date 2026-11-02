@@ -356,6 +356,134 @@ function mkRecord(id, hole, samples, extra = {}) {
       check('CMA：B 模板标题与表格保留', docB.includes('>开土记录表<') && docB.includes('孔号：ZK1'));
     }
 
+    // ---------- 11. 页眉版本行宽度自适应（2026-11-02 用户反馈「实施」折行） ----------
+    // 模板页眉：公司名 15 字 + 162 个定位空格 + 版本行；pStyle=header 继承 sz=18（9pt）。
+    // CMA 默认版本行比模板原文长 → 整段超 A3 可用宽度 → 「实施」折行、页眉变高。
+    // 策略（优先级从高到低）：
+    //   1) 字号不动（9pt，与公司名同号）+ 轻微负字距 <w:spacing>（下限 -30 = -1.5pt/字）；
+    //   2) 字距到下限仍超宽 → 缩版本行字号（下限 sz16 / 8pt）；
+    //   3) 仍超宽 → 才缩定位空格 run（会让版本行左移，仅兜底）。
+    // 注：<w:spacing> 必须排在 <w:sz>/<w:szCs> 之前（OOXML rPr 顺序），否则 Word 忽略。
+    {
+      const filesB = unzipSync(new Uint8Array(TPL_B));
+      const HDR_TPL = strFromU8(filesB['word/header1.xml']);
+      const STYLES_TPL = strFromU8(filesB['word/styles.xml']);
+      const page = dx.readHeaderPageMetrics(XML_B);
+      check('页眉几何：pgSz 23814 - 左右各 1417 = 20980 twips', dx.headerAvailTwips(page) === 20980, String(dx.headerAvailTwips(page)));
+      check('页眉几何：换算 1049pt', Math.abs(dx.headerAvailTwips(page) / 20 - 1049) < 1e-9);
+      check('页眉基准字号：pStyle=header 链解析为 sz=18（9pt）', dx.headerBaseHalfPt(HDR_TPL, STYLES_TPL) === 18, String(dx.headerBaseHalfPt(HDR_TPL, STYLES_TPL)));
+      check('页眉：未传 stylesXml 时回落 Word 默认 sz=20', dx.headerBaseHalfPt(HDR_TPL) === 20, String(dx.headerBaseHalfPt(HDR_TPL)));
+
+      const tplRuns = HDR_TPL.match(/<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/g) || [];
+      const prefixText = tplRuns
+        .slice(0, 4)
+        .map((r) => ([...r.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)].map((m) => m[1]).join('')))
+        .join('');
+      const availPt = dx.headerAvailTwips(page) / 20 - 8;
+      /** 页眉里「纯空格」定位 run（模板 2 个：72 + 90 空格） */
+      const spaceRunsOf = (hdr) =>
+        (hdr.match(/<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/g) || []).filter((r) => {
+          const t = [...r.matchAll(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g)].map((m) => m[1]).join('');
+          return t.length > 0 && t.trim() === '';
+        });
+      const szOf = (run) => Number(run.match(/<w:sz w:val="(\d+)"\/>/)?.[1] ?? 0);
+      const spacingOf = (run) => Number(run.match(/<w:spacing w:val="(-?\d+)"\/>/)?.[1] ?? 0);
+      const runWith = (hdr, text) =>
+        (hdr.match(/<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/g) || []).find((r) => r.includes(text)) || '';
+
+      // 11a. CMA 默认版本行（32 字符）：一级策略——9pt 不变 + 负字距，定位空格不动
+      const cmaDefault = { versionLine: '第 3 版 第 0 次修改 2024 年 12 月 1 日起实施', docCode: 'SHLY-TR068-2024' };
+      check(
+        '页眉估算：默认版行整段超宽（修复前折行的量化依据）',
+        dx.estimateHeaderWidthPt(prefixText + cmaDefault.versionLine, 18) > availPt,
+        String(Math.round(dx.estimateHeaderWidthPt(prefixText + cmaDefault.versionLine, 18))),
+      );
+      const fitDefault = dx.fitHeaderSizes(prefixText, cmaDefault.versionLine, 18, availPt);
+      check('页眉自适应：缩后估算宽度 ≤ 可用宽度', fitDefault.estimatedPt <= availPt, `${fitDefault.estimatedPt} <= ${availPt}`);
+      check('页眉自适应：默认版行保持 9pt（sz18，不缩字号）', fitDefault.versionHalfPt === 18 && fitDefault.shrunkVersion === false, JSON.stringify(fitDefault));
+      check('页眉自适应：默认版行加负字距（-14 twips）', fitDefault.spacingTwips === -14, String(fitDefault.spacingTwips));
+      check('页眉自适应：默认版行不缩定位空格（版式不动）', fitDefault.spaceHalfPt === 18 && fitDefault.shrunkSpaces === false, JSON.stringify(fitDefault));
+
+      const hdrDefault = dx.applyCmaHeaderXml(HDR_TPL, cmaDefault, { page, stylesXml: STYLES_TPL });
+      check('页眉默认版行：仍只有一个段落', (hdrDefault.match(/<w:p(?: [^>]*)?>/g) || []).length === 1, String((hdrDefault.match(/<w:p(?: [^>]*)?>/g) || []).length));
+      check('页眉默认版行：版本行文本完整（未被截断）', hdrDefault.includes(cmaDefault.versionLine));
+      check('页眉默认版行：公司名保留', hdrDefault.includes('天津市水务规划勘测设计有限公司'));
+      const defVersionRun = runWith(hdrDefault, '日起实施');
+      check('页眉默认版行：版本行 run 显式 sz=18', szOf(defVersionRun) === 18, String(szOf(defVersionRun)));
+      check('页眉默认版行：版本行 run 含负字距 -14', spacingOf(defVersionRun) === -14, String(spacingOf(defVersionRun)));
+      check(
+        '页眉默认版行：<w:spacing> 排在 <w:sz> 之前（顺序错 Word 会忽略）',
+        /<w:spacing w:val="-14"\/><w:sz w:val="18"\/>/.test(defVersionRun),
+        defVersionRun.slice(0, 200),
+      );
+      check(
+        '页眉默认版行：sz/spacing 位于 <w:rPr> 内（裸元素会被 Word 忽略）',
+        /<w:rPr>(?:(?!<\/w:rPr>)[\s\S])*<w:spacing w:val="-14"\/>(?:(?!<\/w:rPr>)[\s\S])*<w:sz w:val="18"\/>(?:(?!<\/w:rPr>)[\s\S])*<\/w:rPr>/.test(defVersionRun),
+        defVersionRun.slice(0, 200),
+      );
+      check(
+        '页眉默认版行：保留 rFonts 与 w:u（只加字号/字距，不改字体下划线）',
+        defVersionRun.includes('<w:rFonts') && defVersionRun.includes('<w:u '),
+        defVersionRun.slice(0, 200),
+      );
+      const defSpaceRuns = spaceRunsOf(hdrDefault);
+      check('页眉默认版行：2 个定位空格 run 均未写 sz（保持模板定位）', defSpaceRuns.length === 2 && defSpaceRuns.every((r) => szOf(r) === 0), defSpaceRuns.map(szOf).join(','));
+      check('页眉默认版行：公司名 run 未写 sz / spacing', szOf(runWith(hdrDefault, '天津市')) === 0 && spacingOf(runWith(hdrDefault, '天津市')) === 0, '');
+      check('页眉默认版行：字号集合仅 {18}', (() => {
+        const s = [...new Set((hdrDefault.match(/<w:sz w:val="(\d+)"\/>/g) || []).map((x) => x.match(/\d+/)[0]))];
+        return s.length === 1 && s[0] === '18';
+      })(), '');
+      check(
+        '页眉默认版行：无裸 sz / spacing（全部在 rPr 内）',
+        !/<w:(?:sz|spacing) /.test(hdrDefault.replace(/<w:rPr>[\s\S]*?<\/w:rPr>/g, '')),
+        '',
+      );
+      check('页眉默认版行：未使用 fitText（与 PDF 缩字号行为一致）', !hdrDefault.includes('<w:fitText'));
+
+      // 11b. 短版本行（模板原文 22 字符）：不缩字号、不写字距，渲染与模板逐字一致
+      const cmaShort = { versionLine: '第3版第0次修改 2024年12月1日起实施', docCode: 'SHLY-TR068-2024' };
+      const fitShort = dx.fitHeaderSizes(prefixText, cmaShort.versionLine, 18, availPt);
+      check('页眉短版行：不缩字号（sz 保持 18）', fitShort.versionHalfPt === 18 && fitShort.shrunkVersion === false, JSON.stringify(fitShort));
+      check('页眉短版行：不写字距（spacingTwips=0）', fitShort.spacingTwips === 0, String(fitShort.spacingTwips));
+      check('页眉短版行：不缩空格 run', fitShort.spaceHalfPt === 18 && fitShort.shrunkSpaces === false, JSON.stringify(fitShort));
+      const hdrShort = dx.applyCmaHeaderXml(HDR_TPL, cmaShort, { page, stylesXml: STYLES_TPL });
+      const shortSzs = [...new Set((hdrShort.match(/<w:sz w:val="(\d+)"\/>/g) || []).map((x) => x.match(/\d+/)[0]))];
+      check('页眉短版行：字号集合仅 {18}', shortSzs.length === 1 && shortSzs[0] === '18', shortSzs.join(','));
+      check('页眉短版行：整个页眉无 <w:spacing>', !hdrShort.includes('<w:spacing'), '');
+      check('页眉短版行：仍只有一个段落', (hdrShort.match(/<w:p(?: [^>]*)?>/g) || []).length === 1);
+
+      // 11c. 长版本行（37 字符）：仍在一级策略内（字距 -24，字号不缩、空格不缩）
+      const cmaLong37 = { versionLine: '第 100 版 第 100 次修改 2099 年 12 月 31 日起实施', docCode: 'SHLY-TR068-2024' };
+      const fitLong37 = dx.fitHeaderSizes(prefixText, cmaLong37.versionLine, 18, availPt);
+      check('页眉 37 字版行：仍保持 sz18（字距足够）', fitLong37.versionHalfPt === 18 && fitLong37.shrunkVersion === false, JSON.stringify(fitLong37));
+      check('页眉 37 字版行：字距 -24（未到 -30 下限）', fitLong37.spacingTwips === -24, String(fitLong37.spacingTwips));
+      check('页眉 37 字版行：不缩空格', fitLong37.shrunkSpaces === false, JSON.stringify(fitLong37));
+      const hdrLong37 = dx.applyCmaHeaderXml(HDR_TPL, cmaLong37, { page, stylesXml: STYLES_TPL });
+      check('页眉 37 字版行：单段落、含 spacing -24、sz18', (hdrLong37.match(/<w:p(?: [^>]*)?>/g) || []).length === 1 && hdrLong37.includes('<w:spacing w:val="-24"/><w:sz w:val="18"/>'));
+
+      // 11d. 极长版本行（45 字符）：字距到 -30 仍超 → sz16 + 空格 sz17 三级兜底
+      const cmaXLong = { versionLine: '第 9 版 第 9 次修改 2099 年 12 月 31 日起实施并增加若干条补充说明内容', docCode: 'SHLY-TR068-2024' };
+      const fitXLong = dx.fitHeaderSizes(prefixText, cmaXLong.versionLine, 18, availPt);
+      check('页眉极长版行：版本行缩到下限 sz16', fitXLong.versionHalfPt === 16, String(fitXLong.versionHalfPt));
+      check('页眉极长版行：字距到 -30 下限', fitXLong.spacingTwips === -30, String(fitXLong.spacingTwips));
+      check('页眉极长版行：才触发空格 run 兜底（sz17）', fitXLong.shrunkSpaces === true && fitXLong.spaceHalfPt === 17, JSON.stringify(fitXLong));
+      check('页眉极长版行：缩后估算宽度 ≤ 可用宽度', fitXLong.estimatedPt <= availPt, `${fitXLong.estimatedPt} <= ${availPt}`);
+      const hdrXLong = dx.applyCmaHeaderXml(HDR_TPL, cmaXLong, { page, stylesXml: STYLES_TPL });
+      check('页眉极长版行：仍只有一个段落', (hdrXLong.match(/<w:p(?: [^>]*)?>/g) || []).length === 1);
+      check('页眉极长版行：版本行 sz16 + spacing -30、文本完整', szOf(runWith(hdrXLong, '日起实施')) === 16 && spacingOf(runWith(hdrXLong, '日起实施')) === -30 && hdrXLong.includes(cmaXLong.versionLine));
+      const xSpaceRuns = spaceRunsOf(hdrXLong);
+      check('页眉极长版行：2 个空格 run 均缩到 sz17', xSpaceRuns.length === 2 && xSpaceRuns.every((r) => szOf(r) === 17), xSpaceRuns.map(szOf).join(','));
+
+      // 11e. 真实导出链路（buildDocxBlob）确实把 styles/page 传进去了
+      const recHdr = mkRecord('r1', 'ZK1', [mkSample('1')], { mode: 'B' });
+      const blobHdr = await dx.buildDocxBlob([recHdr], new Uint8Array(TPL_B), cmaDefault);
+      const hdrOut = strFromU8(unzipSync(new Uint8Array(Buffer.from(await blobHdr.arrayBuffer())))['word/header1.xml']);
+      check('页眉：buildDocxBlob 产物版本行 sz=18 + 负字距 -14', hdrOut.includes('<w:spacing w:val="-14"/><w:sz w:val="18"/>'), '');
+
+      check('页眉：buildDocxBlob 产物无空格兜底 sz=17', !hdrOut.includes('<w:sz w:val="17"/>'), '');
+      check('页眉：buildDocxBlob 产物只有一个段落', (hdrOut.match(/<w:p(?: [^>]*)?>/g) || []).length === 1);
+    }
+
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);
   })().catch((e) => {
