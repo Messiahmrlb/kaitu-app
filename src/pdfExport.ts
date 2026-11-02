@@ -206,20 +206,34 @@ function buildPdfFileName(record: SoilRecord): string {
 // ---------------------------------------------------------------------------
 // HTML 模板渲染（DOM，仅导出时运行）
 // ---------------------------------------------------------------------------
+/** 信息行第二排的基线（pt）与字号（pt）——同排所有文本共用，保证垂直对齐 */
+const INFO_LINE_TOP_PT = 130.8;
+const INFO_LINE_FONT_PT = 11.1;
+/** 年份输入区：左缘与「开土日期」同起点，右缘正好是「年」字左缘 */
+const INFO_YEAR_LEFT_PT = 978.4;
+const INFO_YEAR_RIGHT_PT = 1104.8;
+const INFO_YEAR_WIDTH_PT = INFO_YEAR_RIGHT_PT - INFO_YEAR_LEFT_PT;
+
 function renderInfoLine(eng: SoilRecord['engineering']): string {
   const parts = (eng.openDate ?? '').trim().split('-');
   const y = parts[0] ?? '';
   const m = parts[1] ?? '';
   const d = parts[2] ?? '';
   const txt = (leftPt: number, html: string): string =>
-    `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(130.8)}px;font-size:${px(11.1)}px;">${html}</div>`;
+    `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(INFO_LINE_TOP_PT)}px;font-size:${px(INFO_LINE_FONT_PT)}px;">${html}</div>`;
+  // 年份单独成框并右对齐（2026-10-30 用户反馈）：年份位数固定为 4 位，宽度小于
+  // 「开土日期」到「年」之间的可用宽度；只有右对齐才能让年份右缘贴住「年」字左缘。
+  // 此前年份与「开土日期」同框左对齐，年份短时中间会留出明显空隙。
+  const yearBox = (year: string): string =>
+    `<div class="pdf-txt" style="left:${px(INFO_YEAR_LEFT_PT)}px;top:${px(INFO_LINE_TOP_PT)}px;width:${px(INFO_YEAR_WIDTH_PT)}px;text-align:right;font-size:${px(INFO_LINE_FONT_PT)}px;">${esc(year)}</div>`;
   return `
     ${txt(54, `工程编号：${esc(eng.projectCode ?? '')}`)}
     ${txt(494.6, `孔号：${esc(eng.holeCode ?? '')}`)}
     ${txt(673.4, `孔口标高${esc(eng.holeElevation ?? '')}`)}
     ${txt(742.2, 'm')}
-    ${txt(978.4, `开土日期${esc(y)}`)}
-    ${txt(1104.8, '年')}
+    ${txt(INFO_YEAR_LEFT_PT, '开土日期')}
+    ${yearBox(y)}
+    ${txt(INFO_YEAR_RIGHT_PT, '年')}
     ${txt(1122, esc(m))}
     ${txt(1137.8, '月')}
     ${txt(1153, esc(d))}
@@ -352,7 +366,7 @@ function buildPageElement(
     `overflow:hidden;background:#fff;color:#000;font-family:'SimSun','宋体',serif;`;
   const pageCss = `
     .pdf-page *{box-sizing:border-box;}
-    .pdf-txt{position:absolute;white-space:nowrap;}`;
+    .pdf-txt{position:absolute;white-space:nowrap;box-sizing:border-box;}`;
   el.innerHTML =
     `<style>${pageCss}</style>` +
     renderHeaderTexts(record, header) +

@@ -56,6 +56,25 @@ function bodyRows(xml) {
   return xml.match(TR_RE) || [];
 }
 
+// ---------- 工具：提取正文中「右对齐文件编号段落」的纯文本 ----------
+// 模板 document.xml 在标题之后有一个右对齐段落，编号被拆成多个 run
+// （S + HLY + - + TR068-202 + 4），必须跨 run 拼接后才能比对。
+const PARA_RE = /<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/g;
+const PPR_RE = /<w:pPr>[\s\S]*?<\/w:pPr>/;
+const RIGHT_JC_RE = /<w:jc[^>]*w:val="right"[^>]*\/>/;
+function docCodeParagraph(xml) {
+  for (const p of xml.match(PARA_RE) || []) {
+    const pPr = (p.match(PPR_RE) || [''])[0];
+    if (!RIGHT_JC_RE.test(pPr)) continue;
+    let m;
+    let t = '';
+    const re = /<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g;
+    while ((m = re.exec(p)) !== null) t += m[1];
+    return { paragraph: p, text: t };
+  }
+  return { paragraph: '', text: '' };
+}
+
 // ---------- fixture ----------
 function mkSample(no, extra = {}) {
   return {
@@ -250,42 +269,91 @@ function mkRecord(id, hole, samples, extra = {}) {
     const szs = (infoTc9.match(/<w:sz w:val="(\d+)"\/>/g) || []).map((x) => x.match(/\d+/)[0]);
     check('信息行孔口标高超宽缩字号（sz<22）', szs.some((v) => Number(v) < 22), szs.join(','));
 
-    // ---------- 10. CMA 设置应用于 Word 页眉（2026-10-30 用户：CMA设置也适用于导出WORD） ----------
+    // ---------- 10. CMA 设置：页眉版本行 + 正文文件编号（2026-10-30 用户澄清） ----------
+    // 用户澄清：CMA 版本号在页眉，**文件编号在正文**；页眉不再追加编号。
     {
       const rec = mkRecord('r1', 'ZK1', [mkSample('1')]);
-      // 10a. 自定义 header：版本行 + 文件编号替换，公司名保留
-      const blobCma = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A), {
+      // 10a. 自定义 header：页眉只换版本行；文件编号写正文右对齐段落
+      const cma = {
         versionLine: '第 9 版 第 2 次修改 2027 年 1 月 1 日起实施',
         docCode: 'ABC-TR999-2027',
-      });
+      };
+      const blobCma = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A), cma);
       const filesCma = unzipSync(new Uint8Array(Buffer.from(await blobCma.arrayBuffer())));
       const hdr = strFromU8(filesCma['word/header1.xml']);
+      const docCma = strFromU8(filesCma['word/document.xml']);
       check('CMA：header1.xml 含新版本行', hdr.includes('第 9 版 第 2 次修改 2027 年 1 月 1 日起实施'));
-      check('CMA：header1.xml 含新文件编号（全角空格前缀）', hdr.includes('　ABC-TR999-2027'));
+      check(
+        'CMA：header1.xml 不含文件编号（编号在正文）',
+        !hdr.includes('ABC-TR999-2027') && !hdr.includes('　'),
+        hdr.includes('ABC-TR999-2027') ? '仍含编号' : '',
+      );
       check('CMA：公司名保留', hdr.includes('公司'));
       check('CMA：模板默认版行已清除', !hdr.includes('第 3 版') && !hdr.includes('版第0次修改') && !hdr.includes('2024'));
-      check('CMA：document.xml 不受页眉手术影响', strFromU8(filesCma['word/document.xml']).includes('孔号：ZK1'));
-      check('CMA：run 显式带 xml:space=preserve', hdr.includes('<w:t xml:space="preserve">第 9 版'));
-      // 10b. 不传 header（默认 null）：模板页眉原样保留
+      const paraCma = docCodeParagraph(docCma);
+      check('CMA：正文编号段落文本 = 新编号', paraCma.text === 'ABC-TR999-2027', paraCma.text);
+      check(
+        'CMA：document.xml 含新文件编号',
+        docCma.includes('<w:t xml:space="preserve">ABC-TR999-2027</w:t>'),
+        '',
+      );
+      check(
+        'CMA：正文旧编号片段已清除（TR068-202 / HLY）',
+        !docCma.includes('TR068-202') && !docCma.includes('>HLY<'),
+        '',
+      );
+      check(
+        'CMA：正文右对齐段落仍只有一个（未误伤其它段落）',
+        (docCma.match(/<w:jc[^>]*w:val="right"[^>]*\/>/g) || []).length === 1,
+        String((docCma.match(/<w:jc[^>]*w:val="right"[^>]*\/>/g) || []).length),
+      );
+      check('CMA：标题「开土记录表」未被误伤', docCma.includes('>开土记录表<'));
+      check('CMA：编号段落保留 pPr（右对齐）', paraCma.paragraph.includes('<w:jc w:val="right"/></w:pPr>'));
+      check('CMA：编号 run 沿用模板 rPr（等线 sz=21）', paraCma.paragraph.includes('w:ascii="等线"') && paraCma.paragraph.includes('<w:sz w:val="21"/>'));
+      check('CMA：表格/信息行不受页眉手术影响', docCma.includes('孔号：ZK1'));
+
+      // 10b. 不传 header（默认 null）：页眉与正文编号都保留模板原值
       const blobDef = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A));
       const filesDef = unzipSync(new Uint8Array(Buffer.from(await blobDef.arrayBuffer())));
       const hdrDef = strFromU8(filesDef['word/header1.xml']);
+      const docDef = strFromU8(filesDef['word/document.xml']);
       check('CMA：不传 header 模板版行原样', hdrDef.includes('版第0次修改 202') && hdrDef.includes('日起实施'));
-      check('CMA：不传 header 无新编号', !hdrDef.includes('ABC-TR999-2027'));
-      // 10c. 特殊字符转义
+      check('CMA：不传 header 正文保留模板编号', docCodeParagraph(docDef).text === 'SHLY-TR068-2024', docCodeParagraph(docDef).text);
+      check('CMA：不传 header 无新编号', !hdrDef.includes('ABC-TR999-2027') && !docDef.includes('ABC-TR999-2027'));
+
+      // 10c. docCode 为空/纯空白：保留模板编号（只换版本行）
+      const blobBlank = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A), {
+        versionLine: '第 9 版',
+        docCode: '   ',
+      });
+      const filesBlank = unzipSync(new Uint8Array(Buffer.from(await blobBlank.arrayBuffer())));
+      check('CMA：空文件编号保留模板编号', docCodeParagraph(strFromU8(filesBlank['word/document.xml'])).text === 'SHLY-TR068-2024');
+      check('CMA：空文件编号时页眉仍替换版本行', strFromU8(filesBlank['word/header1.xml']).includes('第 9 版'));
+
+      // 10d. 特殊字符转义（页眉版本行 + 正文编号）
       const blobEsc = await dx.buildDocxBlob([rec], new Uint8Array(TPL_A), {
         versionLine: '第<A>&"版',
         docCode: 'X&Y',
       });
-      const hdrEsc = strFromU8(unzipSync(new Uint8Array(Buffer.from(await blobEsc.arrayBuffer())))['word/header1.xml']);
-      check('CMA：特殊字符 esc（&amp;）', hdrEsc.includes('第&lt;A&gt;&amp;&quot;版') && hdrEsc.includes('　X&amp;Y'));
-      // 10d. B 模板同样适用
+      const filesEsc = unzipSync(new Uint8Array(Buffer.from(await blobEsc.arrayBuffer())));
+      const hdrEsc = strFromU8(filesEsc['word/header1.xml']);
+      const docEsc = strFromU8(filesEsc['word/document.xml']);
+      check('CMA：页眉版本行特殊字符 esc', hdrEsc.includes('第&lt;A&gt;&amp;&quot;版'));
+      check('CMA：正文文件编号特殊字符 esc', docEsc.includes('<w:t xml:space="preserve">X&amp;Y</w:t>'));
+      check('CMA：正文文件编号原始 & 不再出现', !docEsc.includes('>X&Y<'));
+
+      // 10e. B 模板同样生效
       const blobB = await dx.buildDocxBlob([mkRecord('r1', 'ZK1', [mkSample('1')], { mode: 'B' })], new Uint8Array(TPL_B), {
         versionLine: '第 9 版',
         docCode: 'B-CODE',
       });
-      const hdrB = strFromU8(unzipSync(new Uint8Array(Buffer.from(await blobB.arrayBuffer())))['word/header1.xml']);
-      check('CMA：B 模板页眉同样替换', hdrB.includes('第 9 版') && hdrB.includes('　B-CODE'));
+      const filesB = unzipSync(new Uint8Array(Buffer.from(await blobB.arrayBuffer())));
+      const hdrB = strFromU8(filesB['word/header1.xml']);
+      const docB = strFromU8(filesB['word/document.xml']);
+      check('CMA：B 模板页眉同样替换版本行', hdrB.includes('第 9 版'));
+      check('CMA：B 模板页眉不含文件编号', !hdrB.includes('B-CODE'));
+      check('CMA：B 模板正文写入文件编号', docCodeParagraph(docB).text === 'B-CODE', docCodeParagraph(docB).text);
+      check('CMA：B 模板标题与表格保留', docB.includes('>开土记录表<') && docB.includes('孔号：ZK1'));
     }
 
     console.log(`\n${pass} passed, ${fail} failed`);

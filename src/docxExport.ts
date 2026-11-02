@@ -36,6 +36,9 @@ import { CMA_DEFAULT, CmaHeaderSettings } from './cmaHeader';
 /** 每页数据行数：模板 row3..row24 共 22 行 */
 export const DOCX_ROWS_PER_PAGE = 22;
 
+/** Word 文档 MIME（Blob 与 Web Share File 共用） */
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 // ---------------------------------------------------------------------------
 // XML 工具
 // ---------------------------------------------------------------------------
@@ -380,8 +383,12 @@ function runRPr(run: string): string {
 
 /**
  * 把 CMA 设置写入页眉 XML：公司名 / 空白定位 run 保留；版本行区（首个非空白且
- * 不含「公司」的 run 起，至最后一个非空白 run 止）合并替换为
- * `versionLine　docCode`（沿用原版本行 run 的 rPr）。模板无版本行区时原样返回。
+ * 不含「公司」的 run 起，至最后一个非空白 run 止）合并替换为 `versionLine`
+ * （沿用原版本行 run 的 rPr）。模板无版本行区时原样返回。
+ *
+ * 2026-10-30 用户澄清：**文件编号在正文，不在页眉**，因此本函数不再处理 docCode
+ * （由 {@link applyDocCodeXml} 写入 document.xml 的右对齐编号段落）。这样页眉
+ * 段落高度/版式与模板完全一致，不会因追加编号 run 影响一页/孔。
  */
 export function applyCmaHeaderXml(headerXml: string, header: CmaHeaderSettings): string {
   const runs = headerXml.match(HEADER_RUN_RE) ?? [];
@@ -397,14 +404,10 @@ export function applyCmaHeaderXml(headerXml: string, header: CmaHeaderSettings):
   }
   if (first < 0) return headerXml;
   const rPr = runRPr(runs[first]);
-  const parts: string[] = [];
-  if ((header.versionLine ?? '').trim()) {
-    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">${esc(header.versionLine)}</w:t></w:r>`);
-  }
-  if ((header.docCode ?? '').trim()) {
-    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">　${esc(header.docCode)}</w:t></w:r>`);
-  }
-  const replacement = parts.join('');
+  const versionLine = (header.versionLine ?? '').trim();
+  const replacement = versionLine
+    ? `<w:r>${rPr}<w:t xml:space="preserve">${esc(versionLine)}</w:t></w:r>`
+    : '';
   let out = '';
   let cursor = 0;
   for (let i = 0; i < runs.length; i++) {
@@ -416,6 +419,54 @@ export function applyCmaHeaderXml(headerXml: string, header: CmaHeaderSettings):
     cursor = idx + runs[i].length;
   }
   return out + headerXml.slice(cursor);
+}
+
+// ---------------------------------------------------------------------------
+// 文件编号（正文右对齐段落，2026-10-30 用户澄清：CMA 版本号在页眉、文件编号在正文）
+// 模板 document.xml 开头（标题「开土记录表」之后）有一个右对齐段落，
+// 文本由 5 个 run 拼成 `SHLY-TR068-2024`（等线 sz=21）。只改这一个段落，
+// 模板其余内容（标题、表格）零改动。
+// ---------------------------------------------------------------------------
+/** 模板文件编号格式：SHLY-TR068-2024（2-6 位大写字母 + -TR + 3 位数字 + -4 位年份） */
+const DOC_CODE_PATTERN = /^[A-Z]{2,6}-TR\d{3}-\d{4}$/;
+/** 右对齐段落属性（容忍属性间空格差异） */
+const RIGHT_JC_RE = /<w:jc[^>]*w:val="right"[^>]*\/>/;
+const PARA_RE = /<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/g;
+const RUN_ANY_RE = /<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/;
+
+/** 段落内可见文本（w:t 串联，自动处理被拆分到多个 run 的编号） */
+function paragraphText(pXml: string): string {
+  const out: string[] = [];
+  const re = /<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(pXml)) !== null) out.push(m[1] ?? '');
+  return out.join('');
+}
+
+/**
+ * 把「文件编号」写入正文（document.xml）。
+ *
+ * 定位规则（只命中模板中唯一的一个编号段落）：
+ * - pPr 含 `<w:jc w:val="right"/>`（右对齐）；
+ * - 段落纯文本匹配 {@link DOC_CODE_PATTERN}（跨 run 拼接后判断，故 `S`+`HLY`+
+ *   `-`+`TR068-202`+`4` 能正确识别为 `SHLY-TR068-2024`）。
+ * 命中后把段落内所有 run 合并为一个 run（沿用首个 run 的 rPr，保留 pPr 与段落
+ * 属性），文本替换为 docCode。标题等其它右对齐段落文本不匹配，不会被误伤。
+ *
+ * @param docCode 新文件编号；为空或纯空白时原样返回（保留模板值）
+ */
+export function applyDocCodeXml(documentXml: string, docCode: string): string {
+  const code = (docCode ?? '').trim();
+  if (!code) return documentXml;
+  return documentXml.replace(PARA_RE, (para) => {
+    const pPr = para.match(PPR_RE)?.[0] ?? '';
+    if (!RIGHT_JC_RE.test(pPr)) return para;
+    if (!DOC_CODE_PATTERN.test(paragraphText(para).trim())) return para;
+    const openTag = para.match(/^<w:p(?: [^>]*)?>/)?.[0] ?? '<w:p>';
+    const firstRun = para.match(RUN_ANY_RE)?.[0] ?? '';
+    const rPr = firstRun.match(RPR_RE)?.[0] ?? '';
+    return `${openTag}${pPr}<w:r>${rPr}<w:t xml:space="preserve">${esc(code)}</w:t></w:r></w:p>`;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -435,9 +486,12 @@ export async function buildDocxBlob(
   const files = unzipSync(templateBytes);
   const xmlEntry = 'word/document.xml';
   if (!files[xmlEntry]) throw new Error('docx 模板缺少 document.xml');
-  const outXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
+  // 顺序：先填表（buildDocxBody），再把文件编号写入正文右对齐段落。
+  // 两者操作的是不同节点（表格 vs 表格前的编号段落），先后不影响表格结构。
+  const bodyXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
+  const outXml = applyDocCodeXml(bodyXml, header?.docCode ?? '');
   files[xmlEntry] = strToU8(outXml);
-  // CMA 页眉：版本行 / 文件编号（模板 header1.xml，与 PDF 同一套全局设置）
+  // CMA 页眉：只替换版本行（文件编号在正文，见 applyDocCodeXml）
   if (header) {
     const headerEntry = 'word/header1.xml';
     if (files[headerEntry]) {
@@ -445,9 +499,7 @@ export async function buildDocxBlob(
     }
   }
   const zipped = zipSync(files, { level: 6 });
-  return new Blob([zipped as BlobPart], {
-    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  });
+  return new Blob([zipped as BlobPart], { type: DOCX_MIME });
 }
 
 /** Uint8Array → base64（原生端写文件用，照抄 xlsxExport） */
@@ -460,7 +512,40 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-/** 交付 docx Blob：原生端写文档目录 + 系统分享；Web 端浏览器下载 */
+/**
+ * Web Share API Level 2 的最小类型声明。
+ * 部分 TypeScript lib.dom 版本没有 `navigator.canShare` / `ShareData.files`，
+ * 用局部接口收窄，避免 `as any` 扩散。
+ */
+interface WebShareFileData {
+  files?: File[];
+  title?: string;
+  text?: string;
+}
+
+interface ShareCapableNavigator {
+  canShare?: (data?: WebShareFileData) => boolean;
+  share?: (data?: WebShareFileData) => Promise<void>;
+}
+
+/** 分享/写入被用户主动取消（Web Share 抛 AbortError；Capacitor Share 抛「cancel」文案） */
+function isShareCancelled(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const err = e as { name?: unknown; message?: unknown };
+  if (err.name === 'AbortError') return true;
+  return typeof err.message === 'string' && /cancel|取消/i.test(err.message);
+}
+
+/**
+ * 交付 docx Blob：
+ * - 原生端（Capacitor）：写文档目录后调系统分享；分享取消/失败都视为「文件已保存」，
+ *   只有写文件失败才抛给上层；
+ * - Web/PWA：优先 Web Share API Level 2（系统分享面板，微信/QQ/邮件可直接发送），
+ *   不支持或分享异常时回退 `<a download>` 浏览器下载。
+ *
+ * 2026-10-30 用户反馈：手机上导出 Word 常卡在浏览器下载页加载不出来
+ * （PWA / 微信内置浏览器对 `a.download` + Blob 支持差），故 Web 端优先系统分享。
+ */
 async function deliverDocxBlob(blob: Blob, fileName: string): Promise<ExportResult> {
   if (Capacitor.isNativePlatform()) {
     const arrayBuffer = await blob.arrayBuffer();
@@ -472,10 +557,46 @@ async function deliverDocxBlob(blob: Blob, fileName: string): Promise<ExportResu
     });
     try {
       await Share.share({ title: '开土记录表', text: '开土记录表 Word 导出', files: [fsResult.uri] });
-    } catch {
-      // 用户取消分享或无可分享目标，文件已保存
+      return {
+        success: true,
+        message: `已保存到文档目录并打开系统分享：${fileName}`,
+        path: fsResult.uri,
+      };
+    } catch (e) {
+      // 用户取消分享（或无可用分享目标）不代表导出失败：文件已经在文档目录里
+      const cancelled = isShareCancelled(e);
+      return {
+        success: true,
+        message: cancelled
+          ? `已保存到文档目录（已取消分享）：${fileName}`
+          : `文件已保存到文档目录：${fileName}`,
+        path: fsResult.uri,
+      };
     }
-    return { success: true, message: `已生成并保存到文档目录：${fileName}`, path: fsResult.uri };
+  }
+
+  // Web / PWA：优先系统分享（Level 2 支持文件）
+  const nav = navigator as Navigator & ShareCapableNavigator;
+  if (typeof nav.share === 'function') {
+    const file = new File([blob], fileName, { type: DOCX_MIME });
+    let canShareFile = false;
+    try {
+      canShareFile = typeof nav.canShare === 'function' && nav.canShare({ files: [file] });
+    } catch {
+      canShareFile = false;
+    }
+    if (canShareFile) {
+      try {
+        await nav.share({ files: [file], title: '开土记录表', text: '开土记录表 Word 导出' });
+        return { success: true, message: `已通过系统分享发送：${fileName}` };
+      } catch (e) {
+        // 用户取消：不误报失败，也不再触发下载（用户已明确放弃）
+        if (isShareCancelled(e)) {
+          return { success: true, message: `已取消分享 ${fileName}` };
+        }
+        // 其它异常（微信内置浏览器常见 NotAllowedError / DataError）：回退下载
+      }
+    }
   }
 
   const url = URL.createObjectURL(blob);

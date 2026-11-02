@@ -341,19 +341,26 @@ function buildMergedPdfFileName(records, today) {
 function buildPdfFileName(record) {
   return buildSinglePdfFileName(record);
 }
+var INFO_LINE_TOP_PT = 130.8;
+var INFO_LINE_FONT_PT = 11.1;
+var INFO_YEAR_LEFT_PT = 978.4;
+var INFO_YEAR_RIGHT_PT = 1104.8;
+var INFO_YEAR_WIDTH_PT = INFO_YEAR_RIGHT_PT - INFO_YEAR_LEFT_PT;
 function renderInfoLine(eng) {
   const parts = (eng.openDate ?? "").trim().split("-");
   const y = parts[0] ?? "";
   const m = parts[1] ?? "";
   const d = parts[2] ?? "";
-  const txt = (leftPt, html) => `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(130.8)}px;font-size:${px(11.1)}px;">${html}</div>`;
+  const txt = (leftPt, html) => `<div class="pdf-txt" style="left:${px(leftPt)}px;top:${px(INFO_LINE_TOP_PT)}px;font-size:${px(INFO_LINE_FONT_PT)}px;">${html}</div>`;
+  const yearBox = (year) => `<div class="pdf-txt" style="left:${px(INFO_YEAR_LEFT_PT)}px;top:${px(INFO_LINE_TOP_PT)}px;width:${px(INFO_YEAR_WIDTH_PT)}px;text-align:right;font-size:${px(INFO_LINE_FONT_PT)}px;">${esc(year)}</div>`;
   return `
     ${txt(54, `\u5DE5\u7A0B\u7F16\u53F7\uFF1A${esc(eng.projectCode ?? "")}`)}
     ${txt(494.6, `\u5B54\u53F7\uFF1A${esc(eng.holeCode ?? "")}`)}
     ${txt(673.4, `\u5B54\u53E3\u6807\u9AD8${esc(eng.holeElevation ?? "")}`)}
     ${txt(742.2, "m")}
-    ${txt(978.4, `\u5F00\u571F\u65E5\u671F${esc(y)}`)}
-    ${txt(1104.8, "\u5E74")}
+    ${txt(INFO_YEAR_LEFT_PT, "\u5F00\u571F\u65E5\u671F")}
+    ${yearBox(y)}
+    ${txt(INFO_YEAR_RIGHT_PT, "\u5E74")}
     ${txt(1122, esc(m))}
     ${txt(1137.8, "\u6708")}
     ${txt(1153, esc(d))}
@@ -453,7 +460,7 @@ function buildPageElement(page, record, pageIndex, totalPages, header) {
   el.style.cssText = `position:absolute;left:-100000px;top:0;width:${PAGE_W_PX}px;height:${PAGE_H_PX}px;overflow:hidden;background:#fff;color:#000;font-family:'SimSun','\u5B8B\u4F53',serif;`;
   const pageCss = `
     .pdf-page *{box-sizing:border-box;}
-    .pdf-txt{position:absolute;white-space:nowrap;}`;
+    .pdf-txt{position:absolute;white-space:nowrap;box-sizing:border-box;}`;
   el.innerHTML = `<style>${pageCss}</style>` + renderHeaderTexts(record, header) + renderTable(page, record) + renderFooter(pageIndex, totalPages);
   return el;
 }

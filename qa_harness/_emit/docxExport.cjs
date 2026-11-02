@@ -5,6 +5,9 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -27,11 +30,30 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// src/docxAssets.ts
+var docxAssets_exports = {};
+__export(docxAssets_exports, {
+  DOCX_TEMPLATE_URLS: () => DOCX_TEMPLATE_URLS
+});
+var import_tpl_normal, import_tpl_triangle, DOCX_TEMPLATE_URLS;
+var init_docxAssets = __esm({
+  "src/docxAssets.ts"() {
+    "use strict";
+    import_tpl_normal = __toESM(require("./assets/tpl-normal.docx?url"), 1);
+    import_tpl_triangle = __toESM(require("./assets/tpl-triangle.docx?url"), 1);
+    DOCX_TEMPLATE_URLS = {
+      A: import_tpl_normal.default,
+      B: import_tpl_triangle.default
+    };
+  }
+});
+
 // src/docxExport.ts
 var docxExport_exports = {};
 __export(docxExport_exports, {
   DOCX_ROWS_PER_PAGE: () => DOCX_ROWS_PER_PAGE,
   applyCmaHeaderXml: () => applyCmaHeaderXml,
+  applyDocCodeXml: () => applyDocCodeXml,
   buildDocxBlob: () => buildDocxBlob,
   buildDocxBody: () => buildDocxBody,
   buildMergedDocxFileName: () => buildMergedDocxFileName,
@@ -138,6 +160,9 @@ function stripSoilNumber(holeCode, soilNumber) {
 
 // src/pdfExport.ts
 var PT = 4 / 3;
+var INFO_YEAR_LEFT_PT = 978.4;
+var INFO_YEAR_RIGHT_PT = 1104.8;
+var INFO_YEAR_WIDTH_PT = INFO_YEAR_RIGHT_PT - INFO_YEAR_LEFT_PT;
 function withOpenDate(records, openDate) {
   const d = (openDate ?? "").trim();
   if (!d) return records;
@@ -149,6 +174,7 @@ function withOpenDate(records, openDate) {
 
 // src/docxExport.ts
 var DOCX_ROWS_PER_PAGE = 22;
+var DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -346,8 +372,8 @@ function buildMergedDocxFileName(records, today) {
   return `\u5F00\u571F\u8BB0\u5F55_${count}\u5B54_${day}.docx`;
 }
 async function fetchTemplateBytes(mode) {
-  const { DOCX_TEMPLATE_URLS } = await import("./docxAssets");
-  const res = await fetch(DOCX_TEMPLATE_URLS[mode]);
+  const { DOCX_TEMPLATE_URLS: DOCX_TEMPLATE_URLS2 } = await Promise.resolve().then(() => (init_docxAssets(), docxAssets_exports));
+  const res = await fetch(DOCX_TEMPLATE_URLS2[mode]);
   if (!res.ok) throw new Error(`\u6A21\u677F\u52A0\u8F7D\u5931\u8D25\uFF08${res.status}\uFF09`);
   return new Uint8Array(await res.arrayBuffer());
 }
@@ -377,14 +403,8 @@ function applyCmaHeaderXml(headerXml, header) {
   }
   if (first < 0) return headerXml;
   const rPr = runRPr(runs[first]);
-  const parts = [];
-  if ((header.versionLine ?? "").trim()) {
-    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">${esc(header.versionLine)}</w:t></w:r>`);
-  }
-  if ((header.docCode ?? "").trim()) {
-    parts.push(`<w:r>${rPr}<w:t xml:space="preserve">\u3000${esc(header.docCode)}</w:t></w:r>`);
-  }
-  const replacement = parts.join("");
+  const versionLine = (header.versionLine ?? "").trim();
+  const replacement = versionLine ? `<w:r>${rPr}<w:t xml:space="preserve">${esc(versionLine)}</w:t></w:r>` : "";
   let out = "";
   let cursor = 0;
   for (let i = 0; i < runs.length; i++) {
@@ -397,12 +417,37 @@ function applyCmaHeaderXml(headerXml, header) {
   }
   return out + headerXml.slice(cursor);
 }
+var DOC_CODE_PATTERN = /^[A-Z]{2,6}-TR\d{3}-\d{4}$/;
+var RIGHT_JC_RE = /<w:jc[^>]*w:val="right"[^>]*\/>/;
+var PARA_RE = /<w:p(?: [^>]*)?>[\s\S]*?<\/w:p>/g;
+var RUN_ANY_RE = /<w:r(?: [^>]*)?>[\s\S]*?<\/w:r>/;
+function paragraphText(pXml) {
+  const out = [];
+  const re = /<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g;
+  let m;
+  while ((m = re.exec(pXml)) !== null) out.push(m[1] ?? "");
+  return out.join("");
+}
+function applyDocCodeXml(documentXml, docCode) {
+  const code = (docCode ?? "").trim();
+  if (!code) return documentXml;
+  return documentXml.replace(PARA_RE, (para) => {
+    const pPr = para.match(PPR_RE)?.[0] ?? "";
+    if (!RIGHT_JC_RE.test(pPr)) return para;
+    if (!DOC_CODE_PATTERN.test(paragraphText(para).trim())) return para;
+    const openTag = para.match(/^<w:p(?: [^>]*)?>/)?.[0] ?? "<w:p>";
+    const firstRun = para.match(RUN_ANY_RE)?.[0] ?? "";
+    const rPr = firstRun.match(RPR_RE)?.[0] ?? "";
+    return `${openTag}${pPr}<w:r>${rPr}<w:t xml:space="preserve">${esc(code)}</w:t></w:r></w:p>`;
+  });
+}
 async function buildDocxBlob(records, templateBytes, header = null) {
   const { unzipSync, zipSync, strFromU8, strToU8 } = await import("fflate");
   const files = unzipSync(templateBytes);
   const xmlEntry = "word/document.xml";
   if (!files[xmlEntry]) throw new Error("docx \u6A21\u677F\u7F3A\u5C11 document.xml");
-  const outXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
+  const bodyXml = buildDocxBody(strFromU8(files[xmlEntry]), records);
+  const outXml = applyDocCodeXml(bodyXml, header?.docCode ?? "");
   files[xmlEntry] = strToU8(outXml);
   if (header) {
     const headerEntry = "word/header1.xml";
@@ -411,9 +456,7 @@ async function buildDocxBlob(records, templateBytes, header = null) {
     }
   }
   const zipped = zipSync(files, { level: 6 });
-  return new Blob([zipped], {
-    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  });
+  return new Blob([zipped], { type: DOCX_MIME });
 }
 function uint8ToBase64(bytes) {
   let binary = "";
@@ -422,6 +465,12 @@ function uint8ToBase64(bytes) {
     binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
   }
   return btoa(binary);
+}
+function isShareCancelled(e) {
+  if (!e || typeof e !== "object") return false;
+  const err = e;
+  if (err.name === "AbortError") return true;
+  return typeof err.message === "string" && /cancel|取消/i.test(err.message);
 }
 async function deliverDocxBlob(blob, fileName) {
   if (import_core2.Capacitor.isNativePlatform()) {
@@ -434,9 +483,39 @@ async function deliverDocxBlob(blob, fileName) {
     });
     try {
       await import_share2.Share.share({ title: "\u5F00\u571F\u8BB0\u5F55\u8868", text: "\u5F00\u571F\u8BB0\u5F55\u8868 Word \u5BFC\u51FA", files: [fsResult.uri] });
-    } catch {
+      return {
+        success: true,
+        message: `\u5DF2\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\u5E76\u6253\u5F00\u7CFB\u7EDF\u5206\u4EAB\uFF1A${fileName}`,
+        path: fsResult.uri
+      };
+    } catch (e) {
+      const cancelled = isShareCancelled(e);
+      return {
+        success: true,
+        message: cancelled ? `\u5DF2\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\uFF08\u5DF2\u53D6\u6D88\u5206\u4EAB\uFF09\uFF1A${fileName}` : `\u6587\u4EF6\u5DF2\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\uFF1A${fileName}`,
+        path: fsResult.uri
+      };
     }
-    return { success: true, message: `\u5DF2\u751F\u6210\u5E76\u4FDD\u5B58\u5230\u6587\u6863\u76EE\u5F55\uFF1A${fileName}`, path: fsResult.uri };
+  }
+  const nav = navigator;
+  if (typeof nav.share === "function") {
+    const file = new File([blob], fileName, { type: DOCX_MIME });
+    let canShareFile = false;
+    try {
+      canShareFile = typeof nav.canShare === "function" && nav.canShare({ files: [file] });
+    } catch {
+      canShareFile = false;
+    }
+    if (canShareFile) {
+      try {
+        await nav.share({ files: [file], title: "\u5F00\u571F\u8BB0\u5F55\u8868", text: "\u5F00\u571F\u8BB0\u5F55\u8868 Word \u5BFC\u51FA" });
+        return { success: true, message: `\u5DF2\u901A\u8FC7\u7CFB\u7EDF\u5206\u4EAB\u53D1\u9001\uFF1A${fileName}` };
+      } catch (e) {
+        if (isShareCancelled(e)) {
+          return { success: true, message: `\u5DF2\u53D6\u6D88\u5206\u4EAB ${fileName}` };
+        }
+      }
+    }
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -483,6 +562,7 @@ async function exportRecordsDocx(records, openDateOverride = "", cmaHeader = CMA
 0 && (module.exports = {
   DOCX_ROWS_PER_PAGE,
   applyCmaHeaderXml,
+  applyDocCodeXml,
   buildDocxBlob,
   buildDocxBody,
   buildMergedDocxFileName,

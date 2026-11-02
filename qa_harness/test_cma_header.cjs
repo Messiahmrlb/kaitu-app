@@ -139,6 +139,42 @@ check('特殊字符被转义', htmlEsc.includes('A&amp;B &lt;C&gt;') && htmlEsc.
 
 check('未传 header 时用默认值', renderHeaderTexts(record).includes(d.versionLine));
 
+// ------------------------------------ 信息行：年份右对齐贴住「年」（2026-10-30）
+// px = pt × 4/3；使用与源码相同的乘算方式，保证浮点字符串逐字一致。
+const PT = 4 / 3;
+const infoTop = 130.8 * PT;
+const infoFont = 11.1 * PT;
+const yearLeft = 978.4 * PT;
+const yearWidth = (1104.8 - 978.4) * PT;
+const yearBoxPrefix = `left:${yearLeft}px;top:${infoTop}px;width:${yearWidth}px;text-align:right;font-size:${infoFont}px;`;
+check(
+  '信息行：年份单独成框、右对齐、宽度 126.4pt',
+  htmlDefault.includes(`${yearBoxPrefix}">2026</div>`),
+  `${yearBoxPrefix}">2026</div>`,
+);
+check(
+  '信息行：年份框宽度 = 1104.8 - 978.4（右缘贴「年」字左缘）',
+  Math.abs(yearWidth / PT - (1104.8 - 978.4)) < 1e-9,
+  yearWidth / PT,
+);
+check(
+  '信息行：开土日期标签仍左对齐（未被年份框取代）',
+  htmlDefault.includes(`left:${yearLeft}px;top:${infoTop}px;font-size:${infoFont}px;">开土日期</div>`),
+);
+check('信息行：年份不再与标签同框（旧渲染已移除）', !htmlDefault.includes('开土日期2026'));
+check(
+  '信息行：「年」字位置不变（1104.8pt）',
+  htmlDefault.includes(`left:${1104.8 * PT}px;top:${infoTop}px;font-size:${infoFont}px;">年</div>`),
+);
+check(
+  '信息行：「月」字位置不变（1137.8pt）',
+  htmlDefault.includes(`left:${1137.8 * PT}px;top:${infoTop}px;font-size:${infoFont}px;">月</div>`),
+);
+check(
+  '信息行：「日」字位置不变（1170.8pt）',
+  htmlDefault.includes(`left:${1170.8 * PT}px;top:${infoTop}px;font-size:${infoFont}px;">日</div>`),
+);
+
 // --------------------------------------------- 表体数据不受页眉设置影响
 const withSamples = { ...record, samples: [{ ...require('./_emit/utils.cjs').newSample(1, '1') }] };
 const pagesA = buildPdfPages(withSamples);
