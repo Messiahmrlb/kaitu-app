@@ -101,7 +101,7 @@ const STD_SUB_HEADERS = ['自', '至', '原状', '扰动', '常规物性', '颗�
  * 写一份送样单块（子表头可自定义）。
  * 勾选规则：soilChecks = [{ colIndex, }] — 在子表头第 colIndex（0 起）列打 √。
  */
-function addBlock(ws, startRow, { hole, subHeaders, soilRows }) {
+function addBlock(ws, startRow, { hole, subHeaders, soilRows, startSeq = 1 }) {
   ws.getCell(`A${startRow}`).value = '土工试验送样单';
   ws.getCell(`A${startRow + 1}`).value = '工程名称：表头测试工程';
   ws.getCell(`A${startRow + 2}`).value = '孔号';
@@ -115,7 +115,7 @@ function addBlock(ws, startRow, { hole, subHeaders, soilRows }) {
   });
   soilRows.forEach((checks, i) => {
     const r = hr + 2 + i;
-    ws.getCell(`A${r}`).value = `${hole}-1-${String(i + 1).padStart(2, '0')}`;
+    ws.getCell(`A${r}`).value = `${hole}-1-${String(i + startSeq).padStart(2, '0')}`;
     ws.getCell(`B${r}`).value = '粉质黏土';
     ws.getCell(`C${r}`).value = '1.0';
     ws.getCell(`D${r}`).value = '1.5';
@@ -217,13 +217,14 @@ async function parseSheets(sheetDefs) {
   }
 
   // 场景 4：同孔两块表头一致 → 不报错误
+  // 第二块从 2 号土接续（重复起始报错由 test_import_merge.cjs 覆盖）
   {
     const res = await parseSheets([
       {
         name: '一致表',
         blocks: [
           { hole: 'ZK4', subHeaders: ALIAS_SUB_HEADERS, soilRows: [[8]] },
-          { hole: 'ZK4', subHeaders: ALIAS_SUB_HEADERS, soilRows: [[7]] },
+          { hole: 'ZK4', subHeaders: ALIAS_SUB_HEADERS, soilRows: [[7]], startSeq: 2 },
         ],
       },
     ]);

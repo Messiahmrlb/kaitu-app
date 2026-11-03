@@ -2,7 +2,8 @@
 //
 // 覆盖：
 //   mergeImportedByHole：同孔合并、精确匹配（ZK1 ≠ ZK1-1）、空孔号独立、
-//                        samples 拼接重排、sheetName/warnings 去重、mergedFrom
+//                        samples 拼接重排、sheetName/warnings 去重、mergedFrom、
+//                        重复起始报错（holeExplicit 块 ≥2 份都从 1 号土开始 → errors）
 //   soilSeqOf：ZK1-1-01→1、ZK1-R1→1、ZK1-1-21→21、ZK1-1→null、''→null、01→1
 //   parseDeliveryFile：同工作表续页继承孔号；续页土号从 1 重开 → errors；
 //                      正常接续（21）→ 无 error；跨工作表不继承但能识别来源重排
@@ -73,6 +74,8 @@ function mkItem(hole, sheetName, soilNumbers, extra = {}) {
     holeCode: hole,
     warnings: extra.warnings ?? [],
     errors: extra.errors ?? [],
+    // 孔号是否为单元格显式写（续页沿用块为 false/缺省）
+    holeExplicit: extra.holeExplicit,
   };
 }
 
@@ -116,6 +119,81 @@ check(
   duplicateStart.record.samples.map((s) => s.soilNumber).join(','),
 );
 check('重复起始土号时土样总数不变', duplicateStart.record.samples.length === 4);
+
+// ---------- 重复起始报错（holeExplicit 块都从 1 号土开始） ----------
+// 用户口径：同孔多份送样单若 ≥2 份都从 1 号土开始（如都有 D25-1），报错误级提示，
+// 不阻止合并/导入。注意 soilSeqOf('D25-1') 因「孔号形态」返回 null，
+// merge 层结合块孔号还原序号（D25 的土号 D25-1 / D25-01 都是 1 号土）。
+const dupStartError = mergeImportedByHole([
+  mkItem('D25', 'Sheet1', ['D25-1'], { holeExplicit: true }),
+  mkItem('D25', 'Sheet2', ['D25-01'], { holeExplicit: true }),
+]);
+check(
+  '两块同孔 holeExplicit 且都从 1 号起 → 仍合并为 1 条',
+  dupStartError.records.length === 1 && dupStartError.records[0].sampleCount === 2,
+  JSON.stringify(dupStartError.records.map((r) => [r.holeCode, r.sampleCount])),
+);
+check(
+  '重复起始合并 → samples 原样拼接 2 条、mergedFrom = 2',
+  dupStartError.records[0].record.samples.length === 2 &&
+    dupStartError.records[0].mergedFrom === 2,
+  `samples=${dupStartError.records[0].record.samples.length}, mergedFrom=${dupStartError.records[0].mergedFrom}`,
+);
+check(
+  '重复起始 → errors 含「都从 1 号土开始」',
+  dupStartError.errors.some((e) => e.includes('都从 1 号土开始')),
+  JSON.stringify(dupStartError.errors),
+);
+check(
+  '重复起始 error 文案含「第 1、2 份」',
+  dupStartError.errors.some((e) => e.includes('第 1、2 份')),
+  JSON.stringify(dupStartError.errors),
+);
+check(
+  '重复起始 → 记录级 errors 同样带出',
+  (dupStartError.records[0].errors ?? []).some((e) => e.includes('都从 1 号土开始')),
+  JSON.stringify(dupStartError.records[0].errors),
+);
+
+// 续页继承块（holeExplicit 缺省=false）从 -05 续：即使显式块从 1 起，也不报重复起始错
+// （该场景的土号重开报错由 parseOneBlock 的块级沿用校验负责，不在本用例断言范围）
+const explicitPlusInherited = mergeImportedByHole([
+  mkItem('D25', 'Sheet1', ['D25-1'], { holeExplicit: true }),
+  mkItem('D25', 'Sheet2', ['D25-05']),
+]);
+check(
+  '显式块从 1 起 + 继承块续 -05 → 不报重复起始错',
+  explicitPlusInherited.errors.length === 0,
+  JSON.stringify(explicitPlusInherited.errors),
+);
+
+// 两块 holeExplicit 都从 -3 起 → 不报重复起始错
+const startAt3 = mergeImportedByHole([
+  mkItem('D25', 'Sheet1', ['D25-3'], { holeExplicit: true }),
+  mkItem('D25', 'Sheet2', ['D25-03'], { holeExplicit: true }),
+]);
+check(
+  '两块 holeExplicit 都从 -3 起 → 不报重复起始错',
+  startAt3.errors.length === 0,
+  JSON.stringify(startAt3.errors),
+);
+
+// 三块同孔，第 1、3 块从 1 号起（第 2 块从 5 号续）→ 文案含「第 1、3 份」
+const threeWithDup = mergeImportedByHole([
+  mkItem('D25', 'Sheet1', ['D25-1'], { holeExplicit: true }),
+  mkItem('D25', 'Sheet2', ['D25-5'], { holeExplicit: true }),
+  mkItem('D25', 'Sheet3', ['D25-01'], { holeExplicit: true }),
+]);
+check(
+  '三块同孔第 1、3 块从 1 号起 → 报错文案含「第 1、3 份」',
+  threeWithDup.errors.some((e) => e.includes('第 1、3 份') && e.includes('都从 1 号土开始')),
+  JSON.stringify(threeWithDup.errors),
+);
+check(
+  '三块同孔第 1、3 块从 1 号起 → 仍合并为 1 条 3 条土样',
+  threeWithDup.records.length === 1 && threeWithDup.records[0].sampleCount === 3,
+  JSON.stringify(threeWithDup.records.map((r) => [r.holeCode, r.sampleCount])),
+);
 
 const prefixCase = mergeImportedByHole([
   mkItem('ZK1', 'Sheet1', ['ZK1-01']),

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { ChangeEvent, useRef, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { SoilRecord, RecordMode } from '../types';
-import { parseDeliveryFile, ImportedRecord } from '../importDelivery';
+import { parseDeliveryFile, mergeImportedByHole, ImportedRecord } from '../importDelivery';
 import { isChunkLoadError } from '../pwaRecovery';
 
 interface Props {
@@ -31,8 +31,12 @@ interface Props {
 /**
  * 导入送样单对话框。
  *
- * 流程：选择 .xlsx/.xlsm 文件 → 读取为 ArrayBuffer → parseDeliveryFile 解析 →
+ * 流程：选择 .xlsx/.xlsm 文件（支持一次多选，批量解析）→ 读取为 ArrayBuffer →
+ * parseDeliveryFile 解析 → 跨文件同孔合并（mergeImportedByHole）→
  * 预览识别到的孔号与土样数 → 确认后回调 onImport，由上层持久化。
+ *
+ * 单文件行为与文案保持与历史版本完全一致；多文件时在汇总/预览中
+ * 追加来源文件与文件数信息，并对损坏文件聚合报错后继续解析其余文件。
  */
 export default function ImportDeliveryDialog({ open, onClose, onImport }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -42,6 +46,10 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
   const [resultWarnings, setResultWarnings] = useState<string[]>([]);
   const [resultErrors, setResultErrors] = useState<string[]>([]);
   const [mergedNotes, setMergedNotes] = useState<string[]>([]);
+  /** 本次解析的文件数（>1 时启用多文件展示：来源文件、文件数汇总等） */
+  const [fileCount, setFileCount] = useState(0);
+  /** 批量解析进度（第 done 个 / 共 total 个） */
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const reset = () => {
     setError('');
@@ -49,6 +57,8 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
     setResultWarnings([]);
     setResultErrors([]);
     setMergedNotes([]);
+    setFileCount(0);
+    setProgress(null);
     setLoading(false);
   };
 
@@ -63,6 +73,7 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
     setResultWarnings([]);
     setResultErrors([]);
     setMergedNotes([]);
+    setFileCount(0);
     setLoading(true);
     try {
       const buffer = await file.arrayBuffer();
@@ -87,6 +98,81 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * 批量解析多个文件：逐文件 parseDeliveryFile，文件级提示加「文件名」前缀，
+   * 单文件损坏/非 xlsx 聚合为一条错误并继续其余文件；最后跨文件同孔合并。
+   */
+  const handleFiles = async (files: File[]) => {
+    setError('');
+    setPreview([]);
+    setResultWarnings([]);
+    setResultErrors([]);
+    setMergedNotes([]);
+    setFileCount(files.length);
+    setLoading(true);
+    setProgress({ done: 0, total: files.length });
+
+    /** 文件级提示统一加「文件名」前缀，多文件时提示可归属到具体文件 */
+    const withFilePrefix = (fileName: string, msgs: string[]) =>
+      msgs.map((m) => `「${fileName}」${m}`);
+
+    const fileWarnings: string[] = [];
+    const fileErrors: string[] = [];
+    const fileNotes: string[] = [];
+    const allRecords: ImportedRecord[] = [];
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setProgress({ done: i, total: files.length });
+        try {
+          const buffer = await file.arrayBuffer();
+          const result = await parseDeliveryFile(buffer);
+          // 每条记录标记来源文件（预览列表展示用；parseDeliveryFile 返回的是新对象，可安全改写）
+          for (const r of result.records) r.sourceFile = file.name;
+          allRecords.push(...result.records);
+          fileWarnings.push(...withFilePrefix(file.name, result.warnings));
+          fileErrors.push(...withFilePrefix(file.name, result.errors ?? []));
+          fileNotes.push(...withFilePrefix(file.name, result.mergedNotes ?? []));
+        } catch (e: any) {
+          // 单文件损坏 / 非 xlsx：聚合为一条错误并继续解析其它文件
+          const reason = isChunkLoadError(e)
+            ? '解析组件加载失败（页面是旧版本，脚本已被新版本替换），请刷新页面后重试'
+            : e?.message ?? String(e);
+          fileErrors.push(`「${file.name}」解析失败（原因：${reason}），已跳过该文件。`);
+        }
+      }
+      setProgress({ done: files.length, total: files.length });
+
+      // 跨文件同孔合并（孔号精确相等；含「都从 1 号土开始」重复起始报错）
+      const merged = mergeImportedByHole(allRecords);
+      setResultWarnings(fileWarnings);
+      setResultErrors(Array.from(new Set(fileErrors)).concat(merged.errors));
+      setMergedNotes([...fileNotes, ...merged.mergedNotes]);
+      if (merged.records.length === 0) {
+        const msg = fileWarnings.length
+          ? fileWarnings.join('；')
+          : '未在所选文件中识别到送样单工作表，请确认文件是否为土工试验送样单。';
+        setError(msg);
+      } else {
+        setPreview(merged.records);
+      }
+    } finally {
+      setLoading(false);
+      setProgress(null);
+    }
+  };
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 1) {
+      void handleFile(files[0]);
+    } else if (files.length > 1) {
+      void handleFiles(files);
+    }
+    e.target.value = '';
   };
 
   // 解析提示聚合（文件级 + 各记录块），错误级与普通 warning 分开展示
@@ -119,13 +205,10 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
         <input
           ref={inputRef}
           type="file"
+          multiple
           accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           style={{ display: 'none' }}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void handleFile(f);
-            e.target.value = '';
-          }}
+          onChange={handleInputChange}
         />
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1, mb: 2 }}>
@@ -138,6 +221,11 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
             选择送样单文件
           </Button>
           {loading && <CircularProgress size={20} />}
+          {loading && progress && progress.total > 1 && (
+            <Typography variant="caption" color="text.secondary">
+              正在解析 {Math.min(progress.done + 1, progress.total)}/{progress.total}…
+            </Typography>
+          )}
         </Box>
 
         {error && (
@@ -188,7 +276,8 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
         {preview.length > 0 && (
           <Box sx={{ mb: 1 }}>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-              识别到 {preview.length} 个孔（来自 {totalDeliveryBlocks} 份送样单），共 {totalSamples} 条土样：
+              识别到 {preview.length} 个孔（来自 {totalDeliveryBlocks} 份送样单
+              {fileCount > 1 ? `、${fileCount} 个文件` : ''}），共 {totalSamples} 条土样：
             </Typography>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
               鉴别格式已按野外定名自动识别，可在此修改；土类不会随导入自动勾选，导入后请逐条勾选。
@@ -204,7 +293,9 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
                     <ListItemText
                       sx={{ my: 0 }}
                       primary={`孔号 ${r.holeCode || '（空）'} ｜ ${r.sampleCount} 条土样 ｜ ${r.record.name}`}
-                      secondary={`来源工作表：${r.sheetName}${
+                      secondary={`${
+                        fileCount > 1 && r.sourceFile ? `来源文件：${r.sourceFile} ｜ ` : ''
+                      }来源工作表：${r.sheetName}${
                         (r.mergedFrom ?? 1) > 1 ? ` ｜ 已合并 ${r.mergedFrom} 张送样单` : ''
                       }`}
                     />

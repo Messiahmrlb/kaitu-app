@@ -38,6 +38,10 @@ export interface ImportedRecord {
   mergedFrom?: number;
   /** 该块内被当作表头残留跳过的行数（「土样编号」出现在土号列，如表二结果表的多行表头） */
   headerJunkRows?: number;
+  /** 孔号是否为单元格显式写（非续页沿用）；merge 层据此区分「重复起始」与「续页重开」 */
+  holeExplicit?: boolean;
+  /** 来源文件名（Dialog 层批量导入时填写，预览列表展示用） */
+  sourceFile?: string;
 }
 
 /** 整份文件解析结果 */
@@ -114,6 +118,28 @@ export function soilSeqOf(soilNumber: string): number | null {
 }
 
 /**
+ * 取一个送样单块第一条土样的序号（含孔号上下文还原）。
+ *
+ * 大多数土号（ZK1-1-01 / 01 / ZK1-R1）直接用 {@link soilSeqOf} 即可；
+ * 但「孔号-纯数字」形态（如孔 D25 的土号 D25-1 / D25-01）会被 soilSeqOf
+ * 按「孔号形态」返回 null，这里结合块孔号还原土样序号，避免漏判「从 1 号土开始」。
+ */
+function firstSampleSeq(item: ImportedRecord): number | null {
+  const first = (item.record.samples ?? [])[0];
+  const soilNumber = String(first?.soilNumber ?? '').trim();
+  let seq = soilSeqOf(soilNumber);
+  if (seq === null && soilNumber) {
+    const hole = (item.holeCode ?? '').trim();
+    if (hole) {
+      const escaped = hole.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = new RegExp(`^${escaped}-(\\d+)$`).exec(soilNumber);
+      if (m) seq = parseInt(m[1], 10);
+    }
+  }
+  return seq;
+}
+
+/**
  * 同一文件内「同孔多表」合并（纯函数）：
  * - 合并键为 `holeCode.trim()`，精确相等（`ZK1` 与 `ZK1-1` 不同孔）；
  * - 空孔号不参与合并，各自独立；
@@ -177,6 +203,20 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
       );
     }
 
+    // 重复起始校验：同孔的多份送样单中若 ≥2 份「都从 1 号土开始」，疑似重复提交了
+    // 同一孔的送样单（如两份都写 D25-1）。只统计 holeExplicit（孔号为单元格显式写）的块：
+    // 续页继承块（holeExplicit=false）的土号重开已由 parseOneBlock 的块级校验报错，
+    // 这里不再统计，避免双重报错。错误级提示不阻止合并/导入。
+    const restartIdx: number[] = [];
+    group.items.forEach((x, i) => {
+      if (x.holeExplicit && firstSampleSeq(x) === 1) restartIdx.push(i + 1);
+    });
+    if (restartIdx.length >= 2) {
+      mergedErrors.push(
+        `孔号 ${group.hole || '(空)'} 的第 ${restartIdx.join('、')} 份送样单都从 1 号土开始，疑似重复提交了同一孔的送样单，已按顺序合并，请核对土样是否重复。`,
+      );
+    }
+
     if (!isMerged) {
       records.push({
         ...first,
@@ -211,6 +251,9 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
       warnings: mergedWarnings,
       errors: mergedErrors,
       mergedFrom: group.items.length,
+      // 来源文件/孔号显式标记保留第一块的（预览展示与再合并场景用）
+      sourceFile: first.sourceFile,
+      holeExplicit: first.holeExplicit,
     });
     errors.push(...mergedErrors);
     mergedNotes.push(
@@ -754,6 +797,9 @@ function parseOneBlock(
     warnings,
     errors,
     headerJunkRows,
+    // 孔号是否为本块单元格显式写（ownHoleCode 非空）；续页沿用块为 false，
+    // merge 层的「重复起始」校验只统计显式块，避免与块级续页重开报错叠加
+    holeExplicit: !!ownHoleCode,
   };
 }
 

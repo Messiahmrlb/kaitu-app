@@ -54,9 +54,15 @@ await sleep(2500);
 const FIXTURE = 'C:/Users/Dell/WorkBuddy/2026-09-10-09-55-25/kaitu-app/qa_harness/_emit/fixtures/tri-delivery.xlsx';
 
 async function openAndPick() {
-  await clickUntil('打开导入对话框', `(() => {
-    const b = [...document.querySelectorAll('button')].find(x => /导入送样单/.test(x.textContent));
+  // 顶部「导入 / 导出」下拉菜单 →「导入送样单」菜单项（现为二级入口）
+  await clickUntil('打开导入/导出菜单', `(() => {
+    const b = document.querySelector('button[aria-label="导入或导出"]');
     if (!b) return 'NO'; b.click(); return 'OK';
+  })()`);
+  await sleep(400);
+  await clickUntil('打开导入对话框', `(() => {
+    const item = [...document.querySelectorAll('li[role="menuitem"]')].find(x => /导入送样单/.test(x.textContent));
+    if (!item) return 'NO'; item.click(); return 'OK';
   })()`);
   await sleep(600);
   const r = await send('Runtime.evaluate', { expression: `document.querySelector('input[type=file]')` });
@@ -93,7 +99,7 @@ console.log('预览内容:', JSON.stringify(await readDialog(), null, 0));
 
 const shot = await send('Page.captureScreenshot', { format: 'png' });
 const { writeFileSync } = await import('node:fs');
-writeFileSync('qa_harness/_emit/import_mode_preview.png', Buffer.from(shot.data, 'base64'));
+writeFileSync(new URL('./import_mode_preview.png', import.meta.url), Buffer.from(shot.data, 'base64'));
 
 await clickUntil('确认导入', `(() => {
   const b = [...document.querySelectorAll('.MuiDialog-root button')].find(x => /确认导入/.test(x.textContent));
