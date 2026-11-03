@@ -75673,6 +75673,7 @@ function firstSampleSeq(item) {
 function mergeImportedByHole(items) {
   const groups = [];
   const byHole = /* @__PURE__ */ new Map();
+  const rejectedHoles = [];
   for (const item of items ?? []) {
     const hole = (item.holeCode ?? "").trim();
     if (!hole) {
@@ -75712,9 +75713,11 @@ function mergeImportedByHole(items) {
       if (x.holeExplicit && firstSampleSeq(x) === 1) restartIdx.push(i + 1);
     });
     if (restartIdx.length >= 2) {
-      mergedErrors.push(
-        `\u5B54\u53F7 ${group.hole || "(\u7A7A)"} \u7684\u7B2C ${restartIdx.join("\u3001")} \u4EFD\u9001\u6837\u5355\u90FD\u4ECE 1 \u53F7\u571F\u5F00\u59CB\uFF0C\u7591\u4F3C\u91CD\u590D\u63D0\u4EA4\u4E86\u540C\u4E00\u5B54\u7684\u9001\u6837\u5355\uFF0C\u5DF2\u6309\u987A\u5E8F\u5408\u5E76\uFF0C\u8BF7\u6838\u5BF9\u571F\u6837\u662F\u5426\u91CD\u590D\u3002`
+      errors.push(
+        `\u5B54\u53F7 ${group.hole || "(\u7A7A)"} \u7684\u7B2C ${restartIdx.join("\u3001")} \u4EFD\u9001\u6837\u5355\u90FD\u4ECE 1 \u53F7\u571F\u5F00\u59CB\uFF0C\u5224\u5B9A\u4E3A\u91CD\u590D\u63D0\u4EA4\u4E86\u540C\u4E00\u5B54\u7684\u9001\u6837\u5355\uFF0C\u8BE5\u5B54\u5DF2\u62D2\u7EDD\u5BFC\u5165\uFF0C\u8BF7\u6838\u5BF9\u540E\u5355\u72EC\u5BFC\u5165\u6B63\u786E\u7684\u4E00\u4EFD\uFF1B\u5176\u4F59\u5B54\u5982\u9700\u5BFC\u5165\u8BF7\u5728\u9884\u89C8\u4E2D\u4EBA\u5DE5\u786E\u8BA4\u3002`
       );
+      rejectedHoles.push(group.hole || "(\u7A7A)");
+      continue;
     }
     if (!isMerged) {
       records.push({
@@ -75757,7 +75760,7 @@ function mergeImportedByHole(items) {
       `\u5B54\u53F7 ${group.hole} \u7684 ${group.items.length} \u4EFD\u9001\u6837\u5355\u5DF2\u5408\u5E76\u4E3A 1 \u6761\u8BB0\u5F55`
     );
   }
-  return { records, mergedNotes, errors: uniqueStrings(errors) };
+  return { records, mergedNotes, errors: uniqueStrings(errors), rejectedHoles };
 }
 var FOOTER_KEYWORDS = ["\u9001\u6837\u4EBA", "\u6536\u6837\u4EBA", "\u8BF4\u660E"];
 function normalizeHeader(s) {
@@ -76175,6 +76178,7 @@ async function parseDeliveryFile(buffer) {
   result.records = merged.records;
   result.mergedNotes = merged.mergedNotes;
   result.errors = merged.errors;
+  result.rejectedHoles = merged.rejectedHoles;
   return result;
 }
 // Annotate the CommonJS export names for ESM import in node:

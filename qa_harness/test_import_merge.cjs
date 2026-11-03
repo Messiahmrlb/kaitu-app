@@ -120,39 +120,34 @@ check(
 );
 check('重复起始土号时土样总数不变', duplicateStart.record.samples.length === 4);
 
-// ---------- 重复起始报错（holeExplicit 块都从 1 号土开始） ----------
-// 用户口径：同孔多份送样单若 ≥2 份都从 1 号土开始（如都有 D25-1），报错误级提示，
-// 不阻止合并/导入。注意 soilSeqOf('D25-1') 因「孔号形态」返回 null，
+// ---------- 重复提交拒绝导入（holeExplicit 块都从 1 号土开始） ----------
+// 用户口径（2026-11-03 收紧）：同孔多份送样单若 ≥2 份都从 1 号土开始（如都有 D25-1），
+// 判定为重复提交，**该孔整组拒绝导入**（不合并、不进预览/存档）；
+// rejectedHoles 带出孔号供上层提示。注意 soilSeqOf('D25-1') 因「孔号形态」返回 null，
 // merge 层结合块孔号还原序号（D25 的土号 D25-1 / D25-01 都是 1 号土）。
 const dupStartError = mergeImportedByHole([
   mkItem('D25', 'Sheet1', ['D25-1'], { holeExplicit: true }),
   mkItem('D25', 'Sheet2', ['D25-01'], { holeExplicit: true }),
 ]);
 check(
-  '两块同孔 holeExplicit 且都从 1 号起 → 仍合并为 1 条',
-  dupStartError.records.length === 1 && dupStartError.records[0].sampleCount === 2,
+  '重复提交 → 该孔整组拒绝（0 条记录）',
+  dupStartError.records.length === 0,
   JSON.stringify(dupStartError.records.map((r) => [r.holeCode, r.sampleCount])),
 );
 check(
-  '重复起始合并 → samples 原样拼接 2 条、mergedFrom = 2',
-  dupStartError.records[0].record.samples.length === 2 &&
-    dupStartError.records[0].mergedFrom === 2,
-  `samples=${dupStartError.records[0].record.samples.length}, mergedFrom=${dupStartError.records[0].mergedFrom}`,
+  '重复提交 → rejectedHoles = [D25]',
+  dupStartError.rejectedHoles.length === 1 && dupStartError.rejectedHoles[0] === 'D25',
+  JSON.stringify(dupStartError.rejectedHoles),
 );
 check(
-  '重复起始 → errors 含「都从 1 号土开始」',
-  dupStartError.errors.some((e) => e.includes('都从 1 号土开始')),
+  '重复提交 → errors 含「判定为重复提交」与「拒绝导入」',
+  dupStartError.errors.some((e) => e.includes('判定为重复提交') && e.includes('拒绝导入')),
   JSON.stringify(dupStartError.errors),
 );
 check(
-  '重复起始 error 文案含「第 1、2 份」',
+  '重复提交 error 文案含「第 1、2 份」',
   dupStartError.errors.some((e) => e.includes('第 1、2 份')),
   JSON.stringify(dupStartError.errors),
-);
-check(
-  '重复起始 → 记录级 errors 同样带出',
-  (dupStartError.records[0].errors ?? []).some((e) => e.includes('都从 1 号土开始')),
-  JSON.stringify(dupStartError.records[0].errors),
 );
 
 // 续页继承块（holeExplicit 缺省=false）从 -05 续：即使显式块从 1 起，也不报重复起始错
@@ -178,7 +173,7 @@ check(
   JSON.stringify(startAt3.errors),
 );
 
-// 三块同孔，第 1、3 块从 1 号起（第 2 块从 5 号续）→ 文案含「第 1、3 份」
+// 三块同孔，第 1、3 块从 1 号起（第 2 块从 5 号续）→ 文案含「第 1、3 份」，整孔拒绝
 const threeWithDup = mergeImportedByHole([
   mkItem('D25', 'Sheet1', ['D25-1'], { holeExplicit: true }),
   mkItem('D25', 'Sheet2', ['D25-5'], { holeExplicit: true }),
@@ -190,9 +185,32 @@ check(
   JSON.stringify(threeWithDup.errors),
 );
 check(
-  '三块同孔第 1、3 块从 1 号起 → 仍合并为 1 条 3 条土样',
-  threeWithDup.records.length === 1 && threeWithDup.records[0].sampleCount === 3,
-  JSON.stringify(threeWithDup.records.map((r) => [r.holeCode, r.sampleCount])),
+  '三块同孔第 1、3 块从 1 号起 → 整孔拒绝（0 条记录，rejectedHoles=[D25]）',
+  threeWithDup.records.length === 0 &&
+    threeWithDup.rejectedHoles.length === 1 &&
+    threeWithDup.rejectedHoles[0] === 'D25',
+  JSON.stringify({
+    records: threeWithDup.records.map((r) => [r.holeCode, r.sampleCount]),
+    rejectedHoles: threeWithDup.rejectedHoles,
+  }),
+);
+
+// 重复提交孔被拒绝时，其余孔照常导入（混合孔场景）
+const mixedHoles = mergeImportedByHole([
+  mkItem('D25', 'Sheet1', ['D25-1'], { holeExplicit: true }),
+  mkItem('D25', 'Sheet2', ['D25-01'], { holeExplicit: true }),
+  mkItem('ZK9', 'Sheet3', ['ZK9-1'], { holeExplicit: true }),
+]);
+check(
+  '混合孔：D25 被拒绝、ZK9 照常导入',
+  mixedHoles.records.length === 1 &&
+    mixedHoles.records[0].holeCode === 'ZK9' &&
+    mixedHoles.rejectedHoles.length === 1 &&
+    mixedHoles.rejectedHoles[0] === 'D25',
+  JSON.stringify({
+    records: mixedHoles.records.map((r) => r.holeCode),
+    rejectedHoles: mixedHoles.rejectedHoles,
+  }),
 );
 
 const prefixCase = mergeImportedByHole([

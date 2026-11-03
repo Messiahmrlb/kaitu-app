@@ -54,6 +54,8 @@ export interface DeliveryParseResult {
   errors?: string[];
   /** 同孔合并说明（如「孔号 ZK1-1 的 3 份送样单已合并为 1 条记录」） */
   mergedNotes?: string[];
+  /** 因重复提交被拒绝导入的孔号（上层据此出人工确认门禁） */
+  rejectedHoles?: string[];
 }
 
 /** 送样单子表头中的试验项目标签 → App 内 testItems 取值（顺序即输出顺序） */
@@ -140,19 +142,23 @@ function firstSampleSeq(item: ImportedRecord): number | null {
 }
 
 /**
- * 同一文件内「同孔多表」合并（纯函数）：
+ * 同孔多表合并（纯函数，文件内与跨文件共用）：
  * - 合并键为 `holeCode.trim()`，精确相等（`ZK1` 与 `ZK1-1` 不同孔）；
  * - 空孔号不参与合并，各自独立；
  * - 以第一块为基础（name / mode / engineering / 时间戳沿用第一块），
  *   samples 按块顺序**原样拼接**：土号只做首尾空白裁剪，绝不重排/改写数字
  *   （土号是现场实物编号，导入必须保真；重复编号由来源错误提示，不在合并层修复）；
  * - sheetName 去重后用「、」连接；
- * - warnings / errors / customTestItems 合并去重。
+ * - warnings / errors / customTestItems 合并去重；
+ * - 重复提交（同孔 ≥2 份显式块都从 1 号土开始）→ 该孔整组**拒绝导入**
+ *   （2026-11-03 用户确认），通过 rejectedHoles 通知上层做人工确认门禁。
  */
 export function mergeImportedByHole(items: ImportedRecord[]): {
   records: ImportedRecord[];
   mergedNotes: string[];
   errors: string[];
+  /** 因重复提交被拒绝导入的孔号列表（该孔的送样单一律不进预览/存档） */
+  rejectedHoles: string[];
 } {
   interface Group {
     hole: string;
@@ -160,6 +166,7 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
   }
   const groups: Group[] = [];
   const byHole = new Map<string, Group>();
+  const rejectedHoles: string[] = [];
 
   for (const item of items ?? []) {
     const hole = (item.holeCode ?? '').trim();
@@ -203,18 +210,22 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
       );
     }
 
-    // 重复起始校验：同孔的多份送样单中若 ≥2 份「都从 1 号土开始」，疑似重复提交了
+    // 重复起始校验：同孔的多份送样单中若 ≥2 份「都从 1 号土开始」，判定为重复提交了
     // 同一孔的送样单（如两份都写 D25-1）。只统计 holeExplicit（孔号为单元格显式写）的块：
     // 续页继承块（holeExplicit=false）的土号重开已由 parseOneBlock 的块级校验报错，
-    // 这里不再统计，避免双重报错。错误级提示不阻止合并/导入。
+    // 这里不再统计，避免双重报错。
+    // 2026-11-03 用户确认：重复提交的孔**拒绝导入**（不合并），同批次其余孔也需
+    // 人工确认来源清洁度后才放行（Dialog 层凭 rejectedHoles 出确认勾选）。
     const restartIdx: number[] = [];
     group.items.forEach((x, i) => {
       if (x.holeExplicit && firstSampleSeq(x) === 1) restartIdx.push(i + 1);
     });
     if (restartIdx.length >= 2) {
-      mergedErrors.push(
-        `孔号 ${group.hole || '(空)'} 的第 ${restartIdx.join('、')} 份送样单都从 1 号土开始，疑似重复提交了同一孔的送样单，已按顺序合并，请核对土样是否重复。`,
+      errors.push(
+        `孔号 ${group.hole || '(空)'} 的第 ${restartIdx.join('、')} 份送样单都从 1 号土开始，判定为重复提交了同一孔的送样单，该孔已拒绝导入，请核对后单独导入正确的一份；其余孔如需导入请在预览中人工确认。`,
       );
+      rejectedHoles.push(group.hole || '(空)');
+      continue;
     }
 
     if (!isMerged) {
@@ -261,7 +272,7 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
     );
   }
 
-  return { records, mergedNotes, errors: uniqueStrings(errors) };
+  return { records, mergedNotes, errors: uniqueStrings(errors), rejectedHoles };
 }
 
 /** 表尾标记：命中即视为当前送样单块结束 */
@@ -884,11 +895,13 @@ export async function parseDeliveryFile(buffer: ArrayBuffer): Promise<DeliveryPa
     }
   }
 
-  // 同孔多表合并（同一文件内、孔号精确相等），并汇总合并说明与错误级提示
+  // 同孔多表合并（同一文件内、孔号精确相等），并汇总合并说明与错误级提示；
+  // 重复提交的孔在此被整组拒绝（不进 records），rejectedHoles 供上层出人工确认门禁
   const merged = mergeImportedByHole(result.records);
   result.records = merged.records;
   result.mergedNotes = merged.mergedNotes;
   result.errors = merged.errors;
+  result.rejectedHoles = merged.rejectedHoles;
 
   return result;
 }

@@ -199,13 +199,14 @@ async function parseSheets(sheetDefs) {
   }
 
   // 场景 3：同孔两块表头不一致 → 来源错误级提示，取第一块
+  // 第二块从 2 号土接续（两块都从 1 号起会命中「重复提交拒绝导入」，与本场景无关）
   {
     const res = await parseSheets([
       {
         name: '混合表',
         blocks: [
           { hole: 'ZK3', subHeaders: ALIAS_SUB_HEADERS, soilRows: [[8]] },
-          { hole: 'ZK3', subHeaders: STD_SUB_HEADERS, soilRows: [[10]] },
+          { hole: 'ZK3', subHeaders: STD_SUB_HEADERS, soilRows: [[10]], startSeq: 2 },
         ],
       },
     ]);

@@ -82,9 +82,11 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
       setResultErrors(result.errors ?? []);
       setMergedNotes(result.mergedNotes ?? []);
       if (result.records.length === 0) {
-        const msg = result.warnings.length
-          ? result.warnings.join('；')
-          : '未在文件中识别到送样单工作表，请确认文件是否为土工试验送样单。';
+        const msg = result.rejectedHoles?.length
+          ? '所选送样单均因疑似重复提交被拒绝导入（详见下方红色提示），请核对来源后单独导入正确的一份。'
+          : result.warnings.length
+            ? result.warnings.join('；')
+            : '未在文件中识别到送样单工作表，请确认文件是否为土工试验送样单。';
         setError(msg);
       } else {
         setPreview(result.records);
@@ -146,15 +148,17 @@ export default function ImportDeliveryDialog({ open, onClose, onImport }: Props)
       }
       setProgress({ done: files.length, total: files.length });
 
-      // 跨文件同孔合并（孔号精确相等；含「都从 1 号土开始」重复起始报错）
+      // 跨文件同孔合并（孔号精确相等；重复提交的孔被整组拒绝导入）
       const merged = mergeImportedByHole(allRecords);
       setResultWarnings(fileWarnings);
       setResultErrors(Array.from(new Set(fileErrors)).concat(merged.errors));
       setMergedNotes([...fileNotes, ...merged.mergedNotes]);
       if (merged.records.length === 0) {
-        const msg = fileWarnings.length
-          ? fileWarnings.join('；')
-          : '未在所选文件中识别到送样单工作表，请确认文件是否为土工试验送样单。';
+        const msg = merged.rejectedHoles.length
+          ? '所选送样单均因疑似重复提交被拒绝导入（详见下方红色提示），请核对来源后单独导入正确的一份。'
+          : fileWarnings.length
+            ? fileWarnings.join('；')
+            : '未在所选文件中识别到送样单工作表，请确认文件是否为土工试验送样单。';
         setError(msg);
       } else {
         setPreview(merged.records);
