@@ -75614,6 +75614,29 @@ async function importWithRecovery(loader) {
   }
 }
 
+// src/exportNaming.ts
+function stripLeadingZeros(digits) {
+  return digits.replace(/^0+(?=\d)/, "");
+}
+function normalizeShortNumber(short) {
+  const m = short.match(/^R(\d+)$/);
+  if (m) return `R${stripLeadingZeros(m[1])}`;
+  if (/^\d+$/.test(short)) return stripLeadingZeros(short);
+  return short;
+}
+function stripSoilNumber(holeCode, soilNumber) {
+  const hole = String(holeCode ?? "").trim();
+  const sn = String(soilNumber ?? "").trim();
+  if (!sn) return "";
+  if (hole && sn.startsWith(hole + "-")) return normalizeShortNumber(sn.slice(hole.length + 1));
+  let m = sn.match(/^原(\d+)$/);
+  if (m) return stripLeadingZeros(m[1]);
+  m = sn.match(/^(?:扰|[rR])(\d+)$/);
+  if (m) return `R${stripLeadingZeros(m[1])}`;
+  if (sn.startsWith("-")) return normalizeShortNumber(sn.slice(1));
+  return normalizeShortNumber(sn);
+}
+
 // src/importDelivery.ts
 var TEST_LABEL_MAP = [
   { label: "\u5E38\u89C4\u7269\u6027", item: "\u7269\u6027" },
@@ -75670,6 +75693,31 @@ function firstSampleSeq(item) {
   }
   return seq;
 }
+function dedupeBySoilNumber(hole, samples) {
+  const kept = [];
+  const dropped = [];
+  const seen = /* @__PURE__ */ new Map();
+  for (const s of samples) {
+    const sn = String(s.soilNumber ?? "").trim();
+    const norm = stripSoilNumber(hole, sn);
+    if (!norm) {
+      kept.push(s);
+      continue;
+    }
+    const first = seen.get(norm);
+    if (first !== void 0) {
+      dropped.push({ sn, dupOf: first });
+      continue;
+    }
+    seen.set(norm, sn);
+    kept.push(s);
+  }
+  return { samples: kept, dropped };
+}
+function dedupeErrorText(hole, dropped) {
+  const detail = dropped.map((d) => `${d.sn}\uFF08\u4E0E\u5DF2\u6709\u300C${d.dupOf}\u300D\u91CD\u590D\uFF09`).join("\u3001");
+  return `\u5B54\u53F7 ${hole || "(\u7A7A)"} \u6709 ${dropped.length} \u6761\u91CD\u590D\u7F16\u53F7\u571F\u6837\u5DF2\u820D\u53BB\uFF1A${detail}\uFF1B\u8BF7\u6838\u5BF9\u9001\u6837\u5355\uFF08\u8868\u5C3E\u9644\u6CE8/\u8865\u6837\u6E05\u5355\u5E38\u4E0E\u6B63\u5F0F\u6837\u7F16\u53F7\u91CD\u590D\uFF09\u3002`;
+}
 function mergeImportedByHole(items) {
   const groups = [];
   const byHole = /* @__PURE__ */ new Map();
@@ -75720,8 +75768,17 @@ function mergeImportedByHole(items) {
       continue;
     }
     if (!isMerged) {
+      const { samples: keptSamples, dropped: dropped2 } = dedupeBySoilNumber(
+        group.hole,
+        first.record.samples ?? []
+      );
+      if (dropped2.length > 0) {
+        mergedErrors.push(dedupeErrorText(group.hole, dropped2));
+      }
       records.push({
         ...first,
+        record: dropped2.length > 0 ? { ...first.record, samples: keptSamples } : first.record,
+        sampleCount: keptSamples.length,
         warnings: mergedWarnings,
         errors: mergedErrors,
         mergedFrom: 1
@@ -75729,12 +75786,16 @@ function mergeImportedByHole(items) {
       errors.push(...mergedErrors);
       continue;
     }
-    const samples = group.items.flatMap(
+    const concatenated = group.items.flatMap(
       (x) => (x.record.samples ?? []).map((s) => ({
         ...s,
         soilNumber: (s.soilNumber ?? "").trim()
       }))
     );
+    const { samples, dropped } = dedupeBySoilNumber(group.hole, concatenated);
+    if (dropped.length > 0) {
+      mergedErrors.push(dedupeErrorText(group.hole, dropped));
+    }
     const customTestItems = uniqueStrings(
       group.items.flatMap((x) => x.record.customTestItems ?? [])
     );

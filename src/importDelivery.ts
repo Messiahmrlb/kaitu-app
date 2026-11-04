@@ -4,6 +4,7 @@ import { SOIL_TYPE_A, SOIL_TYPE_B, DEFAULT_SHEAR_LABELS } from './constants';
 import { classifyShearLabel, classifyConsolidationAlias } from './testHeader';
 import { genId, newSample, coupleDisturbance, todayStr } from './utils';
 import { importWithRecovery } from './pwaRecovery';
+import { stripSoilNumber } from './exportNaming';
 
 /**
  * 送样单（电子送样单 / 土工试验送样单 表一）解析逻辑。
@@ -142,6 +143,49 @@ function firstSampleSeq(item: ImportedRecord): number | null {
 }
 
 /**
+ * 组内土号重复舍去（2026-11-03 用户口径）：土号归一（stripSoilNumber，去「原/扰/
+ * 孔号前缀/前导零」）后重复的，**靠后的舍去不导入**，并返回被舍去明细供醒目提示。
+ * 典型场景：送样单表尾附注「原11/原12/原13」（补样清单被复制进每个孔块尾），
+ * 与正式样 11/12/13 撞号——靠后的附注行舍去，正式样原样保留。
+ * 空土号不参与（渲染层有 -seq 兜底，两条空号是合法的）。
+ */
+function dedupeBySoilNumber(
+  hole: string,
+  samples: SoilSample[],
+): { samples: SoilSample[]; dropped: { sn: string; dupOf: string }[] } {
+  const kept: SoilSample[] = [];
+  const dropped: { sn: string; dupOf: string }[] = [];
+  const seen = new Map<string, string>(); // 归一编号 -> 首个原文土号
+  for (const s of samples) {
+    const sn = String(s.soilNumber ?? '').trim();
+    const norm = stripSoilNumber(hole, sn);
+    if (!norm) {
+      kept.push(s);
+      continue;
+    }
+    const first = seen.get(norm);
+    if (first !== undefined) {
+      dropped.push({ sn, dupOf: first });
+      continue;
+    }
+    seen.set(norm, sn);
+    kept.push(s);
+  }
+  return { samples: kept, dropped };
+}
+
+/** 重复舍去的错误级提示文案（醒目、列出冲突明细） */
+function dedupeErrorText(hole: string, dropped: { sn: string; dupOf: string }[]): string {
+  const detail = dropped
+    .map((d) => `${d.sn}（与已有「${d.dupOf}」重复）`)
+    .join('、');
+  return (
+    `孔号 ${hole || '(空)'} 有 ${dropped.length} 条重复编号土样已舍去：${detail}；` +
+    `请核对送样单（表尾附注/补样清单常与正式样编号重复）。`
+  );
+}
+
+/**
  * 同孔多表合并（纯函数，文件内与跨文件共用）：
  * - 合并键为 `holeCode.trim()`，精确相等（`ZK1` 与 `ZK1-1` 不同孔）；
  * - 空孔号不参与合并，各自独立；
@@ -229,8 +273,20 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
     }
 
     if (!isMerged) {
+      // 单块也要做土号重复舍去（典型：块尾附注 原11/原12/原13 与正式样 11/12/13 撞号）
+      const { samples: keptSamples, dropped } = dedupeBySoilNumber(
+        group.hole,
+        first.record.samples ?? [],
+      );
+      if (dropped.length > 0) {
+        mergedErrors.push(dedupeErrorText(group.hole, dropped));
+      }
       records.push({
         ...first,
+        record: dropped.length > 0
+          ? { ...first.record, samples: keptSamples }
+          : first.record,
+        sampleCount: keptSamples.length,
         warnings: mergedWarnings,
         errors: mergedErrors,
         mergedFrom: 1,
@@ -239,12 +295,17 @@ export function mergeImportedByHole(items: ImportedRecord[]): {
       continue;
     }
 
-    const samples = group.items.flatMap((x) =>
+    const concatenated = group.items.flatMap((x) =>
       (x.record.samples ?? []).map((s) => ({
         ...s,
         soilNumber: (s.soilNumber ?? '').trim(),
       })),
     );
+    // 跨块拼接后统一做土号重复舍去（靠后的舍去，醒目提示）
+    const { samples, dropped } = dedupeBySoilNumber(group.hole, concatenated);
+    if (dropped.length > 0) {
+      mergedErrors.push(dedupeErrorText(group.hole, dropped));
+    }
     const customTestItems = uniqueStrings(
       group.items.flatMap((x) => x.record.customTestItems ?? []),
     );

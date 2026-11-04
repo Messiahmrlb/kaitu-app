@@ -70,15 +70,19 @@ const mkItem = (hole, sheetName, soilNumbers, extra = {}) => ({
     r.errors.some((e) => e.includes('都从 1 号土开始')), JSON.stringify(r.errors));
 }
 
-// c) holeExplicit 缺省（旧调用方）→ 不报新错
+// c) holeExplicit 缺省（旧调用方）→ 不触发「重复提交拒绝」；撞号样仍按口径舍去
 {
   const r = mergeImportedByHole([
     mkItem('D25', 'S1', ['D25-1']),
     mkItem('D25', 'S2', ['D25-01']),
   ]);
-  check('c1 holeExplicit 缺省不报重复起始错',
-    r.errors.every((e) => !e.includes('都从 1 号土开始')), JSON.stringify(r.errors));
-  check('c2 缺省时仍正常合并', r.records.length === 1 && r.records[0].sampleCount === 2);
+  check('c1 holeExplicit 缺省不报重复提交拒绝',
+    r.rejectedHoles.length === 0 &&
+      r.errors.every((e) => !e.includes('判定为重复提交')), JSON.stringify(r.errors));
+  check('c2 缺省时撞号的 D25-01 靠后舍去（保留 1 条）',
+    r.records.length === 1 && r.records[0].sampleCount === 1 &&
+      r.errors.some((e) => e.includes('重复编号土样已舍去')),
+    JSON.stringify({ n: r.records[0]?.sampleCount, errors: r.errors }));
 }
 
 // d) 空 holeCode 组不参与合并/报错（各自独立）

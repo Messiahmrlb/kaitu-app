@@ -107,18 +107,24 @@ check(
   twoBlocks.mergedNotes[0],
 );
 
-// 重复起始序号：两块都从 01 开始 → 土号原样保留（绝不重排/改写现场编号），重复由来源错误提示
+// 重复起始序号：两块都从 01 开始 → 2026-11-03 用户口径改为「靠后的重复编号土舍去」：
+// 第二块的 01/02 与第一块归一后撞号，被舍去并报错（不再原样保留 4 条）
 const duplicateStart = mergeImportedByHole([
   mkItem('ZK3-1', 'Sheet1', ['ZK3-1-01', 'ZK3-1-02']),
   mkItem('ZK3-1', 'Sheet2', ['ZK3-1-01', 'ZK3-1-02']),
 ]).records[0];
 check(
-  '重复起始土号原样保留（01,02,01,02，不重排）',
+  '重复编号靠后舍去：只保留第一块的 01,02',
   duplicateStart.record.samples.map((s) => s.soilNumber).join(',') ===
-    'ZK3-1-01,ZK3-1-02,ZK3-1-01,ZK3-1-02',
+    'ZK3-1-01,ZK3-1-02',
   duplicateStart.record.samples.map((s) => s.soilNumber).join(','),
 );
-check('重复起始土号时土样总数不变', duplicateStart.record.samples.length === 4);
+check('重复编号舍去后土样总数 = 2', duplicateStart.record.samples.length === 2);
+check(
+  '重复舍去有醒目 error（含「重复编号土样已舍去」）',
+  (duplicateStart.errors ?? []).some((e) => e.includes('重复编号土样已舍去')),
+  (duplicateStart.errors ?? []).join(' | '),
+);
 
 // ---------- 重复提交拒绝导入（holeExplicit 块都从 1 号土开始） ----------
 // 用户口径（2026-11-03 收紧）：同孔多份送样单若 ≥2 份都从 1 号土开始（如都有 D25-1），
@@ -162,14 +168,20 @@ check(
   JSON.stringify(explicitPlusInherited.errors),
 );
 
-// 两块 holeExplicit 都从 -3 起 → 不报重复起始错
+// 两块 holeExplicit 都从 -3 起 → 不触发「重复提交拒绝」；但 D25-03 与 D25-3 撞号，靠后者舍去
 const startAt3 = mergeImportedByHole([
   mkItem('D25', 'Sheet1', ['D25-3'], { holeExplicit: true }),
   mkItem('D25', 'Sheet2', ['D25-03'], { holeExplicit: true }),
 ]);
 check(
-  '两块 holeExplicit 都从 -3 起 → 不报重复起始错',
-  startAt3.errors.length === 0,
+  '两块 holeExplicit 都从 -3 起 → 不触发重复提交拒绝（rejectedHoles 空）',
+  startAt3.rejectedHoles.length === 0,
+  JSON.stringify(startAt3.rejectedHoles),
+);
+check(
+  '两块从 -3 起 → D25-03 撞号被舍去（归一后与 D25-3 重复）',
+  startAt3.records[0].record.samples.map((s) => s.soilNumber).join(',') === 'D25-3' &&
+    startAt3.errors.some((e) => e.includes('重复编号土样已舍去')),
   JSON.stringify(startAt3.errors),
 );
 
@@ -211,6 +223,60 @@ check(
     records: mixedHoles.records.map((r) => r.holeCode),
     rejectedHoles: mixedHoles.rejectedHoles,
   }),
+);
+
+// ---------- 土号重复舍去（2026-11-03 用户口径：靠后的重复编号土舍去 + 醒目提示） ----------
+// 东白泵站实测场景：块尾附注 原11/原12/原13 与正式样 11/12/13 撞号 → 附注行舍去
+const annexCase = mergeImportedByHole([
+  mkItem('B7', 'Sheet1', ['1', '2', '11', '12', '13', '原11', '原12', '原13']),
+]);
+check(
+  '块尾附注撞号 → 舍去 原11/原12/原13，保留 5 条正式样',
+  annexCase.records[0].record.samples.map((s) => s.soilNumber).join(',') ===
+    '1,2,11,12,13',
+  annexCase.records[0].record.samples.map((s) => s.soilNumber).join(','),
+);
+check(
+  '附注舍去 error 列出冲突明细（原11 与已有「11」重复）',
+  (annexCase.records[0].errors ?? []).some(
+    (e) => e.includes('重复编号土样已舍去') && e.includes('原11（与已有「11」重复）'),
+  ),
+  (annexCase.records[0].errors ?? []).join(' | '),
+);
+check('附注舍去 → sampleCount 同步为 5', annexCase.records[0].sampleCount === 5);
+check('附注舍去 → 顶层 errors 同样带出', annexCase.errors.some((e) => e.includes('重复编号土样已舍去')));
+
+// R 样与数字样归一后不同号，不互相舍去
+const rCase = mergeImportedByHole([
+  mkItem('ZK1', 'Sheet1', ['ZK1-1', 'ZK1-R1']),
+]);
+check(
+  '数字样与 R 样不撞号（都保留）',
+  rCase.records[0].record.samples.length === 2 &&
+    (rCase.records[0].errors ?? []).every((e) => !e.includes('重复编号土样已舍去')),
+  JSON.stringify(rCase.records[0].record.samples.map((s) => s.soilNumber)),
+);
+
+// 空土号不参与舍去（渲染层有 -seq 兜底，两条空号合法）
+const emptySnCase = mergeImportedByHole([
+  mkItem('ZK1', 'Sheet1', ['', 'ZK1-1', '']),
+]);
+check(
+  '空土号不参与重复舍去（3 条全保留）',
+  emptySnCase.records[0].record.samples.length === 3,
+  emptySnCase.records[0].record.samples.length,
+);
+
+// 跨块拼接（多文件/多表）同样生效：第二块的撞号样舍去
+const crossBlockDup = mergeImportedByHole([
+  mkItem('ZK1', 'Sheet1', ['ZK1-1', 'ZK1-2'], { holeExplicit: true }),
+  mkItem('ZK1', 'Sheet2', ['ZK1-3', 'ZK1-2'], { holeExplicit: true }),
+]);
+check(
+  '跨块撞号 → 第二块的 ZK1-2 舍去，保留 1,2,3',
+  crossBlockDup.records[0].record.samples.map((s) => s.soilNumber).join(',') ===
+    'ZK1-1,ZK1-2,ZK1-3' && crossBlockDup.records[0].sampleCount === 3,
+  JSON.stringify(crossBlockDup.records[0].record.samples.map((s) => s.soilNumber)),
 );
 
 const prefixCase = mergeImportedByHole([
@@ -428,22 +494,22 @@ check(
   JSON.stringify(crossSheetContinue.errors),
 );
 
-// 跨工作表：Sheet2 不写孔号、土号从 01 重开 → 仍沿用并合并，但报来源错误
+// 跨工作表：Sheet2 不写孔号、土号从 01 重开 → 仍沿用并合并；重复的 01/02 按新口径舍去
 const crossSheetRestart = await parseSheets([
   { name: 'Sheet1', blocks: [{ hole: 'ZK2-1', soilNumbers: ['ZK2-1-01', 'ZK2-1-02'] }] },
   { name: 'Sheet2', blocks: [{ hole: '', soilNumbers: ['ZK2-1-01', 'ZK2-1-02'] }] },
 ]);
 check(
-  '跨工作表无孔号 + 土号从 1 重开 → 仍合并为 1 条 4 条土样',
+  '跨工作表无孔号 + 土号从 1 重开 → 仍合并为 1 条；重复编号靠后舍去后剩 2 条',
   crossSheetRestart.records.length === 1 &&
     crossSheetRestart.records[0].holeCode === 'ZK2-1' &&
-    crossSheetRestart.records[0].sampleCount === 4 &&
+    crossSheetRestart.records[0].sampleCount === 2 &&
     crossSheetRestart.records[0].mergedFrom === 2,
   JSON.stringify(crossSheetRestart.records.map((r) => [r.holeCode, r.sampleCount, r.mergedFrom])),
 );
 check(
-  '跨工作表土号重开 → 有 1 条来源 error',
-  (crossSheetRestart.errors ?? []).length === 1,
+  '跨工作表土号重开 → 有块级来源 error + 重复舍去 error 共 2 条',
+  (crossSheetRestart.errors ?? []).length === 2,
   JSON.stringify(crossSheetRestart.errors),
 );
 const crossRestartError = (crossSheetRestart.errors ?? [])[0] ?? '';
@@ -452,6 +518,11 @@ check(
   crossRestartError.includes('已按沿用「ZK2-1」合并') &&
     crossRestartError.includes('疑似送样单来源有误'),
   crossRestartError,
+);
+check(
+  '跨表重复舍去 error 含「重复编号土样已舍去」',
+  (crossSheetRestart.errors ?? []).some((e) => e.includes('重复编号土样已舍去')),
+  JSON.stringify(crossSheetRestart.errors),
 );
 
 console.log(`\nimport merge 测试：${pass} 通过 / ${fail} 失败`);
