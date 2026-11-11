@@ -41923,6 +41923,11 @@ function buildPdfPages(record) {
 function combinedSoilDisplay(holeCode, s, holeSeq) {
   return mergedSoilNumber(holeCode, s.soilNumber) || `${holeCode}-${holeSeq}`;
 }
+function combinedSoilDisplayAt(holeCode, s, holeSeq) {
+  if (holeSeq === 1) return combinedSoilDisplay(holeCode, s, holeSeq);
+  const short = stripSoilNumber(holeCode, s.soilNumber);
+  return short ? `-${short}` : `-${holeSeq}`;
+}
 function fillSegment(seg) {
   const mode = seg[0].mode;
   const headerRecord = seg[0];
@@ -41942,7 +41947,7 @@ function fillSegment(seg) {
     if (n + sep <= remaining) {
       const base = ROWS_PER_PAGE - remaining + sep;
       for (let i = 0; i < n; i++) {
-        fillRow(cells, base + i, samples[i], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[i], i + 1));
+        fillRow(cells, base + i, samples[i], mode, i + 1, testKeys, holeCode, combinedSoilDisplayAt(holeCode, samples[i], i + 1));
       }
       remaining -= n + sep;
       continue;
@@ -41956,7 +41961,7 @@ function fillSegment(seg) {
       const c = {};
       for (let i = 0; i < ROWS_PER_PAGE; i++) {
         const idx = p * ROWS_PER_PAGE + i;
-        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplayAt(holeCode, samples[idx], idx + 1));
       }
       pages.push({ cells: c, mode, dateText, headerRecord });
     }
@@ -41964,7 +41969,7 @@ function fillSegment(seg) {
       const c = {};
       for (let i = 0; i < tail; i++) {
         const idx = fullPages * ROWS_PER_PAGE + i;
-        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplayAt(holeCode, samples[idx], idx + 1));
       }
       pages.push({ cells: c, mode, dateText, headerRecord });
       cells = c;

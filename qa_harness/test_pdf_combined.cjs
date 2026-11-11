@@ -4,8 +4,11 @@
 //   分段：A/B 两种鉴别模式表头列不同，不同模式的孔不混表（各模式独立装填）
 //   装填：小孔拼入当前页剩余行；剩余行装不下整孔 → 该孔整体另起新页（孔不拆页）
 //   大孔：土样 >23 条独占 ceil(n/23) 页（自然分页），尾页剩余行留给后续孔接续
-//   土号：mergedSoilNumber 带孔号前缀（-1→ZK1-1、原2→ZK1-2、1→ZK2-1 去前导零）；
-//         空土号按孔内序号兜底 ZK3-1
+//   土号：每孔第 1 条带孔号前缀（mergedSoilNumber：-1→ZK1-1、原2→ZK1-2、
+//         1→ZK2-1 去前导零），其余土短编号（-2 / -R1，与单孔导出同款；
+//         2026-11-03 用户反馈：全带前缀时孔号超出列宽出格）；大孔自然分页的
+//         续页行序号 >1 不带孔号（严格按用户规则：只有每孔第一个土标孔号）；
+//         空土号按孔内序号兜底：首样 ZK3-1、其余 -2
 //   开土日期：段内所有孔日期一致 → 该日期；不一致 → ''（留空手填）
 //   其余列：与 fillRow 完全一致（颜色/野外记录/扰动√ 等照常落格）
 //
@@ -96,23 +99,24 @@ const soilCell = (page, row) => page.cells[key(row, 1)] ?? '';
   check('用例1：dateTexts 全为段内统一日期', JSON.stringify(dateTexts) === JSON.stringify(['2026-11-01', '2026-11-01', '2026-11-01', '2026-11-01']), JSON.stringify(dateTexts));
 
   // 第 1 页：ZK1 的 5 行（行0-4）+ 1 行孔间分隔空行（行5）+ ZK2 的 7 行（行6-12）
-  check('用例1：页1 行0 = ZK1-1', soilCell(pages[0], 0) === 'ZK1-1', soilCell(pages[0], 0));
-  check('用例1：页1 行4 = ZK1-5', soilCell(pages[0], 4) === 'ZK1-5', soilCell(pages[0], 4));
+  // 新土号规则：每孔首行带孔号前缀，其余短编号 -N
+  check('用例1：页1 行0 = ZK1-1（孔首样带孔号）', soilCell(pages[0], 0) === 'ZK1-1', soilCell(pages[0], 0));
+  check('用例1：页1 行4 = -5（非首样短编号）', soilCell(pages[0], 4) === '-5', soilCell(pages[0], 4));
   check('用例1：页1 行5 留空（孔间分隔行）', soilCell(pages[0], 5) === '', JSON.stringify(soilCell(pages[0], 5)));
-  check('用例1：页1 行6 = ZK2-1（分隔行后孔2 接续拼入）', soilCell(pages[0], 6) === 'ZK2-1', soilCell(pages[0], 6));
-  check('用例1：页1 行12 = ZK2-7', soilCell(pages[0], 12) === 'ZK2-7', soilCell(pages[0], 12));
+  check('用例1：页1 行6 = ZK2-1（分隔行后孔2 接续，孔首样带孔号）', soilCell(pages[0], 6) === 'ZK2-1', soilCell(pages[0], 6));
+  check('用例1：页1 行12 = -7（非首样短编号）', soilCell(pages[0], 12) === '-7', soilCell(pages[0], 12));
   check('用例1：页1 行13 留空（剩 10 行装不下 30+1 分隔行的孔3）', soilCell(pages[0], 13) === '', JSON.stringify(soilCell(pages[0], 13)));
 
   // 第 2 页：孔3 前 23 条；第 3 页：孔3 尾 7 条
-  check('用例1：页2 行0 = ZK3-1（大孔整孔另起新页，不拆页）', soilCell(pages[1], 0) === 'ZK3-1', soilCell(pages[1], 0));
-  check('用例1：页2 行22 = ZK3-23', soilCell(pages[1], 22) === 'ZK3-23', soilCell(pages[1], 22));
-  check('用例1：页3 行0 = ZK3-24（自然分页续行）', soilCell(pages[2], 0) === 'ZK3-24', soilCell(pages[2], 0));
-  check('用例1：页3 行6 = ZK3-30', soilCell(pages[2], 6) === 'ZK3-30', soilCell(pages[2], 6));
+  check('用例1：页2 行0 = ZK3-1（大孔整孔另起新页，孔首样带孔号）', soilCell(pages[1], 0) === 'ZK3-1', soilCell(pages[1], 0));
+  check('用例1：页2 行22 = -23（非首样短编号）', soilCell(pages[1], 22) === '-23', soilCell(pages[1], 22));
+  check('用例1：页3 行0 = -24（自然分页续行，孔内序号>1 不带孔号——预期行为）', soilCell(pages[2], 0) === '-24', soilCell(pages[2], 0));
+  check('用例1：页3 行6 = -30（非首样短编号）', soilCell(pages[2], 6) === '-30', soilCell(pages[2], 6));
   check('用例1：页3 行7 留空（尾页剩 16 行，无后续 A 孔）', soilCell(pages[2], 7) === '');
 
   // 第 4 页：B 孔独立一页
-  check('用例1：页4 行0 = ZK4-1', soilCell(pages[3], 0) === 'ZK4-1', soilCell(pages[3], 0));
-  check('用例1：页4 行3 = ZK4-4', soilCell(pages[3], 3) === 'ZK4-4', soilCell(pages[3], 3));
+  check('用例1：页4 行0 = ZK4-1（孔首样带孔号）', soilCell(pages[3], 0) === 'ZK4-1', soilCell(pages[3], 0));
+  check('用例1：页4 行3 = -4（非首样短编号）', soilCell(pages[3], 3) === '-4', soilCell(pages[3], 3));
   check('用例1：页4 headerRecord 为 B 段第一条记录（表头列来源）', pages[3].headerRecord.id === 'r4', pages[3].headerRecord.id);
   check('用例1：页1 headerRecord 为 A 段第一条记录', pages[0].headerRecord.id === 'r1', pages[0].headerRecord.id);
 }
@@ -122,11 +126,11 @@ const soilCell = (page, row) => page.cells[key(row, 1)] ?? '';
   const recs = [mkRecord('r1', 'ZK1', mkSamples(20)), mkRecord('r2', 'ZK2', mkSamples(5))];
   const { pages } = pdf.buildCombinedPdfPages(recs);
   check('用例2：总 2 页', pages.length === 2, String(pages.length));
-  check('用例2：页1 行0 = ZK1-1', soilCell(pages[0], 0) === 'ZK1-1', soilCell(pages[0], 0));
-  check('用例2：页1 行19 = ZK1-20', soilCell(pages[0], 19) === 'ZK1-20', soilCell(pages[0], 19));
+  check('用例2：页1 行0 = ZK1-1（孔首样带孔号）', soilCell(pages[0], 0) === 'ZK1-1', soilCell(pages[0], 0));
+  check('用例2：页1 行19 = -20（非首样短编号）', soilCell(pages[0], 19) === '-20', soilCell(pages[0], 19));
   check('用例2：页1 行20 留空（剩 3 行装不下 5+1 分隔行的孔2）', soilCell(pages[0], 20) === '');
-  check('用例2：页2 行0 = ZK2-1（孔2 整体新页，未被拦腰拆开）', soilCell(pages[1], 0) === 'ZK2-1', soilCell(pages[1], 0));
-  check('用例2：页2 行4 = ZK2-5', soilCell(pages[1], 4) === 'ZK2-5', soilCell(pages[1], 4));
+  check('用例2：页2 行0 = ZK2-1（孔2 整体新页，未被拦腰拆开；孔首样带孔号）', soilCell(pages[1], 0) === 'ZK2-1', soilCell(pages[1], 0));
+  check('用例2：页2 行4 = -5（非首样短编号）', soilCell(pages[1], 4) === '-5', soilCell(pages[1], 4));
 }
 
 // ---------- 3. 大孔尾页接续：孔1 26 条（23+3，尾页剩 20）+ 孔2 5 条（分隔 1 行） ----------
@@ -134,29 +138,29 @@ const soilCell = (page, row) => page.cells[key(row, 1)] ?? '';
   const recs = [mkRecord('r1', 'ZK1', mkSamples(26)), mkRecord('r2', 'ZK2', mkSamples(5))];
   const { pages } = pdf.buildCombinedPdfPages(recs);
   check('用例3：总 2 页（孔2 接续在孔1 尾页，不新开页）', pages.length === 2, String(pages.length));
-  check('用例3：页2 行0 = ZK1-24', soilCell(pages[1], 0) === 'ZK1-24', soilCell(pages[1], 0));
-  check('用例3：页2 行2 = ZK1-26', soilCell(pages[1], 2) === 'ZK1-26', soilCell(pages[1], 2));
+  check('用例3：页2 行0 = -24（大孔续页行，孔内序号>1 不带孔号——预期行为）', soilCell(pages[1], 0) === '-24', soilCell(pages[1], 0));
+  check('用例3：页2 行2 = -26（非首样短编号）', soilCell(pages[1], 2) === '-26', soilCell(pages[1], 2));
   check('用例3：页2 行3 留空（接续孔前的分隔行）', soilCell(pages[1], 3) === '', JSON.stringify(soilCell(pages[1], 3)));
-  check('用例3：页2 行4 = ZK2-1（落在孔1 尾页分隔行之后）', soilCell(pages[1], 4) === 'ZK2-1', soilCell(pages[1], 4));
-  check('用例3：页2 行8 = ZK2-5', soilCell(pages[1], 8) === 'ZK2-5', soilCell(pages[1], 8));
+  check('用例3：页2 行4 = ZK2-1（落在孔1 尾页分隔行之后，孔首样带孔号）', soilCell(pages[1], 4) === 'ZK2-1', soilCell(pages[1], 4));
+  check('用例3：页2 行8 = -5（非首样短编号）', soilCell(pages[1], 8) === '-5', soilCell(pages[1], 8));
 }
 
-// ---------- 4. 土号前缀：mergedSoilNumber 归一 ----------
+// ---------- 4. 土号前缀：孔首样 mergedSoilNumber 归一、非首样短编号 ----------
 {
   const recs = [
     mkRecord('r1', 'ZK1', [mkSample('-1'), mkSample('原2')]),
     mkRecord('r2', 'ZK2', [mkSample('1'), mkSample('R01')]),
   ];
   const { pages } = pdf.buildCombinedPdfPages(recs);
-  check('用例4：样 -1 → ZK1-1', soilCell(pages[0], 0) === 'ZK1-1', soilCell(pages[0], 0));
-  check('用例4：样 原2 → ZK1-2（去「原」字）', soilCell(pages[0], 1) === 'ZK1-2', soilCell(pages[0], 1));
+  check('用例4：样 -1 → ZK1-1（孔首样带孔号）', soilCell(pages[0], 0) === 'ZK1-1', soilCell(pages[0], 0));
+  check('用例4：样 原2 → -2（非首样短编号，去「原」字）', soilCell(pages[0], 1) === '-2', soilCell(pages[0], 1));
   check('用例4：行2 留空（孔间分隔行）', soilCell(pages[0], 2) === '', soilCell(pages[0], 2));
-  check('用例4：孔 ZK2 样 1 → ZK2-1（分隔行后首行）', soilCell(pages[0], 3) === 'ZK2-1', soilCell(pages[0], 3));
-  check('用例4：样 R01 → ZK2-R1（R 前缀 + 去前导零）', soilCell(pages[0], 4) === 'ZK2-R1', soilCell(pages[0], 4));
-  // 已带孔号前缀的原样保留（去前导零）：ZK3-01 → ZK3-1
+  check('用例4：孔 ZK2 样 1 → ZK2-1（分隔行后首行，孔首样带孔号）', soilCell(pages[0], 3) === 'ZK2-1', soilCell(pages[0], 3));
+  check('用例4：样 R01 → -R1（非首样短编号：R 前缀 + 去前导零）', soilCell(pages[0], 4) === '-R1', soilCell(pages[0], 4));
+  // 已带孔号前缀的原样保留（去前导零）：ZK3-01 → ZK3-1（单样孔 = 孔首样）
   const rec3 = mkRecord('r3', 'ZK3', [mkSample('ZK3-01')]);
   const r3 = pdf.buildCombinedPdfPages([rec3]);
-  check('用例4：样 ZK3-01 → ZK3-1（已有前缀归一）', soilCell(r3.pages[0], 0) === 'ZK3-1', soilCell(r3.pages[0], 0));
+  check('用例4：样 ZK3-01 → ZK3-1（已有前缀归一，孔首样带孔号）', soilCell(r3.pages[0], 0) === 'ZK3-1', soilCell(r3.pages[0], 0));
 }
 
 // ---------- 5. 开土日期：段内一致显示、不一致留空 ----------
@@ -184,12 +188,17 @@ const soilCell = (page, row) => page.cells[key(row, 1)] ?? '';
   check('用例5：一孔日期为空 → 留空', c.dateTexts[0] === '', c.dateTexts[0]);
 }
 
-// ---------- 6. 空土号回退：ZK3-<孔内序号> ----------
+// ---------- 6. 空土号回退：首样 ZK3-1、其余 -<孔内序号> ----------
 {
   const recs = [mkRecord('r1', 'ZK3', [mkSample(''), mkSample('原2')])];
   const { pages } = pdf.buildCombinedPdfPages(recs);
-  check('用例6：空土号第 1 条 → ZK3-1', soilCell(pages[0], 0) === 'ZK3-1', soilCell(pages[0], 0));
-  check('用例6：空土号第 2 条 → ZK3-2（孔内序号兜底）', soilCell(pages[0], 1) === 'ZK3-2', soilCell(pages[0], 1));
+  check('用例6：空土号第 1 条 → ZK3-1（首样带孔号兜底）', soilCell(pages[0], 0) === 'ZK3-1', soilCell(pages[0], 0));
+  check('用例6：样 原2 → -2（非首样短编号去「原」字）', soilCell(pages[0], 1) === '-2', soilCell(pages[0], 1));
+
+  // 全空土号：首样回退 ZK3-1，其余回退 -2（短编号口径）
+  const allEmpty = [mkRecord('r1', 'ZK3', [mkSample(''), mkSample('')])];
+  const b = pdf.buildCombinedPdfPages(allEmpty);
+  check('用例6：全空土号 首→ZK3-1 / 次→-2', soilCell(b.pages[0], 0) === 'ZK3-1' && soilCell(b.pages[0], 1) === '-2', `${soilCell(b.pages[0], 0)}/${soilCell(b.pages[0], 1)}`);
 }
 
 // ---------- 7. 其余列与 fillRow 完全一致（勾选√、颜色、野外记录、扰动） ----------
@@ -260,11 +269,11 @@ const soilCell = (page, row) => page.cells[key(row, 1)] ?? '';
     mkRecord('r2', 'ZK2', mkSamples(5)),
   ]);
   check('用例9a：两小孔同页（1 页）', a.pages.length === 1, String(a.pages.length));
-  check('用例9a：页首孔前无空行（行0 = ZK1-1）', soilCell(a.pages[0], 0) === 'ZK1-1', soilCell(a.pages[0], 0));
-  check('用例9a：行4 = ZK1-5', soilCell(a.pages[0], 4) === 'ZK1-5', soilCell(a.pages[0], 4));
+  check('用例9a：页首孔前无空行（行0 = ZK1-1，孔首样带孔号）', soilCell(a.pages[0], 0) === 'ZK1-1', soilCell(a.pages[0], 0));
+  check('用例9a：行4 = -5（非首样短编号）', soilCell(a.pages[0], 4) === '-5', soilCell(a.pages[0], 4));
   check('用例9a：行5 = 孔间空白分隔行', soilCell(a.pages[0], 5) === '', soilCell(a.pages[0], 5));
-  check('用例9a：行6 = ZK2-1（分隔行后接续）', soilCell(a.pages[0], 6) === 'ZK2-1', soilCell(a.pages[0], 6));
-  check('用例9a：行10 = ZK2-5', soilCell(a.pages[0], 10) === 'ZK2-5', soilCell(a.pages[0], 10));
+  check('用例9a：行6 = ZK2-1（分隔行后接续，孔首样带孔号）', soilCell(a.pages[0], 6) === 'ZK2-1', soilCell(a.pages[0], 6));
+  check('用例9a：行10 = -5（非首样短编号）', soilCell(a.pages[0], 10) === '-5', soilCell(a.pages[0], 10));
   check('用例9a：行11 起留空', soilCell(a.pages[0], 11) === '' && soilCell(a.pages[0], 22) === '');
 
   // b. 两孔合计恰好 23 行：23+1 分隔行 > 23 → 被迫换页（正确行为）
@@ -281,8 +290,8 @@ const soilCell = (page, row) => page.cells[key(row, 1)] ?? '';
   ]);
   check('用例9b：对照 12+10+1 分隔 = 23 → 恰好同页（1 页）', b2.pages.length === 1, String(b2.pages.length));
   check('用例9b：对照页 行12 = 分隔行', soilCell(b2.pages[0], 12) === '', soilCell(b2.pages[0], 12));
-  check('用例9b：对照页 行13 = ZK2-1', soilCell(b2.pages[0], 13) === 'ZK2-1', soilCell(b2.pages[0], 13));
-  check('用例9b：对照页 行22 = ZK2-10（占满整页）', soilCell(b2.pages[0], 22) === 'ZK2-10', soilCell(b2.pages[0], 22));
+  check('用例9b：对照页 行13 = ZK2-1（孔首样带孔号）', soilCell(b2.pages[0], 13) === 'ZK2-1', soilCell(b2.pages[0], 13));
+  check('用例9b：对照页 行22 = -10（占满整页，非首样短编号）', soilCell(b2.pages[0], 22) === '-10', soilCell(b2.pages[0], 22));
 
   // c. 大孔自然分页后，尾页接续孔前有分隔行
   const c = pdf.buildCombinedPdfPages([
@@ -290,9 +299,9 @@ const soilCell = (page, row) => page.cells[key(row, 1)] ?? '';
     mkRecord('r2', 'ZK2', mkSamples(3)),
   ]);
   check('用例9c：大孔尾页接续（2 页）', c.pages.length === 2, String(c.pages.length));
-  check('用例9c：页2 行0-2 = ZK1-24..26', soilCell(c.pages[1], 0) === 'ZK1-24' && soilCell(c.pages[1], 2) === 'ZK1-26');
+  check('用例9c：页2 行0-2 = -24..-26（大孔续页行不带孔号——预期行为：只有每孔第一个土标孔号）', soilCell(c.pages[1], 0) === '-24' && soilCell(c.pages[1], 2) === '-26');
   check('用例9c：页2 行3 = 接续孔前分隔行', soilCell(c.pages[1], 3) === '', soilCell(c.pages[1], 3));
-  check('用例9c：页2 行4 = ZK2-1', soilCell(c.pages[1], 4) === 'ZK2-1', soilCell(c.pages[1], 4));
+  check('用例9c：页2 行4 = ZK2-1（孔首样带孔号）', soilCell(c.pages[1], 4) === 'ZK2-1', soilCell(c.pages[1], 4));
 
   // d. 分隔行是「完全空白行」：该行任何列都不应有数据（抽查土号/颜色/备注列）
   const d = pdf.buildCombinedPdfPages([

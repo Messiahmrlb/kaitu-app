@@ -5,7 +5,8 @@
  * ① 打开导出 PDF 对话框：合并开关存在、默认不勾选
  * ② 勾选「多孔合并同页」→ 导出 → 拦下离屏 pdf-page DOM
  * ③ 断言：只捕获 1 页；同一页表格内两孔之间有 1 个空白分隔行（行3）；
- *    ZK1-1..ZK1-3（含空土号回退）+ ZK2-1/ZK2-R1；信息行开土日期为覆盖日期
+ *    土号新规则（2026-11-03）：孔首样带孔号 ZK1-1/ZK2-1，其余短编号 -2/-3/-R1；
+ *    信息行开土日期为覆盖日期
  * ④ 无运行时异常。
  *
  * 运行：先起 preview（npx vite preview --port 4199），再 node qa_harness/_emit/probe_pdf_combined.mjs
@@ -235,11 +236,12 @@ async function main() {
       // 土号列是每行第 1 格：行内 39 格一组，土号在索引 0, 39, 78, ...
       // （23 行固定渲染，未填行本来就是空 td；行3 为孔间空白分隔行）
       const soilNums = tds.filter((_, i) => i % 39 === 0);
-      check('页内前 6 行土号 = ZK1-1,ZK1-2,ZK1-3,空,ZK2-1,ZK2-R1（行3 为孔间分隔行）', JSON.stringify(soilNums.slice(0, 6)) === JSON.stringify(['ZK1-1', 'ZK1-2', 'ZK1-3', '', 'ZK2-1', 'ZK2-R1']), JSON.stringify(soilNums.slice(0, 6)));
+      // 新土号规则：每孔首样带孔号前缀，其余短编号（-2/-3/-R1）
+      check('页内前 6 行土号 = ZK1-1,-2,-3,空,ZK2-1,-R1（行3 为孔间分隔行）', JSON.stringify(soilNums.slice(0, 6)) === JSON.stringify(['ZK1-1', '-2', '-3', '', 'ZK2-1', '-R1']), JSON.stringify(soilNums.slice(0, 6)));
       check('行3 恰为孔间空白分隔行（两孔之间空一行）', soilNums[3] === '', soilNums[3]);
       check('第 7 行起留空（两孔拼表后其余为空行）', soilNums.slice(6).every((v) => v === ''), JSON.stringify(soilNums.slice(6)));
-      check('空土号回退 ZK1-3（孔内序号）', soilNums.includes('ZK1-3'));
-      check('扰1 → ZK2-R1（R 前缀 + 孔号前缀）', soilNums.includes('ZK2-R1'));
+      check('空土号回退 -3（孔内序号，非首样短编号）', soilNums.includes('-3'));
+      check('扰1 → -R1（非首样短编号：R 前缀，不带孔号）', soilNums.includes('-R1'));
 
       const infoText = await evalJs(`
         (() => {

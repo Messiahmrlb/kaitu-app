@@ -71,7 +71,8 @@ export interface PdfPage {
 /** 把一条土样按 39 列数据映射写入某页某行的单元格；seq 为该土样在全记录中的序号（1 起）；
  *  testKeys 为该记录 8 个试验列的数据键（固结/剪切列显示名可按记录覆盖，见 recordTestColumns）；
  *  holeCode 为孔号（土号去前缀时使用）；
- *  soilNumberDisplay 为合并表模式的土号列覆盖值（已带孔号前缀，直接原样落格）；
+ *  soilNumberDisplay 为合并表模式的土号列覆盖值：每孔第 1 条带孔号前缀（ZK1-1），
+ *  其余为短编号（-2 / -R1，见 combinedSoilDisplayAt），均由调用方算好直接落格；
  *  不传（undefined）时保持单孔导出的短编号规则，行为逐字不变 */
 function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number, testKeys: string[], holeCode: string, soilNumberDisplay?: string): void {
   const set = (col: number, v: string): void => {
@@ -84,8 +85,8 @@ function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode
   // 数字编号跳过 R 样顺位（数字样显示忠实于归一结果，App 内插入重排后即连续）。
   // 土号未填时按行序兜底 -1、-2…。
   if (soilNumberDisplay !== undefined) {
-    // 多孔合并同页模式：土号已由调用方按 mergedSoilNumber 归一成带孔号前缀的
-    // 完整编号（ZK1-1 / ZK2-R1），跨孔不重号，直接原样落格、不再二次加工
+    // 多孔合并同页模式：土号已由调用方按 combinedSoilDisplayAt 算好
+    // （孔内首样 ZK1-1 / 其余 -2、-R1），直接原样落格、不再二次加工
     set(1, soilNumberDisplay);
   } else {
     const short = stripSoilNumber(holeCode, s.soilNumber);
@@ -162,6 +163,23 @@ function combinedSoilDisplay(holeCode: string, s: SoilSample, holeSeq: number): 
 }
 
 /**
+ * 合并表土号列显示值（按孔内序号二分，2026-11-11 用户反馈新规则）：
+ * - 孔内第 1 条土：带孔号前缀（{@link combinedSoilDisplay}，ZK1-1 / ZK2-R1）——
+ *   每孔首行标孔号即可辨识归属；
+ * - 其余土：改用短编号（与单孔导出同款 stripSoilNumber → -2 / -R1）——
+ *   全带孔号前缀时孔号会超出列宽（出格），且满页前缀看着乱；
+ * - 空土号：首样回退 `${holeCode}-${holeSeq}`，其余回退 `-${holeSeq}`（各保口径）。
+ * 跨孔归属靠空白分隔行 + 每孔首行孔号辨识，语义不变。
+ *
+ * @param holeSeq 孔内全序号（1 起，跨页连续计，不是页内行号）
+ */
+function combinedSoilDisplayAt(holeCode: string, s: SoilSample, holeSeq: number): string {
+  if (holeSeq === 1) return combinedSoilDisplay(holeCode, s, holeSeq);
+  const short = stripSoilNumber(holeCode, s.soilNumber);
+  return short ? `-${short}` : `-${holeSeq}`;
+}
+
+/**
  * 一个模式段内的装填（孔不拆页核心算法）：
  * - 当前页剩余行装得下「整孔 + 孔间分隔空行」→ 整孔接续装入（小孔拼表省纸）；
  *   孔落在已有内容的页上时，其前面先放 1 个完全空白行（用户增量需求：
@@ -196,7 +214,8 @@ function fillSegment(seg: SoilRecord[]): CombinedPdfPage[] {
       // 整孔装入当前页剩余行（基行 = 已占用行数 + 分隔行）
       const base = ROWS_PER_PAGE - remaining + sep;
       for (let i = 0; i < n; i++) {
-        fillRow(cells as Record<number, string>, base + i, samples[i], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[i], i + 1));
+        // 土号：孔内第 1 条带孔号前缀，其余短编号（combinedSoilDisplayAt 新规则）
+        fillRow(cells as Record<number, string>, base + i, samples[i], mode, i + 1, testKeys, holeCode, combinedSoilDisplayAt(holeCode, samples[i], i + 1));
       }
       remaining -= n + sep;
       continue;
@@ -212,7 +231,8 @@ function fillSegment(seg: SoilRecord[]): CombinedPdfPage[] {
       const c: Record<number, string> = {};
       for (let i = 0; i < ROWS_PER_PAGE; i++) {
         const idx = p * ROWS_PER_PAGE + i;
-        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+        // idx+1 为孔内全序号（跨页连续计），非页内行号——首样判断必须用它
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplayAt(holeCode, samples[idx], idx + 1));
       }
       pages.push({ cells: c, mode, dateText, headerRecord });
     }
@@ -220,7 +240,8 @@ function fillSegment(seg: SoilRecord[]): CombinedPdfPage[] {
       const c: Record<number, string> = {};
       for (let i = 0; i < tail; i++) {
         const idx = fullPages * ROWS_PER_PAGE + i;
-        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+        // idx+1 为孔内全序号（跨页连续计），非页内行号——续页行序号 >1 不带孔号
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplayAt(holeCode, samples[idx], idx + 1));
       }
       pages.push({ cells: c, mode, dateText, headerRecord });
       cells = c;
@@ -240,7 +261,8 @@ function fillSegment(seg: SoilRecord[]): CombinedPdfPage[] {
  *
  * 装填规则：见 {@link fillSegment}——孔不拆页，小孔拼表，大孔自然分页；
  * 孔间放 1 个空白分隔行（用户增量需求：两孔之间空一行方便看，空行计入 23 行）。
- * 土号列带孔号前缀（mergedSoilNumber），空土号按孔内序号兜底。
+ * 土号列：每孔第 1 条带孔号前缀（mergedSoilNumber），其余短编号（-2 / -R1，
+ * 2026-11-11 用户反馈：全带前缀时孔号超出列宽出格）；空土号按各自口径兜底。
  */
 export function buildCombinedPdfPages(records: SoilRecord[]): CombinedPdfPages {
   // 按模式分组（保持模式首次出现顺序；组内保持传入顺序）
@@ -574,7 +596,8 @@ export interface RecordsPdfOptions {
    * 多孔合并同页（小孔拼表省纸）：
    * - 相同鉴别模式的孔拼入同一张 23 行表（不同模式表头列不同，不混表）；
    * - 孔不拆页：剩余行装不下整孔时该孔整体另起新页；
-   * - 土号带孔号前缀（ZK1-1 / ZK2-R1），跨孔不重号；
+   * - 土号：每孔第 1 条带孔号前缀（ZK1-1 / ZK2-R1）辨识归属，
+   *   其余土用短编号（-2 / -R1，与单孔导出同款）——全带前缀时孔号会出格；
    * - 缺省 / false → 现有行为（每孔从新页开始），逐字不变。
    */
   combine?: boolean;
