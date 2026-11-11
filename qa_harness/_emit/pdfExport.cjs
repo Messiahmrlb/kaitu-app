@@ -41626,6 +41626,7 @@ var require_jspdf_node_min = __commonJS({
 // src/pdfExport.ts
 var pdfExport_exports = {};
 __export(pdfExport_exports, {
+  buildCombinedPdfPages: () => buildCombinedPdfPages,
   buildMergedPdfFileName: () => buildMergedPdfFileName,
   buildPdfPages: () => buildPdfPages,
   buildRecordPdfBlob: () => buildRecordPdfBlob,
@@ -41804,6 +41805,16 @@ function stripSoilNumber(holeCode, soilNumber) {
   if (sn.startsWith("-")) return normalizeShortNumber(sn.slice(1));
   return normalizeShortNumber(sn);
 }
+var NORMALIZABLE_SN = /^(?:原\d+|扰\d+|[rR]\d+|-?\d+)$/;
+function mergedSoilNumber(holeCode, soilNumber) {
+  const hole = String(holeCode ?? "").trim();
+  const sn = String(soilNumber ?? "").trim();
+  if (!hole || !sn) return sn;
+  if (sn.startsWith(hole + "-")) return `${hole}-${normalizeShortNumber(sn.slice(hole.length + 1))}`;
+  if (sn.startsWith(hole)) return sn;
+  if (!NORMALIZABLE_SN.test(sn)) return sn;
+  return `${hole}-${stripSoilNumber(hole, sn)}`;
+}
 
 // src/pdfExport.ts
 var PT = 4 / 3;
@@ -41861,13 +41872,17 @@ var TOTAL_COLS = 39;
 var SUB_ROW_H_PT = { A: 98.2, B: 103 };
 var HEADER_FONT_PT = 15;
 var cellKey = (row, col) => row * 1e3 + col;
-function fillRow(cells, row, s, mode, seq, testKeys, holeCode) {
+function fillRow(cells, row, s, mode, seq, testKeys, holeCode, soilNumberDisplay) {
   const set = (col, v) => {
     cells[cellKey(row, col)] = v;
   };
   const soilType = soilTypeOptions(mode);
-  const short = stripSoilNumber(holeCode, s.soilNumber);
-  set(1, short ? `-${short}` : `-${seq}`);
+  if (soilNumberDisplay !== void 0) {
+    set(1, soilNumberDisplay);
+  } else {
+    const short = stripSoilNumber(holeCode, s.soilNumber);
+    set(1, short ? `-${short}` : `-${seq}`);
+  }
   set(2, s.fieldRecord ?? "");
   set(3, "");
   set(4, "");
@@ -41904,6 +41919,81 @@ function buildPdfPages(record) {
     pages.push({ cells });
   }
   return pages;
+}
+function combinedSoilDisplay(holeCode, s, holeSeq) {
+  return mergedSoilNumber(holeCode, s.soilNumber) || `${holeCode}-${holeSeq}`;
+}
+function fillSegment(seg) {
+  const mode = seg[0].mode;
+  const headerRecord = seg[0];
+  const dates = seg.map((r) => (r.engineering?.openDate ?? "").trim());
+  const dateText = dates.every((d) => d === dates[0]) ? dates[0] : "";
+  const pages = [];
+  let cells = null;
+  let remaining = 0;
+  let hasContent = false;
+  for (const record of seg) {
+    const samples = record.samples ?? [];
+    const n = samples.length;
+    if (n === 0) continue;
+    const testKeys = recordTestColumns(record).map((c) => c.key);
+    const holeCode = record.engineering?.holeCode ?? "";
+    const sep = hasContent ? 1 : 0;
+    if (n + sep <= remaining) {
+      const base = ROWS_PER_PAGE - remaining + sep;
+      for (let i = 0; i < n; i++) {
+        fillRow(cells, base + i, samples[i], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[i], i + 1));
+      }
+      remaining -= n + sep;
+      continue;
+    }
+    cells = null;
+    remaining = 0;
+    hasContent = false;
+    const fullPages = Math.floor(n / ROWS_PER_PAGE);
+    const tail = n % ROWS_PER_PAGE;
+    for (let p = 0; p < fullPages; p++) {
+      const c = {};
+      for (let i = 0; i < ROWS_PER_PAGE; i++) {
+        const idx = p * ROWS_PER_PAGE + i;
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+      }
+      pages.push({ cells: c, mode, dateText, headerRecord });
+    }
+    if (tail > 0) {
+      const c = {};
+      for (let i = 0; i < tail; i++) {
+        const idx = fullPages * ROWS_PER_PAGE + i;
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+      }
+      pages.push({ cells: c, mode, dateText, headerRecord });
+      cells = c;
+      remaining = ROWS_PER_PAGE - tail;
+      hasContent = true;
+    }
+  }
+  return pages;
+}
+function buildCombinedPdfPages(records) {
+  const segments = [];
+  const byMode = /* @__PURE__ */ new Map();
+  for (const r of records) {
+    if (!r) continue;
+    const arr = byMode.get(r.mode);
+    if (arr) arr.push(r);
+    else {
+      const g = [r];
+      byMode.set(r.mode, g);
+      segments.push(g);
+    }
+  }
+  const pages = [];
+  for (const seg of segments) pages.push(...fillSegment(seg));
+  return {
+    pages,
+    modes: pages.map((p) => p.mode),
+    dateTexts: pages.map((p) => p.dateText)
+  };
 }
 var _h2c = null;
 async function getHtml2Canvas() {
@@ -41954,8 +42044,9 @@ var INFO_DATE_SHIFT_PT = 24.4;
 var INFO_YEAR_LEFT_PT = 978.4 - INFO_DATE_SHIFT_PT;
 var INFO_YEAR_RIGHT_PT = 1104.8 - INFO_DATE_SHIFT_PT;
 var INFO_YEAR_WIDTH_PT = 126.4;
-function renderInfoLine(eng) {
-  const parts = (eng.openDate ?? "").trim().split("-");
+function renderInfoLine(eng, dateText) {
+  const openDate = dateText !== void 0 ? dateText : eng.openDate ?? "";
+  const parts = openDate.trim().split("-");
   const y = parts[0] ?? "";
   const m = parts[1] ?? "";
   const d = parts[2] ?? "";
@@ -41979,7 +42070,7 @@ function renderInfoLine(eng) {
     ${txt(1153 - INFO_DATE_SHIFT_PT, esc(d))}
     ${txt(1170.8 - INFO_DATE_SHIFT_PT, "\u65E5")}`;
 }
-function renderHeaderTexts(record, header = CMA_DEFAULT) {
+function renderHeaderTexts(record, header = CMA_DEFAULT, dateText) {
   const eng = record.engineering;
   const versionFs = fitHeaderFontSize(header.versionLine, 9, 1190.7 - 8 - 934.8);
   const codeFs = fitHeaderFontSize(header.docCode, 10.4, 1190.7 - 8 - 1035.8);
@@ -41988,7 +42079,7 @@ function renderHeaderTexts(record, header = CMA_DEFAULT) {
     <div class="pdf-txt" style="left:${px(934.8)}px;top:${px(44.9)}px;font-size:${px(versionFs)}px;">${esc(header.versionLine)}</div>
     <div class="pdf-txt" style="left:${px(550.2)}px;top:${px(73.5)}px;font-size:${px(18)}px;font-weight:bold;">\u5F00\u571F\u8BB0\u5F55\u8868</div>
     <div class="pdf-txt" style="left:${px(1035.8)}px;top:${px(94.4)}px;font-size:${px(codeFs)}px;">${esc(header.docCode)}</div>
-    ${renderInfoLine(eng)}`;
+    ${renderInfoLine(eng, dateText)}`;
 }
 function renderFooter(pageIndex, totalPages) {
   const top = px(794);
@@ -42072,14 +42163,14 @@ function renderTable(page, record) {
       <tbody>${dataRows.join("")}</tbody>
     </table>`;
 }
-function buildPageElement(page, record, pageIndex, totalPages, header) {
+function buildPageElement(page, record, pageIndex, totalPages, header, dateText) {
   const el = document.createElement("div");
   el.className = "pdf-page";
   el.style.cssText = `position:absolute;left:-100000px;top:0;width:${PAGE_W_PX}px;height:${PAGE_H_PX}px;overflow:hidden;background:#fff;color:#000;font-family:'SimSun','\u5B8B\u4F53',serif;`;
   const pageCss = `
     .pdf-page *{box-sizing:border-box;}
     .pdf-txt{position:absolute;white-space:nowrap;box-sizing:border-box;}`;
-  el.innerHTML = `<style>${pageCss}</style>` + renderHeaderTexts(record, header) + renderTable(page, record) + renderFooter(pageIndex, totalPages);
+  el.innerHTML = `<style>${pageCss}</style>` + renderHeaderTexts(record, header, dateText) + renderTable(page, record) + renderFooter(pageIndex, totalPages);
   return el;
 }
 function shrinkOverflow(root) {
@@ -42094,11 +42185,35 @@ function shrinkOverflow(root) {
     }
   });
 }
-async function buildRecordsPdfBlob(records, header = CMA_DEFAULT) {
+async function buildRecordsPdfBlob(records, header = CMA_DEFAULT, opts = {}) {
   const html2canvas = (await getHtml2Canvas()).default;
   const { jsPDF } = await getJsPdf();
   const pdf = new jsPDF({ unit: "mm", format: "a3", orientation: "landscape" });
   let hasPage = false;
+  if (opts.combine) {
+    const combined = buildCombinedPdfPages(records);
+    const totalPages = combined.pages.length;
+    for (let i = 0; i < totalPages; i++) {
+      const p = combined.pages[i];
+      const el = buildPageElement(p, p.headerRecord, i + 1, totalPages, header, p.dateText);
+      document.body.appendChild(el);
+      shrinkOverflow(el);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: "#fff",
+        width: PAGE_W_PX,
+        height: PAGE_H_PX,
+        windowWidth: PAGE_W_PX,
+        windowHeight: PAGE_H_PX
+      });
+      document.body.removeChild(el);
+      const img = canvas.toDataURL("image/jpeg", 0.95);
+      if (hasPage) pdf.addPage();
+      pdf.addImage(img, "JPEG", 0, 0, 420, 297);
+      hasPage = true;
+    }
+    return pdf.output("blob");
+  }
   for (const record of records) {
     const pages = buildPdfPages(record);
     const totalPages = pages.length;
@@ -42159,7 +42274,7 @@ function withOpenDate(records, openDate) {
     engineering: { ...r.engineering, openDate: d }
   }));
 }
-async function exportRecordsPdf(records, header = CMA_DEFAULT, openDateOverride = "") {
+async function exportRecordsPdf(records, header = CMA_DEFAULT, openDateOverride = "", opts = {}) {
   if (!records || records.length === 0) {
     return { success: false, message: "\u6CA1\u6709\u9009\u62E9\u8981\u5BFC\u51FA\u7684\u5B54" };
   }
@@ -42167,7 +42282,7 @@ async function exportRecordsPdf(records, header = CMA_DEFAULT, openDateOverride 
     const stamped = withOpenDate(records, openDateOverride);
     const merged = stamped.length > 1;
     const fileName = merged ? buildMergedPdfFileName(stamped, openDateOverride.trim() || void 0) : buildSinglePdfFileName(stamped[0]);
-    const blob = await buildRecordsPdfBlob(stamped, header);
+    const blob = await buildRecordsPdfBlob(stamped, header, opts);
     const result = await deliverPdfBlob(blob, fileName);
     if (result.success && merged) {
       return { ...result, message: `${result.message}\uFF08${stamped.length} \u4E2A\u5B54\u5DF2\u5408\u5E76\u4E3A\u4E00\u4E2A PDF\uFF09` };
@@ -42187,6 +42302,7 @@ async function exportRecordPdf(record, header = CMA_DEFAULT) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  buildCombinedPdfPages,
   buildMergedPdfFileName,
   buildPdfPages,
   buildRecordPdfBlob,

@@ -22,7 +22,7 @@ import { Share } from '@capacitor/share';
 import type { ExportResult } from './xlsxExport';
 import { importWithRecovery } from './pwaRecovery';
 import { CMA_DEFAULT, CmaHeaderSettings, fitHeaderFontSize } from './cmaHeader';
-import { sanitizeFileNamePart, stripSoilNumber } from './exportNaming';
+import { mergedSoilNumber, sanitizeFileNamePart, stripSoilNumber } from './exportNaming';
 
 // 保留对外导出（历史测试/调用可能直接引用），实现统一收敛到 exportNaming
 export { sanitizeFileNamePart } from './exportNaming';
@@ -70,8 +70,10 @@ export interface PdfPage {
 
 /** 把一条土样按 39 列数据映射写入某页某行的单元格；seq 为该土样在全记录中的序号（1 起）；
  *  testKeys 为该记录 8 个试验列的数据键（固结/剪切列显示名可按记录覆盖，见 recordTestColumns）；
- *  holeCode 为孔号（土号去前缀时使用） */
-function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number, testKeys: string[], holeCode: string): void {
+ *  holeCode 为孔号（土号去前缀时使用）；
+ *  soilNumberDisplay 为合并表模式的土号列覆盖值（已带孔号前缀，直接原样落格）；
+ *  不传（undefined）时保持单孔导出的短编号规则，行为逐字不变 */
+function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode: 'A' | 'B', seq: number, testKeys: string[], holeCode: string, soilNumberDisplay?: string): void {
   const set = (col: number, v: string): void => {
     cells[cellKey(row, col)] = v;
   };
@@ -81,8 +83,14 @@ function fillRow(cells: Record<number, string>, row: number, s: SoilSample, mode
   // 数字序号去前导零（2026-11-02：-01→-1、R01→-R1，导出不写前导零，存储不动）。
   // 数字编号跳过 R 样顺位（数字样显示忠实于归一结果，App 内插入重排后即连续）。
   // 土号未填时按行序兜底 -1、-2…。
-  const short = stripSoilNumber(holeCode, s.soilNumber);
-  set(1, short ? `-${short}` : `-${seq}`);
+  if (soilNumberDisplay !== undefined) {
+    // 多孔合并同页模式：土号已由调用方按 mergedSoilNumber 归一成带孔号前缀的
+    // 完整编号（ZK1-1 / ZK2-R1），跨孔不重号，直接原样落格、不再二次加工
+    set(1, soilNumberDisplay);
+  } else {
+    const short = stripSoilNumber(holeCode, s.soilNumber);
+    set(1, short ? `-${short}` : `-${seq}`);
+  }
   set(2, s.fieldRecord ?? '');
   set(3, ''); // 取样深度：模板留空手填
   set(4, ''); // 取样标高：模板留空手填
@@ -125,6 +133,136 @@ export function buildPdfPages(record: SoilRecord): PdfPage[] {
     pages.push({ cells });
   }
   return pages;
+}
+
+// ---------------------------------------------------------------------------
+// 纯函数：buildCombinedPdfPages（多孔合并同页，不依赖 DOM，便于单测）
+// ---------------------------------------------------------------------------
+/** 合并表单页：在 PdfPage 基础上带上该页所属模式 / 信息行日期文本 / 页眉样板记录 */
+export interface CombinedPdfPage extends PdfPage {
+  /** 本页所属鉴别模式（决定表头「目力鉴别土类」列） */
+  mode: 'A' | 'B';
+  /** 信息行「开土日期」文本：所属段内所有孔日期一致 → 该日期；否则 ''（留空手填） */
+  dateText: string;
+  /** 页眉 / 表头渲染用的样板记录（该段第一条 record） */
+  headerRecord: SoilRecord;
+}
+
+export interface CombinedPdfPages {
+  pages: CombinedPdfPage[];
+  /** 与 pages 一一对应的模式序列（QA 断言用） */
+  modes: ('A' | 'B')[];
+  /** 与 pages 一一对应的开土日期文本序列（QA 断言用） */
+  dateTexts: (string | '')[];
+}
+
+/** 合并表土号列显示值：mergedSoilNumber 归一 + 空土号按孔内序号兜底（孔内序号 1 起） */
+function combinedSoilDisplay(holeCode: string, s: SoilSample, holeSeq: number): string {
+  return mergedSoilNumber(holeCode, s.soilNumber) || `${holeCode}-${holeSeq}`;
+}
+
+/**
+ * 一个模式段内的装填（孔不拆页核心算法）：
+ * - 当前页剩余行装得下「整孔 + 孔间分隔空行」→ 整孔接续装入（小孔拼表省纸）；
+ *   孔落在已有内容的页上时，其前面先放 1 个完全空白行（用户增量需求：
+ *   两孔之间空一行方便看，空行计入 23 行；每页第一个孔前不放空行）；
+ * - 装不下 → 当前页收尾（不足行即自然留白），该孔另起新页；
+ * - 土样 > 23 条的大孔独占 ceil(n/23) 页（自然分页，不算拆页），
+ *   末页剩余行仍留给后续孔接续（只要装得下「整孔 + 分隔行」）。
+ */
+function fillSegment(seg: SoilRecord[]): CombinedPdfPage[] {
+  const mode = seg[0].mode;
+  const headerRecord = seg[0];
+  // 开土日期：段内所有孔一致才显示该日期，否则留空（用户可先用批量改日期统一再导出）
+  const dates = seg.map((r) => (r.engineering?.openDate ?? '').trim());
+  const dateText = dates.every((d) => d === dates[0]) ? dates[0] : '';
+
+  const pages: CombinedPdfPage[] = [];
+  let cells: Record<number, string> | null = null;
+  let remaining = 0;
+  // 当前页是否已有内容：决定下一孔前是否放分隔空行（页首孔前不放）
+  let hasContent = false;
+
+  for (const record of seg) {
+    const samples = record.samples ?? [];
+    const n = samples.length;
+    if (n === 0) continue; // 空孔不占页（也不产生分隔行）
+    const testKeys = recordTestColumns(record).map((c) => c.key);
+    const holeCode = record.engineering?.holeCode ?? '';
+    // 孔间分隔空行占 1 个物理行（不写格即渲染为空白行，与现有空填充行同款）
+    const sep = hasContent ? 1 : 0;
+
+    if (n + sep <= remaining) {
+      // 整孔装入当前页剩余行（基行 = 已占用行数 + 分隔行）
+      const base = ROWS_PER_PAGE - remaining + sep;
+      for (let i = 0; i < n; i++) {
+        fillRow(cells as Record<number, string>, base + i, samples[i], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[i], i + 1));
+      }
+      remaining -= n + sep;
+      continue;
+    }
+
+    // 装不下整孔：当前页收尾，该孔整体另起新页（孔不许被拦腰拆开跨页）
+    cells = null;
+    remaining = 0;
+    hasContent = false;
+    const fullPages = Math.floor(n / ROWS_PER_PAGE);
+    const tail = n % ROWS_PER_PAGE;
+    for (let p = 0; p < fullPages; p++) {
+      const c: Record<number, string> = {};
+      for (let i = 0; i < ROWS_PER_PAGE; i++) {
+        const idx = p * ROWS_PER_PAGE + i;
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+      }
+      pages.push({ cells: c, mode, dateText, headerRecord });
+    }
+    if (tail > 0) {
+      const c: Record<number, string> = {};
+      for (let i = 0; i < tail; i++) {
+        const idx = fullPages * ROWS_PER_PAGE + i;
+        fillRow(c, i, samples[idx], mode, i + 1, testKeys, holeCode, combinedSoilDisplay(holeCode, samples[idx], idx + 1));
+      }
+      pages.push({ cells: c, mode, dateText, headerRecord });
+      cells = c;
+      remaining = ROWS_PER_PAGE - tail; // 大孔尾页剩余行留给后续孔判断
+      hasContent = true;
+    }
+    // tail === 0（整除）：下一孔必然装不下（remaining=0），自然另起新页
+  }
+  return pages;
+}
+
+/**
+ * 计算多孔合并同页的分页与每页单元格取值（不依赖 DOM，便于单测）。
+ *
+ * 分段规则：按鉴别模式分段（A/B 表头列不同，不同模式的孔不得混表），
+ * 每个模式一个序列（按模式首次出现顺序输出各段页，段内保持传入顺序）。
+ *
+ * 装填规则：见 {@link fillSegment}——孔不拆页，小孔拼表，大孔自然分页；
+ * 孔间放 1 个空白分隔行（用户增量需求：两孔之间空一行方便看，空行计入 23 行）。
+ * 土号列带孔号前缀（mergedSoilNumber），空土号按孔内序号兜底。
+ */
+export function buildCombinedPdfPages(records: SoilRecord[]): CombinedPdfPages {
+  // 按模式分组（保持模式首次出现顺序；组内保持传入顺序）
+  const segments: SoilRecord[][] = [];
+  const byMode = new Map<'A' | 'B', SoilRecord[]>();
+  for (const r of records) {
+    if (!r) continue;
+    const arr = byMode.get(r.mode);
+    if (arr) arr.push(r);
+    else {
+      const g = [r];
+      byMode.set(r.mode, g);
+      segments.push(g);
+    }
+  }
+  const pages: CombinedPdfPage[] = [];
+  for (const seg of segments) pages.push(...fillSegment(seg));
+  return {
+    pages,
+    modes: pages.map((p) => p.mode),
+    dateTexts: pages.map((p) => p.dateText),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -229,8 +367,14 @@ const INFO_YEAR_LEFT_PT = 978.4 - INFO_DATE_SHIFT_PT;
 const INFO_YEAR_RIGHT_PT = 1104.8 - INFO_DATE_SHIFT_PT;
 const INFO_YEAR_WIDTH_PT = 126.4;
 
-function renderInfoLine(eng: SoilRecord['engineering']): string {
-  const parts = (eng.openDate ?? '').trim().split('-');
+/**
+ * @param dateText 合并表模式：覆盖信息行的开土日期（段内所有孔一致 → 该日期，
+ *                 不一致 → '' 只画「开土日期」标签供手填）；
+ *                 不传（undefined）时保持单孔行为：取记录自身 openDate
+ */
+function renderInfoLine(eng: SoilRecord['engineering'], dateText?: string): string {
+  const openDate = dateText !== undefined ? dateText : (eng.openDate ?? '');
+  const parts = openDate.trim().split('-');
   const y = parts[0] ?? '';
   const m = parts[1] ?? '';
   const d = parts[2] ?? '';
@@ -266,10 +410,14 @@ function renderInfoLine(eng: SoilRecord['engineering']): string {
  * 版本行与文件编号由「CMA 设置」维护（全局、持久化），导出时传入；
  * 两者按页边可用宽度自动收窄字号，自定义文本变长时不会越出纸边。
  * 导出为纯函数以便回归测试直接检查 HTML。
+ *
+ * @param dateText 合并表模式的信息行开土日期覆盖（见 {@link renderInfoLine}）；
+ *                 不传时行为不变
  */
 export function renderHeaderTexts(
   record: SoilRecord,
   header: CmaHeaderSettings = CMA_DEFAULT,
+  dateText?: string,
 ): string {
   const eng = record.engineering;
   // 可用宽度：页面右边距约 1190.7pt，减去各自左边距并留 8pt 余量
@@ -280,7 +428,7 @@ export function renderHeaderTexts(
     <div class="pdf-txt" style="left:${px(934.8)}px;top:${px(44.9)}px;font-size:${px(versionFs)}px;">${esc(header.versionLine)}</div>
     <div class="pdf-txt" style="left:${px(550.2)}px;top:${px(73.5)}px;font-size:${px(18)}px;font-weight:bold;">开土记录表</div>
     <div class="pdf-txt" style="left:${px(1035.8)}px;top:${px(94.4)}px;font-size:${px(codeFs)}px;">${esc(header.docCode)}</div>
-    ${renderInfoLine(eng)}`;
+    ${renderInfoLine(eng, dateText)}`;
 }
 
 function renderFooter(pageIndex: number, totalPages: number): string {
@@ -377,13 +525,15 @@ export function renderTable(page: PdfPage, record: SoilRecord): string {  const 
     </table>`;
 }
 
-/** 生成单页 DOM（离屏），含表头文字、表格、页脚 */
+/** 生成单页 DOM（离屏），含表头文字、表格、页脚；
+ *  dateText 为合并表模式的信息行开土日期覆盖（不传时单孔行为不变） */
 function buildPageElement(
   page: PdfPage,
   record: SoilRecord,
   pageIndex: number,
   totalPages: number,
   header: CmaHeaderSettings,
+  dateText?: string,
 ): HTMLElement {
   const el = document.createElement('div');
   el.className = 'pdf-page';
@@ -395,7 +545,7 @@ function buildPageElement(
     .pdf-txt{position:absolute;white-space:nowrap;box-sizing:border-box;}`;
   el.innerHTML =
     `<style>${pageCss}</style>` +
-    renderHeaderTexts(record, header) +
+    renderHeaderTexts(record, header, dateText) +
     renderTable(page, record) +
     renderFooter(pageIndex, totalPages);
   return el;
@@ -418,23 +568,66 @@ function shrinkOverflow(root: HTMLElement): void {
 // ---------------------------------------------------------------------------
 // 导出入口
 // ---------------------------------------------------------------------------
+/** 批量导出 PDF 的可选项 */
+export interface RecordsPdfOptions {
+  /**
+   * 多孔合并同页（小孔拼表省纸）：
+   * - 相同鉴别模式的孔拼入同一张 23 行表（不同模式表头列不同，不混表）；
+   * - 孔不拆页：剩余行装不下整孔时该孔整体另起新页；
+   * - 土号带孔号前缀（ZK1-1 / ZK2-R1），跨孔不重号；
+   * - 缺省 / false → 现有行为（每孔从新页开始），逐字不变。
+   */
+  combine?: boolean;
+}
+
 /**
  * 生成多记录 PDF Blob（不触发下载）。
  *
- * 分页策略：
+ * 分页策略（combine=false / 缺省，现状不变）：
  * - 每条记录按自身 23 行/页分页（页脚「第 X 页 / 共 Y 页」仍为孔内页码）；
  * - 记录之间直接接续，不插入空白页，仅在新一页前调用一次 `pdf.addPage()`。
  * 因此总页数 = 各记录页数之和，页序与传入顺序一致。
+ *
+ * combine=true（多孔合并同页）：按 {@link buildCombinedPdfPages} 分段装填，
+ * 同模式孔拼入同一张表，页脚页码为合并后的全局页码。
  */
 export async function buildRecordsPdfBlob(
   records: SoilRecord[],
   header: CmaHeaderSettings = CMA_DEFAULT,
+  opts: RecordsPdfOptions = {},
 ): Promise<Blob> {
   const html2canvas = (await getHtml2Canvas()).default;
   const { jsPDF } = await getJsPdf();
 
   const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape' });
   let hasPage = false;
+
+  if (opts.combine) {
+    // 多孔合并同页：先整体算好分页（纯函数），再逐页渲染；
+    // 页眉信息行用该段第一条记录 + 段内统一日期（不一致留空）
+    const combined = buildCombinedPdfPages(records);
+    const totalPages = combined.pages.length;
+    for (let i = 0; i < totalPages; i++) {
+      const p = combined.pages[i];
+      const el = buildPageElement(p, p.headerRecord, i + 1, totalPages, header, p.dateText);
+      document.body.appendChild(el);
+      shrinkOverflow(el);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#fff',
+        width: PAGE_W_PX,
+        height: PAGE_H_PX,
+        windowWidth: PAGE_W_PX,
+        windowHeight: PAGE_H_PX,
+      });
+      document.body.removeChild(el);
+      const img = canvas.toDataURL('image/jpeg', 0.95);
+      if (hasPage) pdf.addPage();
+      pdf.addImage(img, 'JPEG', 0, 0, 420, 297);
+      hasPage = true;
+    }
+    return pdf.output('blob');
+  }
 
   for (const record of records) {
     const pages = buildPdfPages(record);
@@ -524,11 +717,13 @@ export function withOpenDate(records: SoilRecord[], openDate: string): SoilRecor
  * - >1 个记录 → 合并为一个 PDF，命名为 `开土记录_<N>孔_<当天日期>.pdf`。
  * - openDateOverride 非空时：本次导出的所有记录开土日期（页内工程信息行）
  *   与文件名日期统一使用该日期（仅影响本次导出，不改动存储的记录）。
+ * - opts.combine=true 时启用「多孔合并同页」（见 {@link RecordsPdfOptions}）。
  */
 export async function exportRecordsPdf(
   records: SoilRecord[],
   header: CmaHeaderSettings = CMA_DEFAULT,
   openDateOverride = '',
+  opts: RecordsPdfOptions = {},
 ): Promise<ExportResult> {
   if (!records || records.length === 0) {
     return { success: false, message: '没有选择要导出的孔' };
@@ -539,7 +734,7 @@ export async function exportRecordsPdf(
     const fileName = merged
       ? buildMergedPdfFileName(stamped, openDateOverride.trim() || undefined)
       : buildSinglePdfFileName(stamped[0]);
-    const blob = await buildRecordsPdfBlob(stamped, header);
+    const blob = await buildRecordsPdfBlob(stamped, header, opts);
     const result = await deliverPdfBlob(blob, fileName);
     if (result.success && merged) {
       return { ...result, message: `${result.message}（${stamped.length} 个孔已合并为一个 PDF）` };

@@ -454,11 +454,13 @@ export default function App() {
   const handleExportSelected = async (
     selected: SoilRecord[],
     openDateOverride = '',
+    /** 仅 PDF：多孔合并同页等选项（ExportSelectDialog 勾选回传） */
+    pdfOptions?: { combine?: boolean },
   ): Promise<void> => {
     try {
       const res =
         exportMode === 'pdf'
-          ? await exportRecordsPdf(selected, cmaHeader, openDateOverride)
+          ? await exportRecordsPdf(selected, cmaHeader, openDateOverride, pdfOptions)
           : exportMode === 'docx'
             ? await exportRecordsDocx(selected, openDateOverride, cmaHeader)
             : await exportRecordsXlsx(selected);

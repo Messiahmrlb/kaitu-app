@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   List,
   ListItem,
   ListItemButton,
@@ -21,13 +22,24 @@ import { recordConflictCount, todayStr } from '../utils';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { alpha } from '@mui/material/styles';
 
+/** PDF 导出可选项（随 onExport 回传给 App → exportRecordsPdf） */
+export interface PdfExportOptions {
+  /** 多孔合并同页（小孔拼表省纸）：相同鉴别模式的孔拼入同一张 23 行表 */
+  combine?: boolean;
+}
+
 interface Props {
   open: boolean;
   mode: 'pdf' | 'xlsx' | 'docx';
   records: SoilRecord[];
   onClose: () => void;
-  /** 导出回传：selected 为勾选记录；openDateOverride 仅 PDF / Word 模式使用（可选日期覆盖） */
-  onExport: (selected: SoilRecord[], openDateOverride: string) => void | Promise<void>;
+  /** 导出回传：selected 为勾选记录；openDateOverride 仅 PDF / Word 模式使用（可选日期覆盖）；
+   *  pdfOptions 仅 PDF 模式使用（多孔合并同页等） */
+  onExport: (
+    selected: SoilRecord[],
+    openDateOverride: string,
+    pdfOptions?: PdfExportOptions,
+  ) => void | Promise<void>;
 }
 
 /** 孔号展示名：空孔号统一用「未命名孔」 */
@@ -47,6 +59,8 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
   const [exporting, setExporting] = useState(false);
   /** PDF / Word 模式可选：统一本次导出的开土日期（留空按各记录自身日期） */
   const [dateOverride, setDateOverride] = useState('');
+  /** 仅 PDF：多孔合并同页（小孔拼表省纸），默认不勾选（保持现状导出行为） */
+  const [combine, setCombine] = useState(false);
 
   // 打开时默认全选、日期默认当天；关闭时重置，避免下次打开残留上次的勾选
   useEffect(() => {
@@ -54,10 +68,12 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
       setSelectedIds(records.map((r) => r.id));
       setExporting(false);
       setDateOverride(todayStr());
+      setCombine(false);
     } else {
       setSelectedIds([]);
       setExporting(false);
       setDateOverride('');
+      setCombine(false);
     }
     // 仅在开关状态变化时重置；records 变化不应打断用户正在进行的勾选
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,7 +114,11 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
     if (exporting || selectedCount === 0) return;
     setExporting(true);
     try {
-      await onExport(selected, mode === 'xlsx' ? '' : dateOverride.trim());
+      await onExport(
+        selected,
+        mode === 'xlsx' ? '' : dateOverride.trim(),
+        mode === 'pdf' ? { combine } : undefined,
+      );
     } finally {
       setExporting(false);
     }
@@ -281,6 +301,32 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
                     : '未填日期：按各记录自身的开土日期导出'
                 }
               />
+              {/* 仅 PDF：多孔合并同页开关（默认不勾选，不勾选时导出行为与现状一致） */}
+              {mode === 'pdf' && (
+                <FormControlLabel
+                  sx={{ mt: 0.75, alignItems: 'flex-start', mr: 0 }}
+                  control={
+                    <Checkbox
+                      checked={combine}
+                      onChange={(e) => setCombine(e.target.checked)}
+                      disabled={exporting}
+                      size="small"
+                      sx={{ pt: 0.25 }}
+                      inputProps={{ 'aria-label': '多孔合并同页' }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        多孔合并同页（小孔拼表省纸）
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        相同鉴别模式的孔拼入同一张 23 行表，土号带孔号前缀；孔不拆页
+                      </Typography>
+                    </Box>
+                  }
+                />
+              )}
             </Box>
           </Box>
         )}
