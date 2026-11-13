@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControlLabel,
   List,
   ListItem,
   ListItemButton,
@@ -22,24 +21,13 @@ import { recordConflictCount, todayStr } from '../utils';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { alpha } from '@mui/material/styles';
 
-/** PDF 导出可选项（随 onExport 回传给 App → exportRecordsPdf） */
-export interface PdfExportOptions {
-  /** 多孔合并同页（小孔拼表省纸）：相同鉴别模式的孔拼入同一张 23 行表 */
-  combine?: boolean;
-}
-
 interface Props {
   open: boolean;
   mode: 'pdf' | 'xlsx' | 'docx';
   records: SoilRecord[];
   onClose: () => void;
-  /** 导出回传：selected 为勾选记录；openDateOverride 仅 PDF / Word 模式使用（可选日期覆盖）；
-   *  pdfOptions 仅 PDF 模式使用（多孔合并同页等） */
-  onExport: (
-    selected: SoilRecord[],
-    openDateOverride: string,
-    pdfOptions?: PdfExportOptions,
-  ) => void | Promise<void>;
+  /** 导出回传：selected 为勾选记录；openDateOverride 仅 PDF / Word 模式使用（可选日期覆盖） */
+  onExport: (selected: SoilRecord[], openDateOverride: string) => void | Promise<void>;
 }
 
 /** 孔号展示名：空孔号统一用「未命名孔」 */
@@ -52,15 +40,15 @@ function holeLabel(record: SoilRecord): string {
  *
  * - 每次打开默认全选，关闭后清空选择；
  * - 支持全选 / 半选 / 全不选，列表整行可点；
- * - PDF / Word 多孔合并为一个文件，xlsx 按字母孔号前缀分组合并，说明文案随 mode 切换。
+ * - PDF 勾选 ≥2 个孔时由 exportRecordsPdf 自动启用「多孔合并同页」，
+ *   单孔保持旧格式（土号不带孔号前缀），对话框内不再需要勾选开关；
+ * - Word 多孔合并为一个文件，xlsx 按字母孔号前缀分组合并，说明文案随 mode 切换。
  */
 export default function ExportSelectDialog({ open, mode, records, onClose, onExport }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   /** PDF / Word 模式可选：统一本次导出的开土日期（留空按各记录自身日期） */
   const [dateOverride, setDateOverride] = useState('');
-  /** 仅 PDF：多孔合并同页（小孔拼表省纸），默认不勾选（保持现状导出行为） */
-  const [combine, setCombine] = useState(false);
 
   // 打开时默认全选、日期默认当天；关闭时重置，避免下次打开残留上次的勾选
   useEffect(() => {
@@ -68,12 +56,10 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
       setSelectedIds(records.map((r) => r.id));
       setExporting(false);
       setDateOverride(todayStr());
-      setCombine(false);
     } else {
       setSelectedIds([]);
       setExporting(false);
       setDateOverride('');
-      setCombine(false);
     }
     // 仅在开关状态变化时重置；records 变化不应打断用户正在进行的勾选
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,11 +100,7 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
     if (exporting || selectedCount === 0) return;
     setExporting(true);
     try {
-      await onExport(
-        selected,
-        mode === 'xlsx' ? '' : dateOverride.trim(),
-        mode === 'pdf' ? { combine } : undefined,
-      );
+      await onExport(selected, mode === 'xlsx' ? '' : dateOverride.trim());
     } finally {
       setExporting(false);
     }
@@ -301,31 +283,18 @@ export default function ExportSelectDialog({ open, mode, records, onClose, onExp
                     : '未填日期：按各记录自身的开土日期导出'
                 }
               />
-              {/* 仅 PDF：多孔合并同页开关（默认不勾选，不勾选时导出行为与现状一致） */}
+              {/* 仅 PDF：静态说明（非交互）。勾选 ≥2 个孔时由 exportRecordsPdf 自动
+                  启用「多孔合并同页」，无需用户勾选开关；单孔保持旧格式。
+                  用块级 caption 单行/自然换行，避免窄屏 space-between 把按钮挤出屏外。 */}
               {mode === 'pdf' && (
-                <FormControlLabel
-                  sx={{ mt: 0.75, alignItems: 'flex-start', mr: 0 }}
-                  control={
-                    <Checkbox
-                      checked={combine}
-                      onChange={(e) => setCombine(e.target.checked)}
-                      disabled={exporting}
-                      size="small"
-                      sx={{ pt: 0.25 }}
-                      inputProps={{ 'aria-label': '多孔合并同页' }}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        多孔合并同页（小孔拼表省纸）
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        相同鉴别模式的孔拼入同一张 23 行表，土号带孔号前缀；孔不拆页
-                      </Typography>
-                    </Box>
-                  }
-                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ mt: 0.75, lineHeight: 1.5 }}
+                >
+                  多孔自动合并同页（小孔拼表省纸），土号按孔标识
+                </Typography>
               )}
             </Box>
           </Box>

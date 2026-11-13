@@ -590,7 +590,12 @@ function shrinkOverflow(root: HTMLElement): void {
 // ---------------------------------------------------------------------------
 // 导出入口
 // ---------------------------------------------------------------------------
-/** 批量导出 PDF 的可选项 */
+/**
+ * 生成多记录 PDF Blob 的可选项（低层能力，逻辑保持不变）。
+ * 注意：批量导出「是否合并同页」现由 {@link exportRecordsPdf} 按 stamped 记录数
+ * 自动判定（≥2 条 → combine=true，1 条 → 旧格式），不再由 UI 传入；
+ * 此处保留显式分支，供纯函数 / QA 单测直接覆盖。
+ */
 export interface RecordsPdfOptions {
   /**
    * 多孔合并同页（小孔拼表省纸）：
@@ -613,6 +618,9 @@ export interface RecordsPdfOptions {
  *
  * combine=true（多孔合并同页）：按 {@link buildCombinedPdfPages} 分段装填，
  * 同模式孔拼入同一张表，页脚页码为合并后的全局页码。
+ *
+ * 批量导出入口 {@link exportRecordsPdf} 已按记录数自动决定该值；此处的显式
+ * opts.combine 分支保留不变（底层能力不删，便于纯函数测试直接指定）。
  */
 export async function buildRecordsPdfBlob(
   records: SoilRecord[],
@@ -735,29 +743,34 @@ export function withOpenDate(records: SoilRecord[], openDate: string): SoilRecor
 }
 
 /**
- * 批量导出 PDF：
- * - 1 个记录 → 单文件，命名为 `<开土日期>_<孔号>.pdf`；
- * - >1 个记录 → 合并为一个 PDF，命名为 `开土记录_<N>孔_<当天日期>.pdf`。
+ * 批量导出 PDF（导出入口，自动决定是否合并同页）：
+ * - 1 个记录 → 单文件，命名为 `<开土日期>_<孔号>.pdf`；保持旧路径
+ *   （{@link buildPdfPages}），土号全部为短编号（-1 / -2 / -R1），不带孔号前缀；
+ * - ≥2 个记录 → 自动启用「多孔合并同页」（{@link buildCombinedPdfPages}），
+ *   合并为一个 PDF，命名为 `开土记录_<N>孔_<当天日期>.pdf`；每孔首样带孔号前缀
+ *   （ZK1-1）辨识归属，其余仍为短编号。
  * - openDateOverride 非空时：本次导出的所有记录开土日期（页内工程信息行）
  *   与文件名日期统一使用该日期（仅影响本次导出，不改动存储的记录）。
- * - opts.combine=true 时启用「多孔合并同页」（见 {@link RecordsPdfOptions}）。
+ * - combine 由本入口按 stamped（withOpenDate 之后）的记录数自动判定，不再由 UI 传入；
+ *   底层 {@link buildRecordsPdfBlob} 的显式 opts.combine 分支保留供纯函数测试覆盖。
  */
 export async function exportRecordsPdf(
   records: SoilRecord[],
   header: CmaHeaderSettings = CMA_DEFAULT,
   openDateOverride = '',
-  opts: RecordsPdfOptions = {},
 ): Promise<ExportResult> {
   if (!records || records.length === 0) {
     return { success: false, message: '没有选择要导出的孔' };
   }
   try {
     const stamped = withOpenDate(records, openDateOverride);
-    const merged = stamped.length > 1;
+    // 只有 ≥2 个孔才启用合并同页；单孔必须走旧路径（土号不带孔号前缀）
+    const useCombine = stamped.length > 1;
+    const merged = useCombine;
     const fileName = merged
       ? buildMergedPdfFileName(stamped, openDateOverride.trim() || undefined)
       : buildSinglePdfFileName(stamped[0]);
-    const blob = await buildRecordsPdfBlob(stamped, header, opts);
+    const blob = await buildRecordsPdfBlob(stamped, header, { combine: useCombine });
     const result = await deliverPdfBlob(blob, fileName);
     if (result.success && merged) {
       return { ...result, message: `${result.message}（${stamped.length} 个孔已合并为一个 PDF）` };

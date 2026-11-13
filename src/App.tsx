@@ -446,7 +446,7 @@ export default function App() {
   // ---------- 导出（勾选式） ----------
   /**
    * 导出勾选的记录：
-   * - pdf  → 多孔合并为一个 PDF；
+   * - pdf  → 多孔合并为一个 PDF（≥2 孔自动启用「多孔合并同页」，单孔保持旧格式）；
    * - docx → 多孔合并为一个 Word（模板手术，可在 Word/WPS 编辑）；
    * - xlsx → 按字母孔号前缀分组，每组一个文件（连续下载）。
    * 导出结束后由对话框关闭自身，结果统一用 Snackbar 提示。
@@ -454,13 +454,11 @@ export default function App() {
   const handleExportSelected = async (
     selected: SoilRecord[],
     openDateOverride = '',
-    /** 仅 PDF：多孔合并同页等选项（ExportSelectDialog 勾选回传） */
-    pdfOptions?: { combine?: boolean },
   ): Promise<void> => {
     try {
       const res =
         exportMode === 'pdf'
-          ? await exportRecordsPdf(selected, cmaHeader, openDateOverride, pdfOptions)
+          ? await exportRecordsPdf(selected, cmaHeader, openDateOverride)
           : exportMode === 'docx'
             ? await exportRecordsDocx(selected, openDateOverride, cmaHeader)
             : await exportRecordsXlsx(selected);

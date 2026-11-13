@@ -42279,15 +42279,16 @@ function withOpenDate(records, openDate) {
     engineering: { ...r.engineering, openDate: d }
   }));
 }
-async function exportRecordsPdf(records, header = CMA_DEFAULT, openDateOverride = "", opts = {}) {
+async function exportRecordsPdf(records, header = CMA_DEFAULT, openDateOverride = "") {
   if (!records || records.length === 0) {
     return { success: false, message: "\u6CA1\u6709\u9009\u62E9\u8981\u5BFC\u51FA\u7684\u5B54" };
   }
   try {
     const stamped = withOpenDate(records, openDateOverride);
-    const merged = stamped.length > 1;
+    const useCombine = stamped.length > 1;
+    const merged = useCombine;
     const fileName = merged ? buildMergedPdfFileName(stamped, openDateOverride.trim() || void 0) : buildSinglePdfFileName(stamped[0]);
-    const blob = await buildRecordsPdfBlob(stamped, header, opts);
+    const blob = await buildRecordsPdfBlob(stamped, header, { combine: useCombine });
     const result = await deliverPdfBlob(blob, fileName);
     if (result.success && merged) {
       return { ...result, message: `${result.message}\uFF08${stamped.length} \u4E2A\u5B54\u5DF2\u5408\u5E76\u4E3A\u4E00\u4E2A PDF\uFF09` };

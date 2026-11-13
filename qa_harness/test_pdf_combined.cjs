@@ -12,6 +12,10 @@
 //   开土日期：段内所有孔日期一致 → 该日期；不一致 → ''（留空手填）
 //   其余列：与 fillRow 完全一致（颜色/野外记录/扰动√ 等照常落格）
 //
+// 注：「是否启用合并」由导出入口 exportRecordsPdf 按 stamped 记录数自动判定
+//     （≥2 条自动 combine=true，1 条保持旧格式 buildPdfPages），不再由 UI 传入；
+//     本文件只测底层纯函数 buildCombinedPdfPages / buildPdfPages，无 UI 勾选模拟。
+//
 // 运行：
 //   npx esbuild src/pdfExport.ts --bundle --platform=node --format=cjs \
 //     --outfile=qa_harness/_emit/pdfExport.cjs --log-level=warning
